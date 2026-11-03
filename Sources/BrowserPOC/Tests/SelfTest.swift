@@ -233,6 +233,7 @@ enum SelfTest {
         notesTests(dir: dir)
         noteItemTests(dir: dir)
         chromePlanTests()
+        chromeFixtureTests(dir: dir)
 
         print(failures == 0 ? "\nAll checks passed." : "\n\(failures) check(s) failed.")
         return failures == 0 ? 0 : 1
@@ -450,6 +451,47 @@ enum SelfTest {
                 check(false, "a new note can be created")
             }
         }
+    }
+
+    /// A small database shaped like Chrome's History file.
+    static func chromeFixtureTests(dir: URL) {
+        let f = dir.appendingPathComponent("chrome-fixture/History")
+        Paths.ensure(f.deletingLastPathComponent())
+        try? FileManager.default.removeItem(at: f)
+        let chromeNow = (Date().timeIntervalSince1970 + 11_644_473_600) * 1_000_000
+        do {
+            let db = try SQLiteDB(path: f.path)
+            try db.exec("""
+            CREATE TABLE urls(id INTEGER PRIMARY KEY, url TEXT, title TEXT, visit_count INTEGER, typed_count INTEGER, last_visit_time INTEGER, hidden INTEGER DEFAULT 0);
+            CREATE TABLE keyword_search_terms(keyword_id INTEGER, url_id INTEGER, term TEXT, normalized_term TEXT);
+            """)
+            try db.run("INSERT INTO urls VALUES(1, 'https://developer.apple.com/documentation/webkit', 'WebKit', 5, 0, ?, 0)", [chromeNow - 3_600_000_000])
+            try db.run("INSERT INTO urls VALUES(2, 'https://www.google.com/search?q=wkwebextension+chrome', 'wkwebextension chrome - Google Search', 1, 0, ?, 0)", [chromeNow - 7_200_000_000])
+            try db.run("INSERT INTO keyword_search_terms VALUES(2, 2, 'WKWebExtension chrome', 'wkwebextension chrome')")
+        } catch {
+            check(false, "could build a Chrome fixture", "\(error)")
+            return
+        }
+        let before = snapshotFiles(f.deletingLastPathComponent(), ["History"])
+        do {
+            let snap = try ChromeHistory.read(from: f)
+            check(snap.rows.count == 2 && snap.searches.map { $0.term } == ["WKWebExtension chrome"],
+                  "Chrome rows and past search terms are read from the copy", "\(snap.rows.count) rows, \(snap.searches.map { $0.term })")
+            IndexStore.shared.importSearches(snap.searches.map { ($0.term, $0.at) }, source: "chrome")
+            IndexStore.shared.addSearch("wkwebextension Chrome")
+            check(IndexStore.shared.searchCount() == 1, "the same search is stored once", "\(IndexStore.shared.searchCount())")
+        } catch {
+            check(false, "Chrome fixture reads", "\(error)")
+        }
+        check(before == snapshotFiles(f.deletingLastPathComponent(), ["History"]), "reading Chrome history leaves the original untouched")
+        let leftovers = (try? FileManager.default.contentsOfDirectory(atPath: Paths.tmpDir.path)) ?? []
+        check(leftovers.isEmpty, "the temporary copy is deleted", leftovers.joined(separator: ", "))
+        // A file the app isn't allowed to open maps to the permission help.
+        try? FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: f.path)
+        var gotPermission = false
+        do { _ = try ChromeHistory.read(from: f) } catch ChromeHistory.ReadError.needsPermission { gotPermission = true } catch {}
+        try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: f.path)
+        check(gotPermission, "a denied open shows the permission help instead of a copy error")
     }
 
     static func chromePlanTests() {

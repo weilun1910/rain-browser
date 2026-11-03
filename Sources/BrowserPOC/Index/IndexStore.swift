@@ -181,6 +181,14 @@ final class IndexStore: @unchecked Sendable {
               at REAL NOT NULL
             );
             CREATE INDEX IF NOT EXISTS dismissals_doc ON dismissals(doc_id);
+            CREATE TABLE IF NOT EXISTS searches(
+              id INTEGER PRIMARY KEY,
+              query TEXT NOT NULL,
+              norm TEXT NOT NULL,
+              at REAL NOT NULL,
+              source TEXT NOT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS searches_norm ON searches(norm);
             CREATE TABLE IF NOT EXISTS reasons(
               doc_id INTEGER NOT NULL,
               context_key TEXT NOT NULL,
@@ -263,6 +271,43 @@ final class IndexStore: @unchecked Sendable {
         queue.sync {
             (try? db.query("SELECT text FROM reasons WHERE doc_id = ? AND context_key = ?", [docID, contextKey]) { $0.text(0) })?.first
         }
+    }
+
+    // MARK: - Past searches
+
+    static func normalizeQuery(_ q: String) -> String {
+        q.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+            .split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+    }
+
+    /// Keeps one row per query, with its latest time.
+    func addSearch(_ query: String, at: Date = Date(), source: String = "bar") {
+        importSearches([(query, at.timeIntervalSince1970)], source: source)
+    }
+
+    func importSearches(_ items: [(String, Double)], source: String) {
+        guard !items.isEmpty else { return }
+        queue.sync {
+            try? db.transaction {
+                for (q, t) in items {
+                    let trimmed = q.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let norm = Self.normalizeQuery(trimmed)
+                    guard !norm.isEmpty, norm.count < 300 else { continue }
+                    try db.run("""
+                        INSERT INTO searches(query, norm, at, source) VALUES(?,?,?,?)
+                        ON CONFLICT(norm) DO UPDATE SET at = max(at, excluded.at), query = CASE WHEN excluded.at >= at THEN excluded.query ELSE query END
+                        """, [trimmed, norm, t, source])
+                }
+            }
+        }
+    }
+
+    func searchCount() -> Int {
+        queue.sync { Int((try? db.scalarInt("SELECT count(*) FROM searches")) ?? 0) }
+    }
+
+    func clearSearches() {
+        queue.sync { _ = try? db.run("DELETE FROM searches") }
     }
 
     // MARK: - Writes

@@ -186,7 +186,9 @@ struct FirstRunPanel: View {
                 Text("Reads a copy of your Chrome history from the last 90 days. Text is fetched without cookies, only for pages you opened at least twice.")
                     .font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                if chrome.phase != .idle {
+                if chrome.phase == .needsPermission {
+                    ChromePermissionHelp()
+                } else if chrome.phase != .idle {
                     Text(ChromeStatus.text(chrome.phase)).font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -223,8 +225,35 @@ enum ChromeStatus {
         case .reading: return "Reading Chrome history..."
         case .fetching(let done, let total): return "Reading page text: \(done) of \(total)"
         case .finished(let s): return s
+        case .needsPermission: return ""
         case .failed(let e): return "Couldn't import: \(e)"
         }
+    }
+}
+
+/// Explains the one macOS permission Chrome import needs, with a way to fix it.
+struct ChromePermissionHelp: View {
+    @ObservedObject var chrome = ChromeImporter.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Browser POC needs your OK to read Chrome's history")
+                .font(.system(size: 12, weight: .semibold))
+            Text("macOS asks before one app reads another app's data. If a prompt came up, click Allow, then try again. If you clicked Don't Allow or no prompt came up, open System Settings, go to Privacy & Security, then Files & Folders, find Browser POC and turn on Google Chrome.")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Button("Open System Settings") {
+                    for s in ChromeHistory.settingsURLs {
+                        if let u = URL(string: s), NSWorkspace.shared.open(u) { break }
+                    }
+                }
+                Button("Try again") { chrome.start() }
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
     }
 }
 

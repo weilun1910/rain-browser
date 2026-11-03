@@ -25,22 +25,46 @@ enum ChromeHistory {
     static let maxFetch = 300
     static let days = 90
 
-    /// Copies Chrome's History file into our own tmp folder, reads the copy read-only,
-    /// then deletes the copy. The original is only ever read by the file copy.
-    static func readRows() throws -> [ChromeRow] {
-        let src = historyURL
-        guard FileManager.default.fileExists(atPath: src.path) else {
-            throw SQLiteError(message: "Chrome history not found at the Default profile")
+    enum ReadError: Error, CustomStringConvertible {
+        case notFound
+        /// macOS App Data protection: Chrome's folder needs Felix's OK for this app.
+        case needsPermission
+        case failed(String)
+
+        var description: String {
+            switch self {
+            case .notFound: return "Chrome history wasn't found. This reads Chrome's Default profile."
+            case .needsPermission: return ChromeHistory.permissionHelp
+            case .failed(let why): return why
+            }
         }
+    }
+
+    static let permissionHelp = "macOS needs your OK before Browser POC can read Chrome's history. If a prompt came up, click Allow, then try again. If you clicked Don't Allow or no prompt came up, open System Settings, go to Privacy & Security, then Files & Folders, find Browser POC and turn on Google Chrome."
+
+    static let settingsURLs = [
+        "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_FilesAndFolders",
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders",
+    ]
+
+    struct Snapshot {
+        var rows: [ChromeRow] = []
+        var searches: [(term: String, at: Double)] = []
+    }
+
+    /// Copies Chrome's History file into our own tmp folder and reads the copy read-only.
+    /// The original is opened once, read-only, only to copy its bytes. The copy is deleted after.
+    static func read(from src: URL = historyURL) throws -> Snapshot {
+        guard FileManager.default.fileExists(atPath: src.path) else { throw ReadError.notFound }
         Paths.ensure(Paths.tmpDir)
         let copy = Paths.tmpDir.appendingPathComponent("chrome-history-\(UUID().uuidString).sqlite")
-        try FileManager.default.copyItem(at: src, to: copy)
         defer {
             try? FileManager.default.removeItem(at: copy)
             for suffix in ["-journal", "-wal", "-shm"] {
                 try? FileManager.default.removeItem(at: URL(fileURLWithPath: copy.path + suffix))
             }
         }
+        try copyReadOnly(src, to: copy)
         var comps = URLComponents()
         comps.scheme = "file"
         comps.path = copy.path
@@ -50,7 +74,8 @@ enum ChromeHistory {
         // Chrome stores time as microseconds since 1601-01-01 UTC.
         let epochOffset: Double = 11_644_473_600
         let since = (Date().addingTimeInterval(-Double(days) * 86400).timeIntervalSince1970 + epochOffset) * 1_000_000
-        let rows = try db.query("""
+        var snap = Snapshot()
+        snap.rows = try db.query("""
             SELECT url, title, visit_count, last_visit_time FROM urls
             WHERE last_visit_time > ? AND hidden = 0
             ORDER BY last_visit_time DESC LIMIT 6000
@@ -58,9 +83,38 @@ enum ChromeHistory {
             guard let u = URL(string: s.text(0)) else { return nil }
             let t = s.double(3) / 1_000_000 - epochOffset
             return ChromeRow(url: u, title: s.text(1), visitCount: Int(s.int(2)), lastVisit: Date(timeIntervalSince1970: t))
+        }.compactMap { $0 }
+        // Past searches. Older History files may not have this table.
+        if let terms = try? db.query("""
+            SELECT k.term, max(u.last_visit_time) FROM keyword_search_terms k JOIN urls u ON u.id = k.url_id
+            WHERE u.last_visit_time > ? GROUP BY k.normalized_term ORDER BY 2 DESC LIMIT 2000
+            """, [since], { ($0.text(0), $0.double(1) / 1_000_000 - epochOffset) }) {
+            snap.searches = terms.filter { !$0.0.trimmingCharacters(in: .whitespaces).isEmpty }.map { (term: $0.0, at: $0.1) }
         }
-        return rows.compactMap { $0 }
+        return snap
     }
+
+    /// Opens the source with O_RDONLY and streams it into our copy. No locks, no writes to the source.
+    static func copyReadOnly(_ src: URL, to dst: URL) throws {
+        let fd = open(src.path, O_RDONLY)
+        if fd < 0 {
+            let e = errno
+            if e == EPERM || e == EACCES { throw ReadError.needsPermission }
+            throw ReadError.failed("Couldn't open Chrome history: \(String(cString: strerror(e)))")
+        }
+        let input = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+        guard FileManager.default.createFile(atPath: dst.path, contents: nil) else {
+            throw ReadError.failed("Couldn't write a temporary copy in \(dst.deletingLastPathComponent().path)")
+        }
+        let output = try FileHandle(forWritingTo: dst)
+        defer { try? output.close(); try? input.close() }
+        while true {
+            guard let chunk = try input.read(upToCount: 1 << 20), !chunk.isEmpty else { break }
+            try output.write(contentsOf: chunk)
+        }
+    }
+
+    static func readRows() throws -> [ChromeRow] { try read().rows }
 
     static func plan(_ rows: [ChromeRow], settings: AppSettings) -> ChromePlan {
         var p = ChromePlan()
@@ -95,11 +149,12 @@ enum ChromeHistory {
 
     /// Prints what an import would do. Fetches nothing and writes nothing to the index.
     static func dryRun() -> Int32 {
-        let rows: [ChromeRow]
-        do { rows = try readRows() } catch {
+        let snap: Snapshot
+        do { snap = try read() } catch {
             print("Could not read Chrome history: \(error)")
             return 1
         }
+        let rows = snap.rows
         let p = plan(rows, settings: Settings.shared.value)
         print("Would fetch text for these \(p.fetch.count) pages:")
         for r in p.fetch { print("  FETCH  \(r.visitCount)x  \(r.url.absoluteString)") }
@@ -116,6 +171,7 @@ enum ChromeHistory {
         print("  would fetch text: \(p.fetch.count)")
         print("  title only: \(p.titleOnly.count)")
         for (why, n) in tally(p.titleOnly.map { $0.1 }) { print("    \(why): \(n)") }
+        print("  past search terms: \(snap.searches.count)")
         print("  not imported: \(p.notImported.count)")
         for (why, n) in tally(p.notImported.map { $0.1 }) { print("    \(why): \(n)") }
         return 0
@@ -138,6 +194,7 @@ final class ChromeImporter: ObservableObject {
         case reading
         case fetching(done: Int, total: Int)
         case finished(String)
+        case needsPermission
         case failed(String)
     }
 
@@ -157,8 +214,9 @@ final class ChromeImporter: ObservableObject {
         let settings = Settings.shared.value
         task = Task.detached(priority: .utility) {
             do {
-                let rows = try ChromeHistory.readRows()
-                let plan = ChromeHistory.plan(rows, settings: settings)
+                let snap = try ChromeHistory.read()
+                let plan = ChromeHistory.plan(snap.rows, settings: settings)
+                IndexStore.shared.importSearches(snap.searches.map { ($0.term, $0.at) }, source: "chrome")
                 var docs: [(DocUpsert, Analysis)] = []
                 for r in plan.imports {
                     let key = URLKey.key(for: r.url)
@@ -183,6 +241,8 @@ final class ChromeImporter: ObservableObject {
                     self.phase = .finished(summary)
                     NotificationCenter.default.post(name: .indexChanged, object: nil)
                 }
+            } catch ChromeHistory.ReadError.needsPermission {
+                await MainActor.run { self.phase = .needsPermission }
             } catch {
                 await MainActor.run { self.phase = .failed(String(describing: error)) }
             }

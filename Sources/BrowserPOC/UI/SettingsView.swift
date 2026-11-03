@@ -76,7 +76,9 @@ struct SourcesSettings: View {
                 if case .fetching(let done, let total) = chrome.phase, total > 0 {
                     ProgressView(value: Double(done), total: Double(total))
                 }
-                if chrome.phase != .idle {
+                if chrome.phase == .needsPermission {
+                    ChromePermissionHelp()
+                } else if chrome.phase != .idle {
                     Text(ChromeStatus.text(chrome.phase)).font(.caption).foregroundStyle(.secondary)
                 } else if let s = settings.published.chromeSummary, let at = settings.published.chromeImportedAt {
                     Text("Last import \(Fmt.day(at)): \(s)").font(.caption).foregroundStyle(.secondary)
@@ -84,7 +86,7 @@ struct SourcesSettings: View {
             } header: {
                 Text("Chrome history")
             } footer: {
-                Text("Reads a copy of Chrome's Default profile history from the last 90 days, up to 2,000 pages. Page text is fetched without cookies for the 300 most visited pages you opened at least twice, skipping sign-in, unsubscribe and similar links and logged-in apps.")
+                Text("Reads a copy of Chrome's Default profile history from the last 90 days, up to 2,000 pages, plus your past searches. Page text is fetched without cookies for the 300 most visited pages you opened at least twice, skipping sign-in, unsubscribe and similar links and logged-in apps. macOS asks once before this app can read Chrome's data, and may ask again after the app is rebuilt.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 

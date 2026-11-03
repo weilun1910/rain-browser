@@ -19,5 +19,9 @@ cp "$BIN_DIR/BrowserPOC" "$APP/Contents/MacOS/BrowserPOC"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
-codesign --force --sign - --timestamp=none "$APP"
-echo "Built $APP"
+# Ad hoc by default. Ad hoc signatures change on every build, so macOS may ask again for
+# permissions like reading Chrome's data. Set SIGN_IDENTITY to a code signing identity
+# from your keychain (for example an "Apple Development" certificate) to keep them.
+IDENTITY="${SIGN_IDENTITY:--}"
+codesign --force --sign "$IDENTITY" --timestamp=none "$APP"
+echo "Built $APP (signed with ${IDENTITY/#-/ad hoc})"
