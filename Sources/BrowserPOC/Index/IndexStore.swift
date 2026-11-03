@@ -188,6 +188,8 @@ final class IndexStore: @unchecked Sendable {
               PRIMARY KEY(doc_id, context_key)
             );
             """)
+            // Notes from chosen folders used to be a separate read-only source.
+            try db.exec("UPDATE docs SET source = 'note' WHERE source = 'markdown'")
             try loadVectors()
         }
     }

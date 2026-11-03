@@ -230,7 +230,8 @@ enum SelfTest {
         urlFilterTests()
         markdownTests()
         htmlTests()
-        folderTests(dir: dir)
+        notesTests(dir: dir)
+        noteItemTests(dir: dir)
         chromePlanTests()
 
         print(failures == 0 ? "\nAll checks passed." : "\n\(failures) check(s) failed.")
@@ -286,44 +287,169 @@ enum SelfTest {
         return SHA256.hash(data: d).map { String(format: "%02x", $0) }.joined()
     }
 
-    static func folderTests(dir: URL) {
-        let root = dir.appendingPathComponent("md-root", isDirectory: true)
-        let files = ["ProjA/notes/plan.md": "# Plan\nWebKit things", "top.md": "# Top", "ProjA/.git/x.md": "git",
-                     "node_modules/pkg/readme.md": "nm", "build.nosync/y.md": "nosync", ".build/z.md": "build",
-                     "ProjB/data.txt": "not markdown"]
-        for (p, c) in files {
-            let u = root.appendingPathComponent(p)
-            Paths.ensure(u.deletingLastPathComponent())
-            try? c.write(to: u, atomically: true, encoding: .utf8)
+    static func spin(_ seconds: Double, until done: () -> Bool) -> Bool {
+        let end = Date().addingTimeInterval(seconds)
+        while Date() < end {
+            if done() { return true }
+            RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.05))
         }
-        let before = files.keys.map { (k: String) -> (String, String, Date?) in
-            let u = root.appendingPathComponent(k)
-            return (k, sha(u), (try? u.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate)
+        return done()
+    }
+
+    static func snapshotFiles(_ root: URL, _ rels: [String]) -> [String: String] {
+        var out: [String: String] = [:]
+        for r in rels {
+            let u = root.appendingPathComponent(r)
+            let m = NotesScan.stat(u).map { "\($0.mtime.timeIntervalSince1970)|\($0.size)" } ?? "missing"
+            out[r] = sha(u) + "|" + m
         }
-        let found = MarkdownFolders.scan(root: root)
-        let resolvedRoot = root.resolvingSymlinksInPath().path
-        let rel = Set(found.files.map { $0.url.resolvingSymlinksInPath().path.replacingOccurrences(of: resolvedRoot + "/", with: "") })
-        check(rel == ["ProjA/notes/plan.md", "top.md"], "Markdown scan skips .git, node_modules, .build and .nosync", rel.sorted().joined(separator: ", "))
-        let projA = found.files.first { $0.url.lastPathComponent == "plan.md" }.map { MarkdownFolders.project(for: $0.url, root: root) }
-        check(projA == "ProjA", "project label is the first folder under the root", projA ?? "nil")
-        for f in found.files {
-            if let text = MarkdownFolders.read(f.url) {
-                let (d, a) = Indexer.fileDoc(url: f.url, text: text, source: .markdown, project: "ProjA", root: root.path, mtime: f.mtime)
-                IndexStore.shared.upsertFile(d, analysis: a)
+        return out
+    }
+
+    static func write(_ s: String, to u: URL, bumpSeconds: Double = 0) {
+        Paths.ensure(u.deletingLastPathComponent())
+        try? Data(s.utf8).write(to: u)
+        if bumpSeconds != 0 {
+            try? FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(bumpSeconds)], ofItemAtPath: u.path)
+        }
+    }
+
+    static func read(_ u: URL) -> String { (try? String(contentsOf: u, encoding: .utf8)) ?? "<unreadable>" }
+
+    /// Notes folders: scanning, indexing, opening and saving, all on fixture folders.
+    static func notesTests(dir: URL) {
+        let root = dir.appendingPathComponent("notes-root", isDirectory: true)
+        let files: [String: String] = [
+            "ProjA/notes/plan.md": "# Plan\nWebKit things\n",
+            "top.md": "# Top\n",
+            "crlf.md": "line one\r\nline two",
+            ".context-restoration/x.md": "hidden",
+            "node_modules/pkg/readme.md": "nm",
+            "build.nosync/y.md": "nosync",
+            ".build/z.md": "build",
+            "ProjB/data.txt": "not markdown",
+            ".hidden.md": "hidden file",
+        ]
+        for (p, c) in files { write(c, to: root.appendingPathComponent(p)) }
+        Settings.shared.update { $0.notesFolders = [root.path]; $0.newNotesFolder = nil }
+        let rels = Array(files.keys)
+        let before = snapshotFiles(root, rels)
+
+        let tree = NotesScan.scan(root)
+        let rootPath = root.resolvingSymlinksInPath().path
+        let found = Set(tree.allFiles.map { $0.url.resolvingSymlinksInPath().path.replacingOccurrences(of: rootPath + "/", with: "") })
+        check(found == ["ProjA/notes/plan.md", "top.md", "crlf.md"], "notes scan skips hidden, node_modules, .build and .nosync",
+              found.sorted().joined(separator: ", "))
+        let plan = root.appendingPathComponent("ProjA/notes/plan.md")
+        check(NotesScan.project(for: plan, root: root) == "ProjA", "project label is the first folder under the root")
+
+        let sem = DispatchSemaphore(value: 0)
+        NotesIndexer.shared.sync(roots: [tree]) { sem.signal() }
+        sem.wait()
+        let indexed = IndexStore.shared.fileMtimes(root: root.standardizedFileURL.path).count
+        check(indexed == 3, "the three visible notes are indexed", "\(indexed)")
+
+        MainActor.assumeIsolated {
+            var crlfKept = false
+            var noWrites = true
+            for f in tree.allFiles {
+                let d = NoteDocument(url: f.url)
+                _ = spin(5) { d.state == .ready }
+                if d.saveNow() { noWrites = false }
+                if f.url.lastPathComponent == "crlf.md" { crlfKept = d.text == "line one\r\nline two" && !d.isReadOnly }
+            }
+            check(noWrites, "opening a note without editing never saves")
+            check(crlfKept, "CRLF line endings and a missing final newline are kept as they are")
+        }
+        let after = snapshotFiles(root, rels)
+        check(before == after, "opening and indexing leave bytes and modification dates unchanged",
+              before.filter { after[$0.key] != $0.value }.keys.joined(separator: ", "))
+
+        check(FileSafety.canWriteNote(root.appendingPathComponent("ProjA/new.md")), "a .md file in a notes folder is writable")
+        check(!FileSafety.canWriteNote(root.appendingPathComponent("ProjB/data.txt")), "non-.md files are refused")
+        check(!FileSafety.canWriteNote(dir.appendingPathComponent("elsewhere.md")), "files outside the notes folders are refused")
+        check(!FileSafety.canWriteNote(root.appendingPathComponent(".context-restoration/x.md")), "files in hidden folders are refused")
+        check(!FileSafety.canWriteNote(root.appendingPathComponent("node_modules/pkg/readme.md")), "files in node_modules are refused")
+        check(!FileSafety.canWriteNote(root.appendingPathComponent("build.nosync/y.md")), "files in .nosync folders are refused")
+
+        MainActor.assumeIsolated {
+            // A save is skipped when the file changed on disk after loading.
+            let top = root.appendingPathComponent("top.md")
+            let d = NoteDocument(url: top)
+            _ = spin(5) { d.state == .ready }
+            write("# Top\nchanged by another app\n", to: top, bumpSeconds: 10)
+            d.userEdited("# Top\nmine\n")
+            let saved = d.saveNow()
+            check(!saved && read(top) == "# Top\nchanged by another app\n" && d.diskChange == .changed,
+                  "a save is skipped when the file changed on disk after loading")
+            d.keepMine()
+            check(read(top) == "# Top\nmine\n" && d.diskChange == nil, "Keep mine saves over the disk version")
+
+            // No unsaved edits: reload quietly.
+            let d2 = NoteDocument(url: plan)
+            _ = spin(5) { d2.state == .ready }
+            write("# Plan\nupdated elsewhere\n", to: plan, bumpSeconds: 20)
+            d2.checkDisk()
+            check(d2.text == "# Plan\nupdated elsewhere\n" && d2.diskChange == nil && read(plan) == "# Plan\nupdated elsewhere\n",
+                  "an unedited note reloads quietly when the file changes")
+
+            // The file disappears while open.
+            let gone = root.appendingPathComponent("gone.md")
+            write("# Gone\n", to: gone)
+            let d3 = NoteDocument(url: gone)
+            _ = spin(5) { d3.state == .ready }
+            try? FileManager.default.removeItem(at: gone)
+            d3.checkDisk()
+            check(d3.diskChange == .missing, "a note whose file disappears shows the missing state")
+        }
+    }
+
+    /// Notes as sidebar items: folders with tabs and notes, close versus delete, missing items, new notes.
+    static func noteItemTests(dir: URL) {
+        let root = dir.appendingPathComponent("notes-root", isDirectory: true)
+        MainActor.assumeIsolated {
+            BrowserModel.useEphemeralStore = true
+            let model = BrowserModel()
+            let folder = model.createFolder(named: "Project")
+            let web = Tab(url: URL(string: "https://example.com/article")!, title: "An article")
+            web.model = model
+            model.tabs.append(web)
+            let note = model.openNote(root.appendingPathComponent("ProjA/notes/plan.md"), select: false)
+            model.move(web, to: folder.id)
+            model.move(note, to: folder.id)
+            let kinds = Set(model.tabs(in: folder).map { $0.kind })
+            check(kinds == [.web, .note], "a sidebar folder holds a page and a note together")
+
+            let top = root.appendingPathComponent("top.md")
+            let t = model.openNote(top)
+            _ = spin(5) { model.document?.state == .ready }
+            model.close(t)
+            check(FileManager.default.fileExists(atPath: top.path) && !model.tabs.contains { $0.id == t.id },
+                  "closing a note removes the item and leaves the file")
+
+            let vanish = root.appendingPathComponent("vanish.md")
+            write("# Vanish\n", to: vanish)
+            let v = model.openNote(vanish, select: false)
+            try? FileManager.default.removeItem(at: vanish)
+            model.checkNotesOnDisk()
+            check(v.isMissing, "a note item shows as missing when its file is gone")
+
+            if let n = model.newNote(title: "Fresh idea") {
+                let u = n.url!
+                check(u.deletingLastPathComponent().standardizedFileURL.path == root.standardizedFileURL.path && read(u) == "# Fresh idea\n\n",
+                      "a new note goes in the default notes folder", u.path)
+                // Delete moves the file to the Trash.
+                var result: Bool?
+                model.deleteNote(n) { result = $0 }
+                _ = spin(10) { result != nil }
+                let trash = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".Trash")
+                let inTrash = ((try? FileManager.default.contentsOfDirectory(atPath: trash.path)) ?? []).contains { $0.hasPrefix("Fresh idea") }
+                check(result == true && !FileManager.default.fileExists(atPath: u.path) && !model.tabs.contains { $0.id == n.id },
+                      "deleting a note moves it to the Trash", inTrash ? "found in the Trash" : "not seen in ~/.Trash")
+            } else {
+                check(false, "a new note can be created")
             }
         }
-        let after = before.map { (k, _, _) -> (String, String, Date?) in
-            let u = root.appendingPathComponent(k)
-            return (k, sha(u), (try? u.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate)
-        }
-        let unchanged = zip(before, after).allSatisfy { $0.1 == $1.1 && $0.2 == $1.2 }
-        check(unchanged, "indexing Markdown folders leaves the files untouched")
-
-        let notes = dir.appendingPathComponent("Notes", isDirectory: true)
-        Paths.ensure(notes)
-        check(FileSafety.canWriteNote(notes.appendingPathComponent("a.md"), notesDir: notes), "notes folder is writable")
-        check(!FileSafety.canWriteNote(root.appendingPathComponent("top.md"), notesDir: notes), "Markdown folders are not writable")
-        check(!FileSafety.canWriteNote(notes.appendingPathComponent("../index.sqlite"), notesDir: notes), "paths outside the notes folder are not writable")
     }
 
     static func chromePlanTests() {

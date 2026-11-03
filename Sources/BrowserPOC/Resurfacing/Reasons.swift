@@ -25,10 +25,8 @@ enum Reasons {
             var s = "From your Chrome history, last visited \(Fmt.day(Date(timeIntervalSince1970: d.lastSeen)))"
             if d.visitCount > 1 { s += ", \(d.visitCount) visits" }
             return s + "."
-        case .note:
+        case .note, .markdown:
             return "Your note, last edited \(Fmt.day(Date(timeIntervalSince1970: d.mtime)))."
-        case .markdown:
-            return "Your notes file, last edited \(Fmt.day(Date(timeIntervalSince1970: d.mtime)))."
         }
     }
 
@@ -105,8 +103,7 @@ final class ReasonWriter {
         switch m.doc.source {
         case .web: source = "a web page they read in this browser"
         case .chrome: source = "a page from their Chrome history"
-        case .note: source = "one of their notes"
-        case .markdown: source = "one of their Markdown notes files"
+        case .note, .markdown: source = "one of their notes"
         }
         return """
         Open now: \(contextTitle)

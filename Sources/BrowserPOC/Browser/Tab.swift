@@ -26,6 +26,8 @@ final class Tab: ObservableObject, Identifiable {
     @Published var canGoBack = false
     @Published var canGoForward = false
     @Published var loadError: String?
+    /// A note whose file is gone from disk.
+    @Published var isMissing = false
 
     private(set) var webView: WKWebView?
     private var observers: [NSKeyValueObservation] = []
@@ -52,6 +54,7 @@ final class Tab: ObservableObject, Identifiable {
     var displayTitle: String {
         if !title.isEmpty { return title }
         if kind != .web, let url { return url.deletingPathExtension().lastPathComponent }
+        if kind != .web { return "Note" }
         if let host = url?.host { return host }
         return "New tab"
     }

@@ -48,6 +48,7 @@ final class Resurfacer: ObservableObject {
     }
 
     func contextFromDocument(_ doc: NoteDocument) {
+        guard doc.state == .ready else { return }
         setContext(ContextInput(key: URLKey.fileKey(doc.url), title: doc.title, text: doc.text,
                                 kind: doc.isReadOnly ? .file : .note))
     }

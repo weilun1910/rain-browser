@@ -59,10 +59,9 @@ struct ContentArea: View {
 
     var body: some View {
         ZStack {
-            if let doc = model.document {
-                NoteEditorView(doc: doc)
-                    .id(doc.url)
-            } else if let tab = model.currentTab, tab.kind == .web {
+            if let tab = model.currentTab, tab.kind != .web {
+                NotePane(tab: tab)
+            } else if let tab = model.currentTab {
                 TabContent(tab: tab)
             } else {
                 StartView()
@@ -70,6 +69,21 @@ struct ContentArea: View {
             if !settings.published.firstRunDone {
                 FirstRunPanel()
             }
+        }
+    }
+}
+
+/// A note item: the editor, or the missing-file view.
+struct NotePane: View {
+    @ObservedObject var tab: Tab
+    @EnvironmentObject var model: BrowserModel
+
+    var body: some View {
+        if tab.isMissing && (tab.url.map { model.docs[$0.standardizedFileURL.path] == nil } ?? true) {
+            MissingNoteView(tab: tab)
+        } else if let u = tab.url {
+            NoteEditorView(doc: model.doc(for: u))
+                .id(u.standardizedFileURL.path)
         }
     }
 }
@@ -157,13 +171,13 @@ struct StartView: View {
 struct FirstRunPanel: View {
     @EnvironmentObject var model: BrowserModel
     @ObservedObject var chrome = ChromeImporter.shared
-    @ObservedObject var md = MarkdownIndexer.shared
+    @ObservedObject var settings = Settings.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Start with what you've already seen")
                 .font(.title2.weight(.semibold))
-            Text("Cards on the right come from pages and notes you've looked at before. You can bring in your Chrome history and Markdown folders now, or later in Settings.")
+            Text("Cards on the right come from pages and notes you've looked at before. Pick the folders that hold your notes and bring in your Chrome history now, or later in Settings.")
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 4) {
@@ -177,11 +191,13 @@ struct FirstRunPanel: View {
                 }
             }
             VStack(alignment: .leading, spacing: 4) {
-                Button("Add Markdown folders...") { SourcesActions.addMarkdownFolders() }
-                Text("Indexes the .md files in folders you pick. They're only read, never changed.")
+                Button("Choose notes folders...") { SourcesActions.addNotesFolders() }
+                Text("The .md files in these folders become your notes here. You can open and edit them like any note, and new notes go in the first folder.")
                     .font(.caption).foregroundStyle(.secondary)
-                if !md.status.isEmpty {
-                    Text(md.status).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !Settings.shared.value.usesFallbackNotes {
+                    Text(Settings.shared.value.notesFolders.map { URL(fileURLWithPath: $0).lastPathComponent }.joined(separator: ", "))
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
             HStack {
@@ -214,21 +230,33 @@ enum ChromeStatus {
 
 @MainActor
 enum SourcesActions {
-    static func addMarkdownFolders() {
+    static func addNotesFolders() {
         let p = NSOpenPanel()
         p.canChooseDirectories = true
         p.canChooseFiles = false
         p.allowsMultipleSelection = true
-        p.prompt = "Add"
-        p.message = "Pick folders with Markdown notes. They're indexed read-only."
-        let solo = FileManager.default.homeDirectoryForCurrentUser
+        p.prompt = "Use as notes"
+        p.message = "Pick the folders that hold your Markdown notes."
+        let desk = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs/Desktop")
-        if FileManager.default.fileExists(atPath: solo.path) { p.directoryURL = solo }
+        if FileManager.default.fileExists(atPath: desk.path) { p.directoryURL = desk }
         guard p.runModal() == .OK else { return }
         let paths = p.urls.map { $0.standardizedFileURL.path }
         Settings.shared.update { s in
-            for path in paths where !s.markdownRoots.contains(path) { s.markdownRoots.append(path) }
+            for path in paths where !s.notesFolders.contains(path) { s.notesFolders.append(path) }
         }
-        MarkdownIndexer.shared.rescanAll()
+        AppDelegate.shared?.model.notes.reload()
+    }
+
+    static func removeNotesFolder(_ path: String) {
+        Settings.shared.update { s in
+            s.notesFolders.removeAll { $0 == path }
+            if s.newNotesFolder.map({ FileSafety.isInside(URL(fileURLWithPath: $0), URL(fileURLWithPath: path)) || $0 == path }) == true {
+                s.newNotesFolder = nil
+            }
+        }
+        Task.detached { IndexStore.shared.deleteRoot(path) }
+        AppDelegate.shared?.model.notes.reload()
+        AppDelegate.shared?.model.checkNotesOnDisk()
     }
 }

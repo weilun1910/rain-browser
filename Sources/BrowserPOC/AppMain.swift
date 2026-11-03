@@ -29,7 +29,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Paths.ensure(Paths.root)
-        Paths.ensure(Settings.shared.value.notesDir)
         do {
             IndexStore.shared = try IndexStore(url: Paths.indexFile)
         } catch {
@@ -45,7 +44,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         appLog.notice("Sentence embedding: \(Embedder.shared.isAvailable ? "available" : "not available", privacy: .public)")
 
         model = BrowserModel()
-        model.notes.reload()
         buildMenu()
 
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1380, height: 880),
@@ -72,9 +70,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         src.resume()
         termSource = src
 
-        // Background upkeep: notes and Markdown folders.
-        Indexer.syncNotes(dir: Settings.shared.value.notesDir)
-        MarkdownIndexer.shared.rescanAll()
+        // Background upkeep: scan and watch the notes folders.
+        model.notes.reload()
 
         if model.currentTab == nil && model.document == nil {
             model.focusAddress()
@@ -94,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationDidBecomeActive(_ notification: Notification) {
         model?.notes.reload()
+        model?.checkNotesOnDisk()
     }
 
     // MARK: Settings window

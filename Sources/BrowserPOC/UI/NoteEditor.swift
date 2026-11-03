@@ -6,28 +6,39 @@ struct NoteEditorView: View {
     @ObservedObject var doc: NoteDocument
     @EnvironmentObject var model: BrowserModel
 
+    /// Where the note sits, relative to its notes folder.
+    var location: String {
+        let roots = Settings.shared.value.notesRoots
+        guard let root = FileSafety.notesRoot(for: doc.url, roots: roots) else { return doc.url.deletingLastPathComponent().path }
+        let rootPath = root.standardizedFileURL.path
+        let dir = doc.url.deletingLastPathComponent().standardizedFileURL.path
+        let rel = dir.hasPrefix(rootPath) ? String(dir.dropFirst(rootPath.count)) : ""
+        let parts = [root.lastPathComponent] + rel.split(separator: "/").map(String.init)
+        return parts.joined(separator: "  /  ")
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 if doc.isReadOnly {
                     Image(systemName: "lock").font(.system(size: 11)).foregroundStyle(.secondary)
-                    Text(doc.projectLabel.map { "Read only, from \($0)" } ?? "Read only")
+                    Text(doc.notUTF8 ? "Read only, this file isn't plain UTF-8 text" : "Read only, outside your notes folders")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 } else {
-                    Text("Notes")
+                    Text(location)
                         .font(.system(size: 12))
                         .foregroundStyle(.tertiary)
-                        .help(doc.url.lastPathComponent)
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                        .help(doc.url.path)
                 }
                 Spacer()
-                if doc.isReadOnly {
-                    Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([doc.url]) }
-                        .buttonStyle(.link)
-                        .font(.system(size: 12))
-                }
+                Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([doc.url]) }
+                    .buttonStyle(.link)
+                    .font(.system(size: 12))
                 Picker("", selection: $doc.showPreview) {
-                    Text(doc.isReadOnly ? "Source" : "Edit").tag(false)
+                    Text("Edit").tag(false)
                     Text("Preview").tag(true)
                 }
                 .pickerStyle(.segmented)
@@ -37,13 +48,82 @@ struct NoteEditorView: View {
             }
             .padding(.horizontal, 14)
             .frame(height: 36)
+            if let change = doc.diskChange {
+                DiskChangeBar(doc: doc, change: change)
+            }
             Divider().opacity(0.5)
-            if doc.showPreview {
-                MarkdownPreview(markdown: doc.text, title: doc.title, baseURL: doc.url.deletingLastPathComponent())
-            } else {
-                MarkdownTextView(doc: doc)
+            switch doc.state {
+            case .loading:
+                Color.clear
+            case .waitingForICloud:
+                Text("Downloading from iCloud...")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .failed(let why):
+                VStack(spacing: 8) {
+                    Text(why).foregroundStyle(.secondary)
+                    Button("Try again") { doc.load() }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .ready:
+                if doc.showPreview {
+                    MarkdownPreview(markdown: doc.text, title: doc.title, baseURL: doc.url.deletingLastPathComponent())
+                } else {
+                    MarkdownTextView(doc: doc)
+                }
             }
         }
+    }
+}
+
+/// A quiet bar for a note that changed on disk while it was open.
+struct DiskChangeBar: View {
+    @ObservedObject var doc: NoteDocument
+    let change: NoteDocument.DiskChange
+    @EnvironmentObject var model: BrowserModel
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: change == .missing ? "questionmark.folder" : "arrow.triangle.2.circlepath")
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+            Text(change == .missing ? "This file was moved or deleted on disk. Your text is still here."
+                                    : "This file changed on disk. Your edits aren't saved yet.")
+                .font(.system(size: 12)).foregroundStyle(.secondary)
+            Spacer()
+            if change == .changed {
+                Button("Load disk version") { doc.loadDiskVersion() }
+                Button("Keep mine") { doc.keepMine() }
+            } else {
+                Button("Locate...") {
+                    if let t = model.tabs.first(where: { $0.url?.standardizedFileURL.path == doc.url.standardizedFileURL.path }) { model.locateNote(t) }
+                }
+                Button("Save it back") { doc.keepMine() }
+            }
+        }
+        .buttonStyle(.link)
+        .font(.system(size: 12))
+        .padding(.horizontal, 14)
+        .frame(height: 30)
+        .background(Color.primary.opacity(0.04))
+    }
+}
+
+/// Shown for a note item whose file is gone.
+struct MissingNoteView: View {
+    @ObservedObject var tab: Tab
+    @EnvironmentObject var model: BrowserModel
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Text("This note's file is missing").font(.title3.weight(.semibold))
+            Text(tab.url?.path ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(2).truncationMode(.middle)
+                .frame(maxWidth: 420)
+            HStack(spacing: 14) {
+                Button("Locate...") { model.locateNote(tab) }
+                Button("Close") { model.remove(tab) }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -121,7 +201,7 @@ struct MarkdownTextView: NSViewRepresentable {
                 }
             }
         }
-        tv.isEditable = !doc.isReadOnly
+        tv.isEditable = !doc.isReadOnly && doc.state == .ready
     }
 
     static func dismantleNSView(_ scroll: NSScrollView, coordinator: Coordinator) {
@@ -199,7 +279,7 @@ struct MarkdownPreview: NSViewRepresentable {
             decisionHandler(.cancel)
             MainActor.assumeIsolated {
                 if u.isFileURL {
-                    if u.pathExtension.lowercased() == "md" { model?.openDocument(u) } else { NSWorkspace.shared.activateFileViewerSelecting([u]) }
+                    if u.pathExtension.lowercased() == "md" { model?.openNote(u) } else { NSWorkspace.shared.activateFileViewerSelecting([u]) }
                 } else if u.scheme == "http" || u.scheme == "https" {
                     model?.newTab(url: u, select: true)
                 } else {

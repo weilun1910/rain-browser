@@ -69,8 +69,7 @@ struct CardView: View {
         switch m.doc.source {
         case .web: return "globe"
         case .chrome: return "clock.arrow.circlepath"
-        case .note: return "note.text"
-        case .markdown: return "doc.text"
+        case .note, .markdown: return "note.text"
         }
     }
 
@@ -80,10 +79,8 @@ struct CardView: View {
             let host = Snippet.prettyURL(m.doc.url).split(separator: "/").first.map(String.init) ?? ""
             if let folder = model.folderName(forURL: m.doc.url) { return "\(host)  |  \(folder)" }
             return host
-        case .note:
-            return "Notes"
-        case .markdown:
-            return m.doc.project ?? "Markdown"
+        case .note, .markdown:
+            return m.doc.project ?? "Notes"
         }
     }
 
@@ -148,7 +145,7 @@ struct CardView: View {
         .contextMenu {
             Button("Open") { model.open(card) }
             if m.doc.source == .markdown || m.doc.source == .note, let u = URL(string: m.doc.url) {
-                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([u]) }
+                Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([u]) }
             }
             Button("Copy link") {
                 NSPasteboard.general.clearContents()

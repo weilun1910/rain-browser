@@ -19,22 +19,6 @@ struct GeneralSettings: View {
 
     var body: some View {
         Form {
-            Section("Notes") {
-                LabeledContent("Folder") {
-                    Text(settings.published.notesDir.path)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .truncationMode(.middle)
-                        .textSelection(.enabled)
-                }
-                HStack {
-                    Button("Change...") { pickNotesFolder() }
-                    Button("Use default") { setNotesFolder(nil) }
-                        .disabled(settings.published.notesFolder == nil)
-                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([settings.published.notesDir]) }
-                }
-            }
             Section("Search") {
                 LabeledContent("Default search", value: "Google")
             }
@@ -71,27 +55,12 @@ struct GeneralSettings: View {
         .onChange(of: excludeText) { excludeSaved = false }
     }
 
-    func pickNotesFolder() {
-        let p = NSOpenPanel()
-        p.canChooseDirectories = true
-        p.canChooseFiles = false
-        p.canCreateDirectories = true
-        p.prompt = "Use folder"
-        guard p.runModal() == .OK, let u = p.url else { return }
-        setNotesFolder(u.path)
-    }
-
-    func setNotesFolder(_ path: String?) {
-        Settings.shared.update { $0.notesFolder = path }
-        AppDelegate.shared?.model.notes.reload()
-        Indexer.syncNotes(dir: Settings.shared.value.notesDir)
-    }
 }
 
 struct SourcesSettings: View {
     @ObservedObject var settings = Settings.shared
     @ObservedObject var chrome = ChromeImporter.shared
-    @ObservedObject var md = MarkdownIndexer.shared
+    @ObservedObject var notes: NotesStore = AppDelegate.shared?.model.notes ?? NotesStore()
     @State private var counts: [SourceCount] = []
     @State private var rootCounts: [String: Int] = [:]
     let timer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
@@ -120,35 +89,43 @@ struct SourcesSettings: View {
             }
 
             Section {
-                if settings.published.markdownRoots.isEmpty {
-                    Text("No folders added").foregroundStyle(.secondary)
+                if settings.published.notesFolders.isEmpty {
+                    Text("No folders chosen. Notes go in the app's own folder for now.")
+                        .foregroundStyle(.secondary)
                 }
-                ForEach(settings.published.markdownRoots, id: \.self) { root in
+                ForEach(settings.published.notesFolders, id: \.self) { root in
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(URL(fileURLWithPath: root).lastPathComponent)
                             Text(root).font(.system(size: 10)).foregroundStyle(.tertiary).lineLimit(1).truncationMode(.middle)
                         }
                         Spacer()
-                        Text("\(rootCounts[root] ?? 0) files").font(.caption).foregroundStyle(.secondary)
-                        Button("Remove") { md.removeRoot(root) }
+                        Text("\(rootCounts[root] ?? 0) notes").font(.caption).foregroundStyle(.secondary)
+                        Button("Remove") { SourcesActions.removeNotesFolder(root) }
                     }
                 }
                 HStack {
-                    Button("Add folders...") { SourcesActions.addMarkdownFolders() }
-                    Button("Rescan") { md.rescanAll() }
-                        .disabled(settings.published.markdownRoots.isEmpty || md.running)
+                    Button("Add folder...") { SourcesActions.addNotesFolders() }
+                    Button("Rescan") { notes.reload() }
                 }
-                if !md.status.isEmpty { Text(md.status).font(.caption).foregroundStyle(.secondary) }
+                LabeledContent("New notes go in") {
+                    HStack {
+                        Text(settings.published.defaultNewNotesFolder.lastPathComponent)
+                            .foregroundStyle(.secondary)
+                            .help(settings.published.defaultNewNotesFolder.path)
+                        Button("Change...") { pickNewNotesFolder() }
+                    }
+                }
+                if !notes.status.isEmpty { Text(notes.status).font(.caption).foregroundStyle(.secondary) }
             } header: {
-                Text("Markdown folders")
+                Text("Notes folders")
             } footer: {
-                Text("Files are only read, never changed. Skips .git, node_modules, .build and any .nosync folder. Rescans on launch.")
+                Text("Every .md file in these folders is one of your notes, and you can edit them here. Hidden folders, node_modules, .build and .nosync folders are left out. Notes save as you type, but never over a file that changed on disk since you opened it.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
             Section("Index") {
-                ForEach(SourceType.allCases, id: \.self) { s in
+                ForEach([SourceType.web, .note, .chrome], id: \.self) { s in
                     let c = counts.first { $0.source == s }
                     LabeledContent(Self.name(s)) {
                         Text(Self.countText(s, c)).foregroundStyle(.secondary)
@@ -156,7 +133,7 @@ struct SourcesSettings: View {
                 }
                 Button("Clear index...") {
                     if Prompt.confirm(title: "Clear the index?",
-                                      message: "This removes every captured page, note entry, Markdown entry and Chrome entry from the index. Your notes and Markdown files stay as they are.",
+                                      message: "This removes every page, note and Chrome entry from the index. Your note files stay exactly as they are.",
                                       ok: "Clear") {
                         Task.detached {
                             IndexStore.shared.clearAll()
@@ -175,11 +152,27 @@ struct SourcesSettings: View {
         .onReceive(timer) { _ in refresh() }
     }
 
+    func pickNewNotesFolder() {
+        let p = NSOpenPanel()
+        p.canChooseDirectories = true
+        p.canChooseFiles = false
+        p.canCreateDirectories = true
+        p.prompt = "Use folder"
+        p.directoryURL = settings.published.defaultNewNotesFolder
+        guard p.runModal() == .OK, let u = p.url else { return }
+        let roots = Settings.shared.value.notesRoots
+        guard roots.contains(where: { FileSafety.isInside(u, $0) || $0.standardizedFileURL.path == u.standardizedFileURL.path }) else {
+            Prompt.info(title: "Pick a folder inside your notes folders", message: "New notes have to go somewhere the app shows as notes.")
+            return
+        }
+        Settings.shared.update { $0.newNotesFolder = u.standardizedFileURL.path }
+    }
+
     static func name(_ s: SourceType) -> String {
         switch s {
         case .web: return "Pages read here"
         case .note: return "Notes"
-        case .markdown: return "Markdown files"
+        case .markdown: return "Notes (older entries)"
         case .chrome: return "Chrome history"
         }
     }
@@ -191,7 +184,7 @@ struct SourcesSettings: View {
     }
 
     func refresh() {
-        let roots = settings.published.markdownRoots
+        let roots = settings.published.notesFolders
         Task.detached {
             let c = IndexStore.shared.counts()
             var rc: [String: Int] = [:]

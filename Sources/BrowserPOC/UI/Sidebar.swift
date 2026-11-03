@@ -14,7 +14,6 @@ struct LeftSidebar: View {
                 VStack(alignment: .leading, spacing: 14) {
                     pinnedSection
                     foldersSection
-                    NotesSection(notes: model.notes)
                     tabsSection
                 }
                 .padding(.bottom, 12)
@@ -97,7 +96,8 @@ struct LeftSidebar: View {
     }
 
     private var tabsSection: some View {
-        SectionBox(title: "Tabs", onDrop: { ids in model.moveTabs(ids: ids, to: nil) }) {
+        SectionBox(title: "Tabs", trailing: AnyView(SmallIconButton(symbol: "square.and.pencil", help: "New note") { model.newNote() }),
+                   onDrop: { ids in model.moveTabs(ids: ids, to: nil) }) {
             Button { model.newTabCommand() } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "plus").frame(width: 16)
@@ -125,30 +125,6 @@ struct LeftSidebar: View {
         }
         .frame(height: 30)
         .padding(.bottom, 6)
-    }
-}
-
-struct NotesSection: View {
-    @ObservedObject var notes: NotesStore
-    @EnvironmentObject var model: BrowserModel
-    @State private var showAll = false
-
-    var body: some View {
-        let all = notes.notes
-        let shown = showAll ? all : Array(all.prefix(8))
-        SectionBox(title: "Notes", trailing: AnyView(SmallIconButton(symbol: "square.and.pencil", help: "New note") { model.newNote() })) {
-            if all.isEmpty {
-                Text("No notes yet").font(.system(size: 12)).foregroundStyle(.tertiary).padding(.leading, 8)
-            }
-            ForEach(shown) { NoteRow(note: $0) }
-            if all.count > 8 {
-                Button(showAll ? "Show fewer" : "Show all \(all.count)") { showAll.toggle() }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 8)
-            }
-        }
     }
 }
 
@@ -257,8 +233,7 @@ struct TabRow: View {
     var icon: String {
         switch tab.kind {
         case .web: return tab.isPinned ? "pin" : "globe"
-        case .note: return "note.text"
-        case .file: return "doc.text"
+        case .note, .file: return tab.isMissing ? "questionmark.square.dashed" : "note.text"
         }
     }
 
@@ -275,7 +250,12 @@ struct TabRow: View {
             Text(tab.displayTitle)
                 .font(.system(size: 13))
                 .lineLimit(1)
-                .foregroundStyle(tab.isLoaded || tab.kind != .web || model.isSelected(tab) ? .primary : .secondary)
+                .strikethrough(tab.isMissing, color: .secondary)
+                .foregroundStyle(tab.isMissing ? .secondary : (tab.isLoaded || tab.kind != .web || model.isSelected(tab) ? .primary : .secondary))
+            if tab.isMissing && hovering {
+                Button("Locate") { model.locateNote(tab) }
+                    .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(Color.accentColor)
+            }
             Spacer(minLength: 0)
             if hovering {
                 Button { tab.kind == .web ? model.close(tab) : model.remove(tab) } label: {
@@ -302,9 +282,11 @@ struct TabMenu: View {
     @EnvironmentObject var model: BrowserModel
 
     var body: some View {
-        if tab.kind == .web {
-            Button(tab.isPinned ? "Unpin" : "Pin") { model.togglePin(tab) }
-        }
+        if tab.kind == .web { webMenu } else { noteMenu }
+    }
+
+    @ViewBuilder var folderMenu: some View {
+        Button(tab.isPinned ? "Unpin" : "Pin") { model.togglePin(tab) }
         Menu("Move to folder") {
             ForEach(model.folders) { f in
                 Button(f.name) { model.move(tab, to: f.id) }
@@ -316,21 +298,36 @@ struct TabMenu: View {
         if tab.folderID != nil || tab.isPinned {
             Button("Move to Tabs") { model.move(tab, to: nil) }
         }
+    }
+
+    @ViewBuilder var webMenu: some View {
+        folderMenu
         Divider()
         if let u = tab.url {
             Button("Copy link") {
                 NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(u.isFileURL ? u.path : u.absoluteString, forType: .string)
-            }
-            if u.isFileURL {
-                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([u]) }
+                NSPasteboard.general.setString(u.absoluteString, forType: .string)
             }
         }
         Divider()
-        if tab.kind == .web && tab.isLoaded && (tab.isPinned || tab.folderID != nil) {
+        if tab.isLoaded && (tab.isPinned || tab.folderID != nil) {
             Button("Unload") { model.close(tab) }
         }
-        Button(tab.kind == .web && !(tab.isPinned || tab.folderID != nil) ? "Close" : "Remove") { model.remove(tab) }
+        Button(!(tab.isPinned || tab.folderID != nil) ? "Close" : "Remove") { model.remove(tab) }
+    }
+
+    @ViewBuilder var noteMenu: some View {
+        Button("Close") { model.remove(tab) }
+        if tab.isMissing {
+            Button("Locate...") { model.locateNote(tab) }
+        } else {
+            Button("Rename...") { model.promptRenameNote(tab) }
+            if let u = tab.url { Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([u]) } }
+        }
+        Divider()
+        folderMenu
+        Divider()
+        if !tab.isMissing { Button("Delete...") { model.promptDeleteNote(tab) } }
     }
 }
 
@@ -368,41 +365,6 @@ struct FolderRow: View {
         .contextMenu {
             Button("Rename...") { model.promptRename(folder) }
             Button("Delete folder") { model.deleteFolder(folder) }
-        }
-    }
-}
-
-struct NoteRow: View {
-    let note: NoteItem
-    @EnvironmentObject var model: BrowserModel
-    @State private var hovering = false
-
-    var selected: Bool {
-        if case .document(let u) = model.selection { return u == note.url }
-        return false
-    }
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "note.text").font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 16)
-            Text(note.title).font(.system(size: 13)).lineLimit(1)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 8)
-        .frame(height: 28)
-        .modifier(RowBackground(selected: selected, hovering: hovering))
-        .contentShape(Rectangle())
-        .onTapGesture { model.openDocument(note.url) }
-        .onHover { hovering = $0 }
-        .contextMenu {
-            Menu("Add to folder") {
-                ForEach(model.folders) { f in Button(f.name) { model.addDocumentToFolder(note.url, folder: f) } }
-                if model.folders.isEmpty { Text("No folders yet") }
-            }
-            Button("Rename...") { model.renameNote(note.url) }
-            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([note.url]) }
-            Divider()
-            Button("Move to Trash") { model.trashNote(note.url) }
         }
     }
 }

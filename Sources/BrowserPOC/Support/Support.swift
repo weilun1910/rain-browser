@@ -23,8 +23,8 @@ enum Paths {
     }
 }
 
-/// The app only ever writes inside its own support folder and the notes folder.
-/// Everything else (Markdown folders Felix adds, Chrome's files) is read-only.
+/// The app writes only inside its own support folder and to .md files inside the chosen
+/// notes folders. Chrome's files and everything else are read-only.
 enum FileSafety {
     static func isInside(_ url: URL, _ dir: URL) -> Bool {
         let a = url.standardizedFileURL.resolvingSymlinksInPath().path
@@ -33,23 +33,39 @@ enum FileSafety {
         return a.hasPrefix(d)
     }
 
-    static func canWriteNote(_ url: URL, notesDir: URL) -> Bool {
-        guard url.pathExtension.lowercased() == "md" else { return false }
-        guard isInside(url, notesDir) else { return false }
-        for root in Settings.shared.value.markdownRoots {
-            let r = URL(fileURLWithPath: root)
-            // A notes folder inside an added Markdown folder is still the app's own,
-            // but a file in a Markdown folder outside the notes folder never is.
-            if isInside(url, r) && !isInside(notesDir, r) { return false }
+    /// Folder names the notes tree never shows or writes into.
+    static func isSkippedFolder(_ name: String) -> Bool {
+        name.hasPrefix(".") || name == "node_modules" || name.lowercased().hasSuffix(".nosync")
+    }
+
+    /// The chosen root that holds this URL, if it's in a visible part of the tree.
+    static func notesRoot(for url: URL, roots: [URL]) -> URL? {
+        for r in roots where isInside(url, r) {
+            let rootPath = r.standardizedFileURL.resolvingSymlinksInPath().path
+            let path = url.standardizedFileURL.resolvingSymlinksInPath().path
+            let rel = path.dropFirst(rootPath.count).split(separator: "/").map(String.init)
+            if rel.isEmpty { return nil }
+            if rel.dropLast().contains(where: isSkippedFolder) { return nil }
+            if rel.last?.hasPrefix(".") == true { return nil }
+            return r
         }
-        return true
+        return nil
+    }
+
+    static func canWriteNote(_ url: URL, roots: [URL]? = nil) -> Bool {
+        guard url.pathExtension.lowercased() == "md" else { return false }
+        return notesRoot(for: url, roots: roots ?? Settings.shared.value.notesRoots) != nil
     }
 }
 
 struct AppSettings: Codable, Equatable {
-    var notesFolder: String?
-    var markdownRoots: [String] = []
+    /// Folders whose .md files are the browser's notes. Empty means the fallback folder.
+    var notesFolders: [String] = []
+    /// Where new notes go when no folder is selected in the tree. Nil means the first notes folder.
+    var newNotesFolder: String?
     var excludedDomains: [String] = AppSettings.defaultExcluded
+    /// Sites you write on. Their pages go under Notes / Docs. Notion and Google Docs are built in.
+    var writingSites: [String] = AppSettings.defaultWritingSites
     var threshold: Double = 0.40
     var keywordWeight: Double = 1.0
     var semanticWeight: Double = 0.7
@@ -70,14 +86,27 @@ struct AppSettings: Codable, Equatable {
         "1password.com", "bitwarden.com", "irs.gov", "ssa.gov",
     ]
 
+    static let defaultWritingSites: [String] = [
+        "coda.io", "quip.com", "paper.dropbox.com", "overleaf.com", "hackmd.io", "craft.do",
+        "*.atlassian.net/wiki", "figma.com",
+    ]
+
+    enum CodingKeys: String, CodingKey {
+        case notesFolders, newNotesFolder, excludedDomains, writingSites, threshold, keywordWeight, semanticWeight,
+             entityWeight, showScores, rightPanelOpen, firstRunDone, chromeImportedAt, chromeSummary
+        case markdownRoots // older name, read once for migration
+    }
+
     init() {}
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = AppSettings()
-        notesFolder = try c.decodeIfPresent(String.self, forKey: .notesFolder)
-        markdownRoots = try c.decodeIfPresent([String].self, forKey: .markdownRoots) ?? d.markdownRoots
+        notesFolders = try c.decodeIfPresent([String].self, forKey: .notesFolders)
+            ?? c.decodeIfPresent([String].self, forKey: .markdownRoots) ?? []
+        newNotesFolder = try c.decodeIfPresent(String.self, forKey: .newNotesFolder)
         excludedDomains = try c.decodeIfPresent([String].self, forKey: .excludedDomains) ?? d.excludedDomains
+        writingSites = try c.decodeIfPresent([String].self, forKey: .writingSites) ?? d.writingSites
         threshold = try c.decodeIfPresent(Double.self, forKey: .threshold) ?? d.threshold
         keywordWeight = try c.decodeIfPresent(Double.self, forKey: .keywordWeight) ?? d.keywordWeight
         semanticWeight = try c.decodeIfPresent(Double.self, forKey: .semanticWeight) ?? d.semanticWeight
@@ -89,9 +118,39 @@ struct AppSettings: Codable, Equatable {
         chromeSummary = try c.decodeIfPresent(String.self, forKey: .chromeSummary)
     }
 
-    var notesDir: URL {
-        if let notesFolder, !notesFolder.isEmpty { return URL(fileURLWithPath: notesFolder, isDirectory: true) }
-        return Paths.defaultNotesDir
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(notesFolders, forKey: .notesFolders)
+        try c.encodeIfPresent(newNotesFolder, forKey: .newNotesFolder)
+        try c.encode(excludedDomains, forKey: .excludedDomains)
+        try c.encode(writingSites, forKey: .writingSites)
+        try c.encode(threshold, forKey: .threshold)
+        try c.encode(keywordWeight, forKey: .keywordWeight)
+        try c.encode(semanticWeight, forKey: .semanticWeight)
+        try c.encode(entityWeight, forKey: .entityWeight)
+        try c.encode(showScores, forKey: .showScores)
+        try c.encode(rightPanelOpen, forKey: .rightPanelOpen)
+        try c.encode(firstRunDone, forKey: .firstRunDone)
+        try c.encodeIfPresent(chromeImportedAt, forKey: .chromeImportedAt)
+        try c.encodeIfPresent(chromeSummary, forKey: .chromeSummary)
+    }
+
+    /// True when no folder is chosen and the app's own Notes folder stands in.
+    var usesFallbackNotes: Bool { notesFolders.isEmpty }
+
+    var notesRoots: [URL] {
+        if notesFolders.isEmpty { return [Paths.defaultNotesDir] }
+        return notesFolders.map { URL(fileURLWithPath: $0, isDirectory: true) }
+    }
+
+    /// The folder new notes go in when nothing is selected in the tree.
+    var defaultNewNotesFolder: URL {
+        let roots = notesRoots
+        if let p = newNotesFolder {
+            let u = URL(fileURLWithPath: p, isDirectory: true)
+            if roots.contains(where: { FileSafety.isInside(u, $0) || $0.standardizedFileURL.path == u.standardizedFileURL.path }) { return u }
+        }
+        return roots[0]
     }
 
     func isExcluded(host: String?) -> Bool {
@@ -211,6 +270,13 @@ enum URLKey {
     ]
 
     static func key(for url: URL) -> String {
+        // One entry per Google Doc and per Notion page, whatever tab or view is in the URL.
+        if let doc = WritingKey.googleDoc(url) { return "https://docs.google.com/\(doc.type)/d/\(doc.id)" }
+        if WritingKey.isNotion(url), var c = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            c.query = nil; c.fragment = nil
+            c.host = c.host?.lowercased()
+            return c.string ?? url.absoluteString
+        }
         guard var c = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url.absoluteString }
         c.fragment = nil
         c.scheme = c.scheme?.lowercased()
@@ -233,5 +299,79 @@ enum URLKey {
         guard scheme == "http" || scheme == "https" else { return false }
         guard let host = url.host, !host.isEmpty else { return false }
         return true
+    }
+}
+
+
+/// Which Related section an item belongs in.
+enum CardSection: String, CaseIterable {
+    case sites, docs
+
+    var title: String { self == .sites ? "Sites" : "Notes / Docs" }
+}
+
+enum WritingKey {
+    static let typedThreshold = 200
+
+    static func googleDoc(_ url: URL) -> (type: String, id: String)? {
+        guard url.host?.lowercased() == "docs.google.com" else { return nil }
+        let parts = url.path.split(separator: "/").map(String.init)
+        guard let first = parts.first, ["document", "spreadsheets", "presentation"].contains(first) else { return nil }
+        // /document/d/<id>/edit or /document/u/0/d/<id>/edit
+        guard let d = parts.firstIndex(of: "d"), d + 1 < parts.count else { return nil }
+        let id = parts[d + 1]
+        guard id.count >= 10, id.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }) else { return nil }
+        return (first, id)
+    }
+
+    static func isNotion(_ url: URL) -> Bool {
+        guard let h = url.host?.lowercased() else { return false }
+        return h == "notion.so" || h.hasSuffix(".notion.so") || h == "notion.site" || h.hasSuffix(".notion.site")
+    }
+
+    /// Typing counts are kept per document for Docs and Notion and per page elsewhere.
+    static func key(_ url: URL) -> String { URLKey.key(for: url) }
+
+    /// Matches entries like "coda.io", "*.atlassian.net/wiki" or "paper.dropbox.com".
+    static func matches(_ url: URL, pattern raw: String) -> Bool {
+        var p = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if p.isEmpty { return false }
+        if p.hasPrefix("https://") { p.removeFirst(8) } else if p.hasPrefix("http://") { p.removeFirst(7) }
+        var hostPart = p
+        var pathPart = ""
+        if let slash = p.firstIndex(of: "/") { hostPart = String(p[..<slash]); pathPart = String(p[slash...]) }
+        if hostPart.hasPrefix("*.") { hostPart.removeFirst(2) }
+        guard let host = url.host?.lowercased(), host == hostPart || host.hasSuffix("." + hostPart) else { return false }
+        if pathPart.isEmpty || pathPart == "/" { return true }
+        return url.path.lowercased().hasPrefix(pathPart)
+    }
+
+    /// Built-in rules plus the editable list. Typed characters and manual choices are checked by the caller.
+    static func isWritingSite(_ url: URL, list: [String]) -> Bool {
+        if isNotion(url) || googleDoc(url) != nil { return true }
+        return list.contains { matches(url, pattern: $0) }
+    }
+
+    static func section(source: SourceType, url: String, typed: Int, override: CardSection?, writingSites: [String]) -> CardSection {
+        if let override { return override }
+        if source == .note || source == .markdown { return .docs }
+        guard let u = URL(string: url) else { return .sites }
+        if isWritingSite(u, list: writingSites) { return .docs }
+        if typed >= typedThreshold { return .docs }
+        return .sites
+    }
+}
+
+/// Google Docs draws text on a canvas, so the app asks Google for the plain export instead,
+/// from inside Felix's own tab (the same as File > Download).
+enum DocsExport {
+    static func url(for doc: URL) -> URL? {
+        guard let d = WritingKey.googleDoc(doc) else { return nil }
+        switch d.type {
+        case "document": return URL(string: "https://docs.google.com/document/d/\(d.id)/export?format=txt")
+        case "spreadsheets": return URL(string: "https://docs.google.com/spreadsheets/d/\(d.id)/export?format=csv")
+        case "presentation": return URL(string: "https://docs.google.com/presentation/d/\(d.id)/export/txt")
+        default: return nil
+        }
     }
 }

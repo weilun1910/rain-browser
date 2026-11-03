@@ -118,13 +118,17 @@ enum SmokeTest {
         }
 
         // 5. A note about bread brings back bread items, and Add to research links them in the note.
-        guard let noteURL = model.notes.create() else {
+        let notesRoot = dir.appendingPathComponent("notes-root", isDirectory: true)
+        Paths.ensure(notesRoot)
+        Settings.shared.update { $0.notesFolders = [notesRoot.path] }
+        guard let noteURL = model.notes.create(in: model.newNotesFolder, title: "Feeding schedule") else {
             check(false, "could create a note")
             return 1
         }
         let noteText = "# Feeding schedule\n\nMy sourdough starter is sluggish after feeding and the levain smells of acetone. Try rye flour and a warmer spot.\n"
         try? noteText.write(to: noteURL, atomically: true, encoding: .utf8)
-        model.openDocument(noteURL)
+        model.openNote(noteURL)
+        _ = wait(5) { model.document?.state == .ready }
         let breadKeys = Set([3, 4].map { SelfTest.fixtures[$0].key })
         let gotBread = wait(10) { model.resurfacer.cards.contains { breadKeys.contains($0.match.doc.key) } }
         check(gotBread, "a bread note brings back bread items", model.resurfacer.cards.map { $0.match.doc.title }.joined(separator: " | "))
