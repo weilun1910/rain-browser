@@ -20,7 +20,7 @@ struct RightPanelContent: View {
                 Text("Related")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.secondary)
-                Spacer()
+                WindowDragArea()
                 NavButton(symbol: "sidebar.right", help: "Hide related panel") {
                     Settings.shared.update { $0.rightPanelOpen = false }
                 }
@@ -116,9 +116,9 @@ struct CardView: View {
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
             if showScores {
-                Text(String(format: "keyword %.2f  |  semantic %.2f  |  entity %.2f  |  score %.2f%@",
-                            m.keyword, m.semantic, m.entity, m.score, m.penalized ? "  |  dismissed before" : ""))
-                    .font(.system(size: 10, design: .monospaced))
+                Text(String(format: "keyword %.2f | meaning %.2f | names %.2f | score %.2f%@",
+                            m.keyword, m.semantic, m.entity, m.score, m.penalized ? " | dismissed before" : ""))
+                    .font(.system(size: 10).monospacedDigit())
                     .foregroundStyle(.tertiary)
             }
             HStack(spacing: 12) {

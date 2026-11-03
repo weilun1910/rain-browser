@@ -54,10 +54,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         w.title = "Browser POC"
         w.titlebarAppearsTransparent = true
         w.titleVisibility = .hidden
-        w.isMovableByWindowBackground = true
+        w.isMovableByWindowBackground = false
         w.collectionBehavior.insert(.fullScreenPrimary)
         w.minSize = NSSize(width: 900, height: 560)
-        w.contentView = NSHostingView(rootView: MainView().environmentObject(model))
+        w.contentView = MainView.host(model)
         w.delegate = self
         w.setFrameAutosaveName("BrowserPOCMain")
         if !w.setFrameUsingName("BrowserPOCMain") { w.center() }
@@ -103,7 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             w.makeKeyAndOrderFront(nil)
             return
         }
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 520),
+        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 580, height: 620),
                          styleMask: [.titled, .closable], backing: .buffered, defer: false)
         w.title = "Settings"
         w.isReleasedWhenClosed = false

@@ -8,7 +8,7 @@ struct SettingsView: View {
             SourcesSettings().tabItem { Label("Sources", systemImage: "tray.full") }
             TuningSettings().tabItem { Label("Tuning", systemImage: "slider.horizontal.3") }
         }
-        .frame(width: 560, height: 520)
+        .frame(width: 580, height: 620)
     }
 }
 
@@ -218,7 +218,7 @@ struct TuningSettings: View {
             Section {
                 SliderRow(title: "Relevance threshold", value: binding(\.threshold), range: 0.1...0.9)
             } footer: {
-                Text("Higher shows fewer, stronger cards. Showing nothing is fine.")
+                Text("Higher means fewer, stronger cards.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Signal weights") {

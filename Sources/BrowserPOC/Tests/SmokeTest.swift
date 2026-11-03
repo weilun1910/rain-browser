@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import WebKit
 
 /// `--smoketest`: drives the real browser model headless (no window) against a throwaway folder.
@@ -12,6 +13,30 @@ enum SmokeTest {
             RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.1))
         }
         return done()
+    }
+
+    /// Renders a view to a PNG without putting any window on screen.
+    static func snapshot(_ view: NSView, _ url: URL) {
+        for _ in 0..<5 {
+            view.layoutSubtreeIfNeeded()
+            RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.1))
+        }
+        guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        if let data = rep.representation(using: .png, properties: [:]) {
+            try? data.write(to: url)
+            print("      snapshot: \(url.lastPathComponent)")
+        }
+    }
+
+    static func offscreenWindow(_ content: NSView, size: NSSize) -> NSWindow {
+        let w = NSWindow(contentRect: NSRect(origin: .zero, size: size),
+                         styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+        w.titlebarAppearsTransparent = true
+        w.titleVisibility = .hidden
+        w.isReleasedWhenClosed = false
+        w.contentView = content
+        return w
     }
 
     static let webkitPage = """
@@ -44,6 +69,11 @@ enum SmokeTest {
 
         let model = BrowserModel()
         model.notes.reload()
+        let snaps = dir.appendingPathComponent("snapshots", isDirectory: true)
+        Paths.ensure(snaps)
+        let window = offscreenWindow(MainView.host(model), size: NSSize(width: 1380, height: 860))
+        snapshot(window.contentView!, snaps.appendingPathComponent("0-first-run.png"))
+        Settings.shared.update { $0.firstRunDone = true }
 
         // 1. A page loads in a real WKWebView and becomes the context.
         let tab = model.newTab(url: nil, select: true)
@@ -56,6 +86,7 @@ enum SmokeTest {
         let webkitKeys = Set([0, 1, 2, 7].map { SelfTest.fixtures[$0].key })
         check(!keys.isEmpty && keys.isSubset(of: webkitKeys), "cards are all WebKit items")
         for c in model.resurfacer.cards { print("      card: \(c.match.doc.title.prefix(50))  |  \(c.reason)") }
+        snapshot(window.contentView!, snaps.appendingPathComponent("1-page-with-cards.png"))
 
         // 2. After about five seconds the page is captured into the index.
         let key = URLKey.key(for: pageURL)
@@ -73,6 +104,8 @@ enum SmokeTest {
         } else {
             print("      Foundation Models not available: \(ReasonWriter.availabilityText). Template reasons stay.")
         }
+
+        snapshot(window.contentView!, snaps.appendingPathComponent("2-model-reasons.png"))
 
         // 4. Add to research from a page goes to an auto-created Research folder.
         if let card = model.resurfacer.cards.first {
@@ -101,6 +134,17 @@ enum SmokeTest {
             check(msg == "Added to note" && saved.contains("## Related") && saved.contains(card.match.doc.url),
                   "Add to research appends a link under Related", msg)
         }
+
+        Settings.shared.update { $0.showScores = true }
+        snapshot(window.contentView!, snaps.appendingPathComponent("3-note-with-cards.png"))
+        Settings.shared.update { $0.showScores = false }
+        if let doc = model.document {
+            doc.showPreview = true
+            snapshot(window.contentView!, snaps.appendingPathComponent("4-note-preview.png"))
+            doc.showPreview = false
+        }
+        let settingsWindow = offscreenWindow(NSHostingView(rootView: SettingsView()), size: NSSize(width: 560, height: 520))
+        snapshot(settingsWindow.contentView!, snaps.appendingPathComponent("5-settings.png"))
 
         // 6. Typing keeps cards in place.
         if let doc = model.document {

@@ -18,6 +18,10 @@ struct MainView: View {
     @EnvironmentObject var model: BrowserModel
     @ObservedObject var settings = Settings.shared
 
+    @MainActor static func host(_ model: BrowserModel) -> NSView {
+        NSHostingView(rootView: MainView().environmentObject(model))
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             LeftSidebar()
@@ -37,6 +41,15 @@ struct MainView: View {
         .background(VisualEffect().ignoresSafeArea())
         .ignoresSafeArea()
         .frame(minWidth: 900, minHeight: 560)
+    }
+}
+
+/// Empty space that drags the window, like a title bar.
+struct WindowDragArea: View {
+    var body: some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .gesture(WindowDragGesture())
     }
 }
 

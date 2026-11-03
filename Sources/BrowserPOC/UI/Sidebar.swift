@@ -29,7 +29,7 @@ struct LeftSidebar: View {
 
     private var topBar: some View {
         HStack(spacing: 2) {
-            Spacer()
+            WindowDragArea()
             if let tab = model.currentTab, tab.kind == .web {
                 NavControls(tab: tab)
             } else {

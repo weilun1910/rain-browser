@@ -15,10 +15,10 @@ struct NoteEditorView: View {
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 } else {
-                    Text(doc.url.deletingPathExtension().lastPathComponent)
+                    Text("Notes")
                         .font(.system(size: 12))
                         .foregroundStyle(.tertiary)
-                        .lineLimit(1)
+                        .help(doc.url.lastPathComponent)
                 }
                 Spacer()
                 if doc.isReadOnly {
@@ -61,7 +61,8 @@ struct MarkdownTextView: NSViewRepresentable {
 
         func textDidChange(_ n: Notification) {
             guard let tv = n.object as? NSTextView else { return }
-            MarkdownStyler.style(tv)
+            // Restyling mid-composition would break input methods.
+            if !tv.hasMarkedText() { MarkdownStyler.style(tv) }
             let s = tv.string
             MainActor.assumeIsolated { doc.userEdited(s) }
         }
@@ -214,7 +215,6 @@ struct MarkdownPreview: NSViewRepresentable {
         let c = WKWebViewConfiguration()
         c.websiteDataStore = .nonPersistent()
         let wv = WKWebView(frame: .zero, configuration: c)
-        wv.setValue(false, forKey: "drawsBackground")
         wv.navigationDelegate = context.coordinator
         context.coordinator.model = model
         return wv

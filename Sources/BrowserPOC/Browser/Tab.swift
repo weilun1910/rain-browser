@@ -128,9 +128,13 @@ final class Tab: ObservableObject, Identifiable {
 
     func load(_ u: URL) {
         loadError = nil
-        url = u
         kind = .web
-        ensureWebView().load(URLRequest(url: u))
+        url = u
+        if let webView {
+            webView.load(URLRequest(url: u))
+        } else {
+            _ = ensureWebView() // loads `url` when it creates the view
+        }
     }
 
     static let extractJS = """
