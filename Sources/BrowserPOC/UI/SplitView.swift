@@ -186,6 +186,7 @@ struct SplitRow: View {
         .contextMenu {
             Button("Separate") { model.separate(split) }
             Button("Swap sides") { model.swap(split) }
+            MoveToSpaceMenu { id in model.move(split: split, toSpace: id) }
         }
     }
 

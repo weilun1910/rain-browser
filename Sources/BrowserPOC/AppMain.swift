@@ -71,6 +71,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 MainActor.assumeIsolated { self?.splitNewTabAction() }
                 return nil
             }
+            // Ctrl-1 to Ctrl-9 jump to a space.
+            let digits: [UInt16: Int] = [18: 0, 19: 1, 20: 2, 21: 3, 23: 4, 22: 5, 26: 6, 28: 7, 25: 8]
+            if mods == [.control], let i = digits[e.keyCode] {
+                MainActor.assumeIsolated { self?.model.switchSpace(index: i) }
+                return nil
+            }
             return e
         }
 

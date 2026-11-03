@@ -2,8 +2,28 @@ import AppKit
 import SwiftUI
 import WebKit
 
+/// A space: its own pins, folders, tabs and splits, with a look of its own.
+struct Space: Codable, Identifiable, Equatable {
+    var id: UUID = UUID()
+    var name: String
+    var icon: String = "house"
+    var color: String = "#7A8CA8"
+    /// Where new notes made in this space go. Nil means the app-wide default.
+    var newNotesFolder: String?
+    var selectedTab: UUID?
+    var selectedSplit: UUID?
+
+    static let palette: [(String, String)] = [
+        ("Slate", "#7A8CA8"), ("Blue", "#4C8DF6"), ("Teal", "#2FA8A0"), ("Green", "#5DA55A"),
+        ("Amber", "#E0A030"), ("Orange", "#E57A3C"), ("Rose", "#D9607A"), ("Purple", "#9070D8"),
+    ]
+    static let icons = ["house", "briefcase", "book", "graduationcap", "hammer", "paintbrush", "globe",
+                        "leaf", "flame", "star", "heart", "bolt", "cart", "airplane", "music.note", "camera"]
+}
+
 struct Folder: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
+    var spaceID: UUID?
     var name: String
     var isExpanded: Bool = true
     var createdAt: Date = Date()
@@ -17,6 +37,7 @@ struct TabRecord: Codable {
     var isPinned: Bool
     var folderID: UUID?
     var createdAt: Date
+    var spaceID: UUID?
 }
 
 /// Two items side by side. Either side can be a page or a note.
@@ -27,6 +48,7 @@ struct SplitRecord: Codable, Identifiable, Equatable {
     var ratio: Double = 0.5
     var focusRight: Bool = false
     var createdAt: Date = Date()
+    var spaceID: UUID?
 
     var focused: UUID { focusRight ? right : left }
     var other: UUID { focusRight ? left : right }
@@ -34,6 +56,10 @@ struct SplitRecord: Codable, Identifiable, Equatable {
 }
 
 struct SavedState: Codable {
+    /// 2 adds spaces. Version 1 files have none and move into "Home".
+    var version: Int? = 2
+    var spaces: [Space]? = nil
+    var currentSpace: UUID? = nil
     var tabs: [TabRecord] = []
     var folders: [Folder] = []
     var splits: [SplitRecord]? = nil
@@ -52,9 +78,26 @@ enum PaneSide { case left, right }
 
 @MainActor
 final class BrowserModel: ObservableObject {
-    @Published var tabs: [Tab] = []
-    @Published var folders: [Folder] = []
-    @Published private(set) var splits: [SplitRecord] = []
+    @Published var spaces: [Space] = []
+    @Published private(set) var currentSpaceID = UUID()
+    /// Every item in every space. New items land in the current space.
+    @Published var tabs: [Tab] = [] {
+        didSet { for t in tabs where t.spaceID == nil { t.spaceID = currentSpaceID } }
+    }
+    @Published var folders: [Folder] = [] {
+        didSet {
+            if folders.contains(where: { $0.spaceID == nil }) {
+                for i in folders.indices where folders[i].spaceID == nil { folders[i].spaceID = currentSpaceID }
+            }
+        }
+    }
+    @Published private(set) var splits: [SplitRecord] = [] {
+        didSet {
+            if splits.contains(where: { $0.spaceID == nil }) {
+                for i in splits.indices where splits[i].spaceID == nil { splits[i].spaceID = currentSpaceID }
+            }
+        }
+    }
     @Published private(set) var selection: Selection?
     /// The note shown in the focused pane, if it's a note.
     @Published private(set) var document: NoteDocument?
@@ -114,11 +157,16 @@ final class BrowserModel: ObservableObject {
     /// The focused web tab, for the address bar and navigation.
     var currentWebTab: Tab? { currentTab.flatMap { $0.kind == .web ? $0 : nil } }
 
+    var currentSpace: Space? { spaces.first { $0.id == currentSpaceID } }
+    var spaceTabs: [Tab] { tabs.filter { $0.spaceID == currentSpaceID } }
+    var spaceFolders: [Folder] { folders.filter { $0.spaceID == currentSpaceID } }
+    var spaceSplits: [SplitRecord] { splits.filter { $0.spaceID == currentSpaceID } }
+
     // Items in a split show as the split's joined row, not on their own.
-    var pinnedTabs: [Tab] { let s = splitTabIDs; return tabs.filter { $0.isPinned && !s.contains($0.id) } }
+    var pinnedTabs: [Tab] { let s = splitTabIDs; return spaceTabs.filter { $0.isPinned && !s.contains($0.id) } }
     var looseTabs: [Tab] {
         let s = splitTabIDs
-        return tabs.filter { !$0.isPinned && $0.folderID == nil && !s.contains($0.id) }.sorted { $0.createdAt > $1.createdAt }
+        return spaceTabs.filter { !$0.isPinned && $0.folderID == nil && !s.contains($0.id) }.sorted { $0.createdAt > $1.createdAt }
     }
     func tabs(in folder: Folder) -> [Tab] { let s = splitTabIDs; return tabs.filter { $0.folderID == folder.id && !$0.isPinned && !s.contains($0.id) } }
 
@@ -131,21 +179,40 @@ final class BrowserModel: ObservableObject {
 
     private func load() {
         guard let data = try? Data(contentsOf: Paths.stateFile),
-              let s = try? JSONDecoder.iso.decode(SavedState.self, from: data) else { return }
-        folders = s.folders
+              let s = try? JSONDecoder.iso.decode(SavedState.self, from: data) else {
+            let home = Space(name: "Home")
+            spaces = [home]
+            currentSpaceID = home.id
+            return
+        }
+        // Version 1 had no spaces: everything moves into one called Home.
+        var sp = s.spaces ?? []
+        if sp.isEmpty {
+            sp = [Space(name: "Home", selectedTab: s.selectedTab, selectedSplit: s.selectedSplit)]
+        }
+        spaces = sp
+        let home = sp[0].id
+        currentSpaceID = s.currentSpace.flatMap { id in sp.contains { $0.id == id } ? id : nil } ?? home
+        folders = s.folders.map { var f = $0; if f.spaceID == nil || !sp.contains(where: { $0.id == f.spaceID }) { f.spaceID = home }; return f }
         tabs = s.tabs.map { r in
             let kind: TabKind = r.kind == .file ? .note : r.kind
             let t = Tab(id: r.id, kind: kind, url: r.url.flatMap(URL.init(string:)), title: r.title,
                         isPinned: r.isPinned, folderID: r.folderID, createdAt: r.createdAt)
             t.model = self
+            t.spaceID = r.spaceID.flatMap { id in sp.contains { $0.id == id } ? id : nil } ?? home
             return t
         }
         let ids = Set(tabs.map { $0.id })
-        splits = (s.splits ?? []).filter { ids.contains($0.left) && ids.contains($0.right) && $0.left != $0.right }
+        splits = (s.splits ?? []).filter { ids.contains($0.left) && ids.contains($0.right) && $0.left != $0.right }.map { r in
+            var x = r
+            if x.spaceID == nil || !sp.contains(where: { $0.id == x.spaceID }) { x.spaceID = tab(r.left)?.spaceID ?? home }
+            return x
+        }
         checkNotesOnDisk()
-        if let sid = s.selectedSplit, let sp = splits.first(where: { $0.id == sid }) {
+        let cur = currentSpace
+        if let sid = cur?.selectedSplit ?? s.selectedSplit, let sp = splits.first(where: { $0.id == sid && $0.spaceID == currentSpaceID }) {
             selectSplit(sp)
-        } else if let id = s.selectedTab, let t = tab(id) {
+        } else if let id = cur?.selectedTab ?? s.selectedTab, let t = tab(id), t.spaceID == currentSpaceID {
             select(t)
         } else if let p = s.selectedDocument, FileManager.default.fileExists(atPath: p) {
             openNote(URL(fileURLWithPath: p))
@@ -160,11 +227,14 @@ final class BrowserModel: ObservableObject {
     }
 
     func saveNow() {
+        rememberSelection()
         var s = SavedState()
+        s.spaces = spaces
+        s.currentSpace = currentSpaceID
         s.folders = folders
         s.tabs = tabs.filter { !$0.isBlank }.map {
             TabRecord(id: $0.id, kind: $0.kind, url: $0.url?.absoluteString, title: $0.title,
-                      isPinned: $0.isPinned, folderID: $0.folderID, createdAt: $0.createdAt)
+                      isPinned: $0.isPinned, folderID: $0.folderID, createdAt: $0.createdAt, spaceID: $0.spaceID)
         }
         s.splits = splits
         switch selection {
@@ -235,6 +305,7 @@ final class BrowserModel: ObservableObject {
     }
 
     func select(_ tab: Tab) {
+        if let sid = tab.spaceID, sid != currentSpaceID { switchSpace(to: sid, restore: false) }
         if let sp = split(containing: tab.id) {
             // Picking an item that lives in a split brings the split back, focused on it.
             selectSplit(sp, focus: sp.right == tab.id ? .right : .left)
@@ -288,6 +359,7 @@ final class BrowserModel: ObservableObject {
     // MARK: - Split view
 
     func selectSplit(_ sp: SplitRecord, focus: PaneSide? = nil) {
+        if let sid = sp.spaceID, sid != currentSpaceID { switchSpace(to: sid, restore: false) }
         if let focus, let i = splits.firstIndex(where: { $0.id == sp.id }) {
             splits[i].focusRight = focus == .right
         }
@@ -444,10 +516,19 @@ final class BrowserModel: ObservableObject {
     }
 
     private func selectPrevious(excluding: Selection) {
+        // Earlier items in other spaces stay in the history for when you go back there.
+        var skipped: [Selection] = []
+        defer { history.append(contentsOf: skipped.reversed()) }
         while let last = history.popLast() {
             if last == excluding { continue }
-            if case .tab(let id) = last, let t = tab(id) { selection = nil; select(t); return }
-            if case .split(let sid) = last, let sp = splits.first(where: { $0.id == sid }) { selection = nil; selectSplit(sp); return }
+            if case .tab(let id) = last, let t = tab(id) {
+                if t.spaceID != currentSpaceID { skipped.append(last); continue }
+                selection = nil; select(t); return
+            }
+            if case .split(let sid) = last, let sp = splits.first(where: { $0.id == sid }) {
+                if sp.spaceID != currentSpaceID { skipped.append(last); continue }
+                selection = nil; selectSplit(sp); return
+            }
         }
         if let t = looseTabs.first ?? pinnedTabs.first(where: { $0.isLoaded }) {
             selection = nil
@@ -512,7 +593,7 @@ final class BrowserModel: ObservableObject {
 
     @discardableResult
     func createFolder(named name: String) -> Folder {
-        let f = Folder(name: name)
+        let f = Folder(spaceID: currentSpaceID, name: name)
         folders.append(f)
         scheduleSave()
         return f
@@ -551,7 +632,7 @@ final class BrowserModel: ObservableObject {
     }
 
     func researchFolder() -> Folder {
-        if let f = folders.first(where: { $0.name == "Research" }) { return f }
+        if let f = spaceFolders.first(where: { $0.name == "Research" }) { return f }
         return createFolder(named: "Research")
     }
 
@@ -561,7 +642,7 @@ final class BrowserModel: ObservableObject {
     @discardableResult
     func openNote(_ url: URL, select doSelect: Bool = true) -> Tab {
         let path = url.standardizedFileURL.path
-        if let t = tabs.first(where: { $0.kind == .note && $0.url?.standardizedFileURL.path == path }) {
+        if let t = spaceTabs.first(where: { $0.kind == .note && $0.url?.standardizedFileURL.path == path }) {
             if doSelect { select(t) }
             return t
         }
@@ -573,8 +654,15 @@ final class BrowserModel: ObservableObject {
         return t
     }
 
-    /// The folder new notes go in.
-    var newNotesFolder: URL { Settings.shared.value.defaultNewNotesFolder }
+    /// The folder new notes go in: the space's own choice, else the app-wide default.
+    var newNotesFolder: URL {
+        let roots = Settings.shared.value.notesRoots
+        if let p = currentSpace?.newNotesFolder {
+            let u = URL(fileURLWithPath: p, isDirectory: true)
+            if roots.contains(where: { FileSafety.isInside(u, $0) || $0.standardizedFileURL.path == u.standardizedFileURL.path }) { return u }
+        }
+        return Settings.shared.value.defaultNewNotesFolder
+    }
 
     @discardableResult
     func newNote(title: String? = nil) -> Tab? {
@@ -800,7 +888,7 @@ final class BrowserModel: ObservableObject {
             return "Added to note"
         }
         let folder: Folder
-        if let fid = currentTab?.folderID, let f = folders.first(where: { $0.id == fid }) { folder = f } else { folder = researchFolder() }
+        if let fid = currentTab?.folderID, let f = spaceFolders.first(where: { $0.id == fid }) { folder = f } else { folder = researchFolder() }
         guard let u = URL(string: d.url) else { return "Couldn't add" }
         let key = u.isFileURL ? u.standardizedFileURL.path : URLKey.key(for: u)
         if tabs.contains(where: { $0.folderID == folder.id && $0.url.map { $0.isFileURL ? $0.standardizedFileURL.path : URLKey.key(for: $0) } == key }) {
@@ -815,15 +903,162 @@ final class BrowserModel: ObservableObject {
         return "Added to \(folder.name)"
     }
 
+    /// "Research" for an item filed in this space, or "Work" when it lives in another space.
     func folderName(forURL s: String) -> String? {
         guard let u = URL(string: s) else { return nil }
         let key = u.isFileURL ? u.standardizedFileURL.path : URLKey.key(for: u)
-        for t in tabs where t.folderID != nil {
-            if let tu = t.url, (tu.isFileURL ? tu.standardizedFileURL.path : URLKey.key(for: tu)) == key {
-                return folders.first { $0.id == t.folderID }?.name
-            }
+        let matches = tabs.filter { t in t.url.map { ($0.isFileURL ? $0.standardizedFileURL.path : URLKey.key(for: $0)) == key } ?? false }
+        if let here = matches.first(where: { $0.spaceID == currentSpaceID && $0.folderID != nil }) {
+            return folders.first { $0.id == here.folderID }?.name
+        }
+        if matches.contains(where: { $0.spaceID == currentSpaceID }) { return nil }
+        if let there = matches.first, let sp = spaces.first(where: { $0.id == there.spaceID }) {
+            if let f = folders.first(where: { $0.id == there.folderID }) { return "\(sp.name), \(f.name)" }
+            return sp.name
         }
         return nil
+    }
+
+    // MARK: - Spaces
+
+    private func rememberSelection() {
+        guard let i = spaces.firstIndex(where: { $0.id == currentSpaceID }) else { return }
+        switch selection {
+        case .tab(let id): spaces[i].selectedTab = id; spaces[i].selectedSplit = nil
+        case .split(let sid): spaces[i].selectedSplit = sid; spaces[i].selectedTab = nil
+        case nil: spaces[i].selectedTab = nil; spaces[i].selectedSplit = nil
+        }
+    }
+
+    /// Instant: each space comes back to the tab or split it last showed.
+    func switchSpace(to id: UUID, restore: Bool = true) {
+        guard id != currentSpaceID, spaces.contains(where: { $0.id == id }) else { return }
+        if let t = currentTab { endDwell(t) }
+        rememberSelection()
+        currentSpaceID = id
+        selection = nil
+        refreshFocus()
+        if restore {
+            let sp = currentSpace
+            if let sid = sp?.selectedSplit, let s = splits.first(where: { $0.id == sid && $0.spaceID == id }) {
+                selectSplit(s)
+            } else if let tid = sp?.selectedTab, let t = tab(tid), t.spaceID == id {
+                select(t)
+            } else {
+                syncAddress()
+                resurfacer.setContext(nil)
+            }
+        }
+        scheduleSave()
+    }
+
+    func switchSpace(index: Int) {
+        guard index >= 0, index < spaces.count else { return }
+        switchSpace(to: spaces[index].id)
+    }
+
+    func switchSpace(by step: Int) {
+        guard let i = spaces.firstIndex(where: { $0.id == currentSpaceID }), !spaces.isEmpty else { return }
+        let j = i + step
+        guard j >= 0, j < spaces.count else { return }
+        switchSpace(to: spaces[j].id)
+    }
+
+    @discardableResult
+    func createSpace(name: String, icon: String? = nil, color: String? = nil) -> Space {
+        let used = Set(spaces.map { $0.color })
+        let pick = Space.palette.first { !used.contains($0.1) }?.1 ?? Space.palette[spaces.count % Space.palette.count].1
+        let sp = Space(name: name, icon: icon ?? Space.icons[spaces.count % Space.icons.count], color: color ?? pick)
+        spaces.append(sp)
+        scheduleSave()
+        return sp
+    }
+
+    func updateSpace(_ id: UUID, _ change: (inout Space) -> Void) {
+        guard let i = spaces.firstIndex(where: { $0.id == id }) else { return }
+        change(&spaces[i])
+        scheduleSave()
+    }
+
+    func moveSpace(_ id: UUID, by step: Int) {
+        guard let i = spaces.firstIndex(where: { $0.id == id }) else { return }
+        let j = i + step
+        guard j >= 0, j < spaces.count else { return }
+        spaces.swapAt(i, j)
+        scheduleSave()
+    }
+
+    /// Closes the space's tabs and drops its pins, folders and splits. Notes on disk stay.
+    func deleteSpace(_ id: UUID) {
+        guard spaces.count > 1, let i = spaces.firstIndex(where: { $0.id == id }) else { return }
+        if currentSpaceID == id {
+            let other = spaces[i == 0 ? 1 : i - 1].id
+            switchSpace(to: other)
+        }
+        for t in tabs where t.spaceID == id {
+            if t.kind == .note, let u = t.url { docs[u.standardizedFileURL.path]?.saveNow() }
+            t.unload()
+        }
+        let gone = Set(tabs.filter { $0.spaceID == id }.map { $0.id })
+        tabs.removeAll { $0.spaceID == id }
+        splits.removeAll { $0.spaceID == id }
+        folders.removeAll { $0.spaceID == id }
+        history.removeAll { if case .tab(let t) = $0 { return gone.contains(t) }; return false }
+        spaces.remove(at: i)
+        refreshFocus()
+        scheduleSave()
+    }
+
+    func promptDeleteSpace(_ sp: Space) {
+        guard spaces.count > 1 else { Prompt.info(title: "This is your only space", message: "Make another space before deleting this one."); return }
+        if Prompt.confirm(title: "Delete the \(sp.name) space?",
+                          message: "Its tabs close and its pins, folders and splits go with it. Notes on disk aren't touched.", ok: "Delete space") {
+            deleteSpace(sp.id)
+        }
+    }
+
+    func promptNewSpace() {
+        guard let name = Prompt.text(title: "New space", message: "Name", defaultValue: ""), !name.isEmpty else { return }
+        let sp = createSpace(name: name)
+        switchSpace(to: sp.id)
+    }
+
+    func promptRenameSpace(_ sp: Space) {
+        if let name = Prompt.text(title: "Rename space", message: "Name", defaultValue: sp.name), !name.isEmpty {
+            updateSpace(sp.id) { $0.name = name }
+        }
+    }
+
+    func promptSpaceEmoji(_ sp: Space) {
+        if let e = Prompt.text(title: "Space icon", message: "Type an emoji", defaultValue: ""), let first = e.first {
+            updateSpace(sp.id) { $0.icon = String(first) }
+        }
+    }
+
+    /// Moves an item to another space, loose in its Tabs list.
+    func move(_ tab: Tab, toSpace id: UUID) {
+        guard tab.spaceID != id else { return }
+        let wasSelected = isSelected(tab)
+        if split(containing: tab.id) != nil { dissolveSplit(around: tab.id) }
+        if wasSelected { endDwell(tab) }
+        tab.spaceID = id
+        tab.folderID = nil
+        tab.isPinned = false
+        if wasSelected || isVisible(tab) { selectPrevious(excluding: .tab(tab.id)) }
+        objectWillChange.send()
+        scheduleSave()
+    }
+
+    func move(split sp: SplitRecord, toSpace id: UUID) {
+        guard let i = splits.firstIndex(where: { $0.id == sp.id }), sp.spaceID != id else { return }
+        let wasSelected = selection == .split(sp.id)
+        for tid in [sp.left, sp.right] {
+            if let t = tab(tid) { t.spaceID = id; t.folderID = nil; t.isPinned = false }
+        }
+        splits[i].spaceID = id
+        if wasSelected { selectPrevious(excluding: .split(sp.id)) }
+        objectWillChange.send()
+        scheduleSave()
     }
 
     // MARK: - Misc

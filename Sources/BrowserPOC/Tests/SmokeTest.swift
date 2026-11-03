@@ -177,6 +177,18 @@ enum SmokeTest {
             snapshot(window.contentView!, snaps.appendingPathComponent("6-split-page-and-note.png"))
         }
 
+        // 8. A sidebar folder with a page and a note, and a second space.
+        if let sp = model.currentSplit { model.separate(sp) }
+        if let research = model.spaceFolders.first(where: { $0.name == "Research" }),
+           let note = model.tabs.first(where: { $0.kind == .note }) {
+            model.move(note, to: research.id)
+            let kinds = Set(model.tabs(in: research).map { $0.kind })
+            check(kinds == [.web, .note], "the Research folder holds a page and a note")
+        }
+        model.createSpace(name: "Work", icon: "briefcase")
+        model.updateSpace(model.currentSpaceID) { $0.color = "#4C8DF6" }
+        snapshot(window.contentView!, snaps.appendingPathComponent("7-folder-and-two-spaces.png"))
+
         model.prepareForQuit()
         print(SelfTest.failures == 0 ? "\nSmoke test passed." : "\n\(SelfTest.failures) check(s) failed.")
         return SelfTest.failures == 0 ? 0 : 1

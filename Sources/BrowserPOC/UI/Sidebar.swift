@@ -10,6 +10,14 @@ struct LeftSidebar: View {
         VStack(alignment: .leading, spacing: 8) {
             topBar
             addressField
+            if let sp = model.currentSpace {
+                HStack(spacing: 6) {
+                    SpaceIcon(icon: sp.icon, size: 11).foregroundStyle(Color(hex: sp.color))
+                    Text(sp.name).font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 8)
+                .padding(.top, 2)
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     pinnedSection
@@ -22,6 +30,8 @@ struct LeftSidebar: View {
             bottomBar
         }
         .padding(.horizontal, 10)
+        .background(SpaceSwipeCatcher { step in model.switchSpace(by: step) })
+        .background((model.currentSpace.map { Color(hex: $0.color) } ?? .clear).opacity(0.07).ignoresSafeArea())
     }
 
     // MARK: Top
@@ -77,10 +87,10 @@ struct LeftSidebar: View {
 
     private var foldersSection: some View {
         SectionBox(title: "Folders", trailing: AnyView(SmallIconButton(symbol: "plus", help: "New folder") { model.promptNewFolder() })) {
-            if model.folders.isEmpty {
+            if model.spaceFolders.isEmpty {
                 Text("No folders yet").font(.system(size: 12)).foregroundStyle(.tertiary).padding(.leading, 8)
             }
-            ForEach(model.folders) { f in
+            ForEach(model.spaceFolders) { f in
                 FolderRow(folder: f)
                 if f.isExpanded {
                     VStack(spacing: 1) {
@@ -111,20 +121,23 @@ struct LeftSidebar: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            ForEach(model.splits.reversed()) { SplitRow(split: $0) }
+            ForEach(model.spaceSplits.reversed()) { SplitRow(split: $0) }
             ForEach(model.looseTabs) { TabRow(tab: $0) }
         }
     }
 
     private var bottomBar: some View {
-        HStack {
-            SmallIconButton(symbol: "gearshape", help: "Settings") { AppDelegate.shared?.openSettings() }
+        VStack(alignment: .leading, spacing: 4) {
             if let msg = model.flashMessage {
-                Text(msg).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                Text(msg).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).padding(.horizontal, 8)
             }
-            Spacer()
+            HStack {
+                SmallIconButton(symbol: "gearshape", help: "Settings") { AppDelegate.shared?.openSettings() }
+                Spacer()
+                SpaceBar()
+            }
+            .frame(height: 30)
         }
-        .frame(height: 30)
         .padding(.bottom, 6)
     }
 }
@@ -291,16 +304,17 @@ struct TabMenu: View {
     @ViewBuilder var splitMenu: some View {
         Button("Open in split view") { model.openInSplit(tab, side: .right) }
             .disabled(model.currentTab?.id == tab.id && model.currentSplit == nil)
+        MoveToSpaceMenu { id in model.move(tab, toSpace: id) }
     }
 
     @ViewBuilder var folderMenu: some View {
         Button(tab.isPinned ? "Unpin" : "Pin") { model.togglePin(tab) }
         Menu("Move to folder") {
-            ForEach(model.folders) { f in
+            ForEach(model.spaceFolders) { f in
                 Button(f.name) { model.move(tab, to: f.id) }
                     .disabled(tab.folderID == f.id)
             }
-            if !model.folders.isEmpty { Divider() }
+            if !model.spaceFolders.isEmpty { Divider() }
             Button("New folder...") { model.promptNewFolder(moving: tab) }
         }
         if tab.folderID != nil || tab.isPinned {

@@ -21,6 +21,8 @@ final class Tab: ObservableObject, Identifiable {
     @Published var title: String
     @Published var isPinned: Bool
     @Published var folderID: UUID?
+    /// The space this item lives in.
+    var spaceID: UUID?
     @Published var isLoading = false
     @Published var progress: Double = 0
     @Published var canGoBack = false
