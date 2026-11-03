@@ -121,6 +121,25 @@ enum SelfTest {
             .joined(separator: "; ")
     }
 
+    static func seed(_ store: IndexStore, now: Date) {
+        for f in fixtures {
+            let t = now.timeIntervalSince1970 - f.daysAgo * day
+            let a = TextAnalysis.analyze(title: f.title, description: "", text: f.text)
+            var d = DocUpsert(key: f.key, source: f.source, url: f.key.hasPrefix("note:") ? "file:///notes/\(f.key.dropFirst(5))" : f.key,
+                              title: f.title, body: f.text, firstSeen: t, lastSeen: t, visitCount: f.visits, mtime: t)
+            switch f.source {
+            case .web: store.recordCapture(d, analysis: a)
+            case .chrome:
+                d.body = ""
+                _ = store.importChrome([(d, a)])
+            case .note, .markdown:
+                d.project = f.source == .markdown ? "7-Eleven" : "Notes"
+                d.root = f.source == .markdown ? "/fixtures" : nil
+                store.upsertFile(d, analysis: a)
+            }
+        }
+    }
+
     static func run(workdir: URL?) -> Int32 {
         let dir = workdir ?? FileManager.default.temporaryDirectory.appendingPathComponent("BrowserPOC-selftest-\(UUID().uuidString)")
         try? FileManager.default.removeItem(at: dir)
@@ -139,22 +158,7 @@ enum SelfTest {
         }
         let store = IndexStore.shared!
         let now = Date()
-        for f in fixtures {
-            let t = now.timeIntervalSince1970 - f.daysAgo * day
-            let a = TextAnalysis.analyze(title: f.title, description: "", text: f.text)
-            var d = DocUpsert(key: f.key, source: f.source, url: f.key.hasPrefix("note:") ? "file:///notes/\(f.key.dropFirst(5))" : f.key,
-                              title: f.title, body: f.text, firstSeen: t, lastSeen: t, visitCount: f.visits, mtime: t)
-            switch f.source {
-            case .web: store.recordCapture(d, analysis: a)
-            case .chrome:
-                d.body = ""
-                _ = store.importChrome([(d, a)])
-            case .note, .markdown:
-                d.project = f.source == .markdown ? "7-Eleven" : "Notes"
-                d.root = f.source == .markdown ? "/fixtures" : nil
-                store.upsertFile(d, analysis: a)
-            }
-        }
+        seed(store, now: now)
         let counts = store.counts()
         check(counts.reduce(0) { $0 + $1.total } == fixtures.count, "all fixtures indexed", "\(counts.map { "\($0.source.rawValue)=\($0.total)" })")
 

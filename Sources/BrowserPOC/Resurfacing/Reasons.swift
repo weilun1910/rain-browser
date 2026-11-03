@@ -93,9 +93,11 @@ final class ReasonWriter {
     }
 
     nonisolated static let instructions = """
-    You write one short line for a card in a browser sidebar. The card shows something the user saw before. \
-    Say plainly why it relates to what they have open now, naming the specific shared topic. \
-    Use at most 18 words, in second person, as one sentence. No quotes, no dashes, no emoji, no preamble.
+    You write one short line for a card in a browser sidebar. The card shows an item the user read or wrote earlier. \
+    Say why it is useful for what they have open now by naming the specific topic both share. \
+    Describe what the earlier item covers. Never claim the user did anything beyond reading or writing it. \
+    One sentence, at most 18 words, plain words. No quotes, no dashes, no emoji, no preamble. \
+    Example: Covers how Nook converts CRX files, which this page says you need before loading extensions.
     """
 
     static func prompt(contextTitle: String, contextPassage: String, match m: Match) -> String {

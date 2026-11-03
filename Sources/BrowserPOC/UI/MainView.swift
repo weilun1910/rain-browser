@@ -1,0 +1,221 @@
+import AppKit
+import SwiftUI
+import WebKit
+
+struct VisualEffect: NSViewRepresentable {
+    var material: NSVisualEffectView.Material = .sidebar
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let v = NSVisualEffectView()
+        v.material = material
+        v.blendingMode = .behindWindow
+        v.state = .followsWindowActiveState
+        return v
+    }
+    func updateNSView(_ v: NSVisualEffectView, context: Context) { v.material = material }
+}
+
+struct MainView: View {
+    @EnvironmentObject var model: BrowserModel
+    @ObservedObject var settings = Settings.shared
+
+    var body: some View {
+        HStack(spacing: 0) {
+            LeftSidebar()
+                .frame(width: 252)
+            ContentArea()
+                .background(Color(nsColor: .textBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
+                .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+                .padding(.vertical, 8)
+                .padding(.trailing, settings.published.rightPanelOpen ? 0 : 8)
+            if settings.published.rightPanelOpen {
+                RightPanel()
+                    .frame(width: 300)
+            }
+        }
+        .background(VisualEffect().ignoresSafeArea())
+        .ignoresSafeArea()
+        .frame(minWidth: 900, minHeight: 560)
+    }
+}
+
+struct ContentArea: View {
+    @EnvironmentObject var model: BrowserModel
+    @ObservedObject var settings = Settings.shared
+
+    var body: some View {
+        ZStack {
+            if let doc = model.document {
+                NoteEditorView(doc: doc)
+                    .id(doc.url)
+            } else if let tab = model.currentTab, tab.kind == .web {
+                TabContent(tab: tab)
+            } else {
+                StartView()
+            }
+            if !settings.published.firstRunDone {
+                FirstRunPanel()
+            }
+        }
+    }
+}
+
+/// Watches the tab itself, so a blank tab switches to the page as soon as it gets a URL.
+struct TabContent: View {
+    @ObservedObject var tab: Tab
+    var body: some View {
+        if tab.url == nil && !tab.isLoaded { StartView() } else { WebArea(tab: tab) }
+    }
+}
+
+struct WebArea: View {
+    @ObservedObject var tab: Tab
+    @EnvironmentObject var model: BrowserModel
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            WebContainer(tab: tab)
+            if tab.isLoading && tab.progress < 1 {
+                GeometryReader { g in
+                    Rectangle()
+                        .fill(Color.accentColor.opacity(0.7))
+                        .frame(width: max(8, g.size.width * tab.progress), height: 2)
+                }
+                .frame(height: 2)
+                .allowsHitTesting(false)
+            }
+            if let err = tab.loadError {
+                VStack(spacing: 10) {
+                    Text("Couldn't open this page").font(.title3.weight(.semibold))
+                    Text(err).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 420)
+                    Button("Try again") { model.reload() }
+                }
+                .padding(28)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(nsColor: .textBackgroundColor))
+            }
+        }
+    }
+}
+
+final class WebHostView: NSView {
+    private weak var current: WKWebView?
+
+    func show(_ wv: WKWebView) {
+        guard current !== wv else { return }
+        current?.removeFromSuperview()
+        wv.frame = bounds
+        wv.autoresizingMask = [.width, .height]
+        addSubview(wv)
+        current = wv
+    }
+}
+
+struct WebContainer: NSViewRepresentable {
+    let tab: Tab
+
+    func makeNSView(context: Context) -> WebHostView { WebHostView() }
+
+    func updateNSView(_ v: WebHostView, context: Context) {
+        v.show(tab.ensureWebView())
+    }
+}
+
+struct StartView: View {
+    @EnvironmentObject var model: BrowserModel
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Text("Search or enter an address")
+                .font(.title3)
+                .foregroundStyle(.tertiary)
+            HStack(spacing: 18) {
+                Button("New tab") { model.newTabCommand() }
+                Button("New note") { model.newNote() }
+            }
+            .buttonStyle(.link)
+            .font(.callout)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+struct FirstRunPanel: View {
+    @EnvironmentObject var model: BrowserModel
+    @ObservedObject var chrome = ChromeImporter.shared
+    @ObservedObject var md = MarkdownIndexer.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Start with what you've already seen")
+                .font(.title2.weight(.semibold))
+            Text("Cards on the right come from pages and notes you've looked at before. You can bring in your Chrome history and Markdown folders now, or later in Settings.")
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 4) {
+                Button("Import Chrome history") { chrome.start() }
+                    .disabled(chrome.isRunning)
+                Text("Reads a copy of your Chrome history from the last 90 days. Text is fetched without cookies, only for pages you opened at least twice.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if chrome.phase != .idle {
+                    Text(ChromeStatus.text(chrome.phase)).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Button("Add Markdown folders...") { SourcesActions.addMarkdownFolders() }
+                Text("Indexes the .md files in folders you pick. They're only read, never changed.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if !md.status.isEmpty {
+                    Text(md.status).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            HStack {
+                Spacer()
+                Button("Done") { Settings.shared.update { $0.firstRunDone = true } }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 460)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(nsColor: .windowBackgroundColor)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.1)))
+        .shadow(color: .black.opacity(0.15), radius: 20, y: 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black.opacity(0.04))
+    }
+}
+
+enum ChromeStatus {
+    static func text(_ p: ChromeImporter.Phase) -> String {
+        switch p {
+        case .idle: return ""
+        case .reading: return "Reading Chrome history..."
+        case .fetching(let done, let total): return "Reading page text: \(done) of \(total)"
+        case .finished(let s): return s
+        case .failed(let e): return "Couldn't import: \(e)"
+        }
+    }
+}
+
+@MainActor
+enum SourcesActions {
+    static func addMarkdownFolders() {
+        let p = NSOpenPanel()
+        p.canChooseDirectories = true
+        p.canChooseFiles = false
+        p.allowsMultipleSelection = true
+        p.prompt = "Add"
+        p.message = "Pick folders with Markdown notes. They're indexed read-only."
+        let solo = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs/Desktop")
+        if FileManager.default.fileExists(atPath: solo.path) { p.directoryURL = solo }
+        guard p.runModal() == .OK else { return }
+        let paths = p.urls.map { $0.standardizedFileURL.path }
+        Settings.shared.update { s in
+            for path in paths where !s.markdownRoots.contains(path) { s.markdownRoots.append(path) }
+        }
+        MarkdownIndexer.shared.rescanAll()
+    }
+}
