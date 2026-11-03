@@ -443,14 +443,26 @@ enum SelfTest {
                 let u = n.url!
                 check(u.deletingLastPathComponent().standardizedFileURL.path == root.standardizedFileURL.path && read(u) == "# Fresh idea\n\n",
                       "a new note goes in the default notes folder", u.path)
-                // Delete moves the file to the Trash.
+                // Delete goes through the Trash path. A fixture folder stands in for ~/.Trash.
+                let trash = dir.appendingPathComponent("fake-trash", isDirectory: true)
+                try? FileManager.default.removeItem(at: trash)
+                Paths.ensure(trash)
+                let realRecycle = NotesStore.recycle
+                NotesStore.recycle = { urls, done in
+                    var moved: [URL: URL] = [:]
+                    for u in urls {
+                        let t = trash.appendingPathComponent(u.lastPathComponent)
+                        if (try? FileManager.default.moveItem(at: u, to: t)) != nil { moved[u] = t }
+                    }
+                    done(moved, nil)
+                }
+                defer { NotesStore.recycle = realRecycle }
                 var result: Bool?
                 model.deleteNote(n) { result = $0 }
                 _ = spin(10) { result != nil }
-                let trash = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".Trash")
                 let inTrash = ((try? FileManager.default.contentsOfDirectory(atPath: trash.path)) ?? []).contains { $0.hasPrefix("Fresh idea") }
-                check(result == true && !FileManager.default.fileExists(atPath: u.path) && !model.tabs.contains { $0.id == n.id },
-                      "deleting a note moves it to the Trash", inTrash ? "found in the Trash" : "not seen in ~/.Trash")
+                check(result == true && inTrash && !FileManager.default.fileExists(atPath: u.path) && !model.tabs.contains { $0.id == n.id },
+                      "deleting a note moves it to the Trash", inTrash ? "found in the Trash" : "not seen in the Trash")
             } else {
                 check(false, "a new note can be created")
             }

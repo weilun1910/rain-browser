@@ -31,7 +31,7 @@ build/BrowserPOC.app/Contents/MacOS/BrowserPOC --chrome-dry-run # what a Chrome 
 .build/debug/BrowserPOC --extract-check <url>                   # what capture reads from one public page
 ```
 
-Both tests use throwaway folders and exit non-zero if a check fails. The self test moves one small note called "Fresh idea" to your Trash, to check that delete uses the Trash. The dry run prints full URLs from your Chrome history, so keep its output to yourself.
+Both tests use throwaway folders and exit non-zero if a check fails. The self test checks delete with a stand-in Trash folder inside its throwaway folder, so your real Trash is never touched. The dry run prints full URLs from your Chrome history, so keep its output to yourself.
 
 ## What's in it
 

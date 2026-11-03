@@ -104,10 +104,15 @@ final class NotesStore: ObservableObject {
         return .renamed(target)
     }
 
+    /// How notes reach the Trash. The self test swaps in a fixture folder so it never fills the real Trash.
+    static var recycle: ([URL], @escaping @Sendable ([URL: URL], (any Error)?) -> Void) -> Void = { urls, done in
+        NSWorkspace.shared.recycle(urls, completionHandler: done)
+    }
+
     /// Moves a note to the Trash. Never deletes it outright.
     func trash(_ url: URL, completion: @escaping (Bool) -> Void) {
         guard FileSafety.canWriteNote(url) else { completion(false); return }
-        NSWorkspace.shared.recycle([url]) { [weak self] moved, error in
+        Self.recycle([url]) { [weak self] moved, error in
             MainActor.assumeIsolated {
                 self?.scheduleReload()
                 completion(error == nil && moved[url] != nil)
