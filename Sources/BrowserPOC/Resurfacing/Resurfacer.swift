@@ -28,9 +28,15 @@ final class Resurfacer: ObservableObject {
     private var indexObserver: NSObjectProtocol?
     private var settingsWork: DispatchWorkItem?
 
+    /// Cards per context, so switching focus back to a pane doesn't refetch.
+    private struct Cached { let sites: [Card]; let docs: [Card]; let terms: [String]; let at: Date }
+    private var cache: [String: Cached] = [:]
+    /// How many retrievals have run. The self test uses it to check the cache.
+    private(set) var retrievalCount = 0
+
     init() {
         indexObserver = NotificationCenter.default.addObserver(forName: .indexChanged, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refresh(replace: false) }
+            MainActor.assumeIsolated { self?.indexDidChange() }
         }
     }
 
@@ -65,7 +71,36 @@ final class Resurfacer: ObservableObject {
         }
         context = input
         hasContext = true
+        if input.key != lastKey, let c = cache[input.key], Date().timeIntervalSince(c.at) < 180 {
+            siteCards = c.sites
+            docCards = c.docs
+            contextTerms = c.terms
+            lastTerms = Set(c.terms)
+            lastKey = input.key
+            return
+        }
         run(input, replace: false)
+    }
+
+    private var indexWork: DispatchWorkItem?
+
+    /// Index changes come in bursts (a rescan, an import), so they're coalesced.
+    private func indexDidChange() {
+        indexWork?.cancel()
+        let w = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                self?.cache = [:]
+                self?.refresh(replace: false)
+            }
+        }
+        indexWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: w)
+    }
+
+    private func storeCache() {
+        guard let k = lastKey else { return }
+        cache[k] = Cached(sites: siteCards, docs: docCards, terms: contextTerms, at: Date())
+        if cache.count > 40, let oldest = cache.min(by: { $0.value.at < $1.value.at })?.key { cache[oldest] = nil }
     }
 
     /// Re-runs the current context, for index changes and tuning.
@@ -76,6 +111,7 @@ final class Resurfacer: ObservableObject {
     }
 
     func settingsChanged() {
+        cache = [:]
         settingsWork?.cancel()
         let w = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.refresh(replace: true) } }
         settingsWork = w
@@ -87,6 +123,7 @@ final class Resurfacer: ObservableObject {
         var params = RankParams.fromSettings(Settings.shared.value)
         params.keepIDs = replace ? [] : Set(cards.map { $0.id })
         isWorking = true
+        retrievalCount += 1
         Task.detached(priority: .userInitiated) {
             let ctx = ContextAnalysis.make(input)
             let result = IndexStore.shared.retrieve(ctx, params)
@@ -110,6 +147,7 @@ final class Resurfacer: ObservableObject {
         lastTerms = newTerms
         lastKey = input.key
         ReasonWriter.shared.cancelAll(except: input.key)
+        storeCache()
         for c in cards where !c.reasonFromModel {
             requestReason(for: c, input: input)
         }
@@ -158,6 +196,7 @@ final class Resurfacer: ObservableObject {
         guard key == lastKey else { return }
         if let i = siteCards.firstIndex(where: { $0.id == docID }) { siteCards[i].reason = text; siteCards[i].reasonFromModel = true }
         if let i = docCards.firstIndex(where: { $0.id == docID }) { docCards[i].reason = text; docCards[i].reasonFromModel = true }
+        storeCache()
     }
 
     func dismiss(_ card: Card) {
@@ -165,11 +204,13 @@ final class Resurfacer: ObservableObject {
         IndexStore.shared.dismiss(docID: card.id, contextKey: key, terms: contextTerms)
         siteCards.removeAll { $0.id == card.id }
         docCards.removeAll { $0.id == card.id }
+        storeCache()
     }
 
     func setFeedback(_ text: String, for card: Card) {
         if let i = siteCards.firstIndex(where: { $0.id == card.id }) { siteCards[i].feedback = text }
         if let i = docCards.firstIndex(where: { $0.id == card.id }) { docCards[i].feedback = text }
+        storeCache()
     }
 
     /// Felix's own call on which section a card belongs in. Remembered per item.
@@ -177,7 +218,10 @@ final class Resurfacer: ObservableObject {
         let key = card.match.doc.key
         Task.detached {
             IndexStore.shared.setOverride(key: key, section: sec)
-            await MainActor.run { self.refresh(replace: false) }
+            await MainActor.run {
+                self.cache = [:]
+                self.refresh(replace: false)
+            }
         }
     }
 

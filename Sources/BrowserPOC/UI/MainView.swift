@@ -27,10 +27,6 @@ struct MainView: View {
             LeftSidebar()
                 .frame(width: 252)
             ContentArea()
-                .background(Color(nsColor: .textBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
-                .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
                 .padding(.vertical, 8)
                 .padding(.trailing, settings.published.rightPanelOpen ? 0 : 8)
             if settings.published.rightPanelOpen {
@@ -57,18 +53,28 @@ struct ContentArea: View {
     @EnvironmentObject var model: BrowserModel
     @ObservedObject var settings = Settings.shared
 
+    @State private var dropSide: PaneSide?
+
     var body: some View {
-        ZStack {
-            if let tab = model.currentTab, tab.kind != .web {
-                NotePane(tab: tab)
-            } else if let tab = model.currentTab {
-                TabContent(tab: tab)
-            } else {
-                StartView()
+        GeometryReader { g in
+            ZStack {
+                if let sp = model.currentSplit, let l = model.tab(sp.left), let r = model.tab(sp.right) {
+                    SplitPanes(split: sp, left: l, right: r, width: g.size.width)
+                } else {
+                    PaneView(tab: model.currentTab).paneCard()
+                }
+                if let side = dropSide {
+                    HStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 9).fill(Color.accentColor.opacity(side == .left ? 0.12 : 0))
+                        RoundedRectangle(cornerRadius: 9).fill(Color.accentColor.opacity(side == .right ? 0.12 : 0))
+                    }
+                    .allowsHitTesting(false)
+                }
+                if !settings.published.firstRunDone {
+                    FirstRunPanel().clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                }
             }
-            if !settings.published.firstRunDone {
-                FirstRunPanel()
-            }
+            .onDrop(of: [ItemDrag.type], delegate: PaneDropDelegate(width: g.size.width, side: $dropSide, model: model))
         }
     }
 }

@@ -111,6 +111,7 @@ struct LeftSidebar: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            ForEach(model.splits.reversed()) { SplitRow(split: $0) }
             ForEach(model.looseTabs) { TabRow(tab: $0) }
         }
     }
@@ -158,7 +159,9 @@ struct DropModifier: ViewModifier {
     @Binding var targeted: Bool
     func body(content: Content) -> some View {
         if let onDrop {
-            content.dropDestination(for: String.self) { items, _ in onDrop(items) } isTargeted: { targeted = $0 }
+            content.onDrop(of: [ItemDrag.type], isTargeted: $targeted) { providers in
+                ItemDrag.load(providers) { ids in _ = onDrop(ids.map { $0.uuidString }) }
+            }
         } else {
             content
         }
@@ -272,7 +275,7 @@ struct TabRow: View {
         .contentShape(Rectangle())
         .onTapGesture { model.select(tab) }
         .onHover { hovering = $0 }
-        .draggable(tab.id.uuidString)
+        .onDrag { ItemDrag.provider(tab.id) }
         .contextMenu { TabMenu(tab: tab) }
     }
 }
@@ -283,6 +286,11 @@ struct TabMenu: View {
 
     var body: some View {
         if tab.kind == .web { webMenu } else { noteMenu }
+    }
+
+    @ViewBuilder var splitMenu: some View {
+        Button("Open in split view") { model.openInSplit(tab, side: .right) }
+            .disabled(model.currentTab?.id == tab.id && model.currentSplit == nil)
     }
 
     @ViewBuilder var folderMenu: some View {
@@ -301,6 +309,8 @@ struct TabMenu: View {
     }
 
     @ViewBuilder var webMenu: some View {
+        splitMenu
+        Divider()
         folderMenu
         Divider()
         if let u = tab.url {
@@ -325,6 +335,7 @@ struct TabMenu: View {
             if let u = tab.url { Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([u]) } }
         }
         Divider()
+        splitMenu
         folderMenu
         Divider()
         if !tab.isMissing { Button("Delete...") { model.promptDeleteNote(tab) } }
@@ -359,9 +370,9 @@ struct FolderRow: View {
         .contentShape(Rectangle())
         .onTapGesture { model.toggleFolder(folder) }
         .onHover { hovering = $0 }
-        .dropDestination(for: String.self) { items, _ in
-            model.moveTabs(ids: items, to: folder.id)
-        } isTargeted: { targeted = $0 }
+        .onDrop(of: [ItemDrag.type], isTargeted: $targeted) { providers in
+            ItemDrag.load(providers) { ids in _ = model.moveTabs(ids: ids.map { $0.uuidString }, to: folder.id) }
+        }
         .contextMenu {
             Button("Rename...") { model.promptRename(folder) }
             Button("Delete folder") { model.deleteFolder(folder) }

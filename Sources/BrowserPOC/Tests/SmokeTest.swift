@@ -161,6 +161,22 @@ enum SmokeTest {
                   "cards stay in place while typing", "\(before) -> \(after)")
         }
 
+        // 7. A page and a note side by side, focused on the page.
+        if let noteTab = model.currentTab, noteTab.kind == .note {
+            model.openInSplit(tab, side: .left)
+            model.focusPane(.left)
+            _ = wait(10) { model.resurfacer.context?.key == key && !model.resurfacer.isWorking && !model.resurfacer.cards.isEmpty }
+            check(model.currentSplit != nil && model.resurfacer.context?.key == key, "a page and note split takes Related from the focused page")
+            _ = wait(2) { false } // a moved web view repaints on its next frame
+            var title: String?
+            tab.webView?.evaluateJavaScript("document.title") { r, _ in title = (r as? String) ?? "" }
+            _ = wait(5) { title != nil }
+            let wv = tab.webView
+            check(wv?.window === window && (wv?.frame.width ?? 0) > 300 && title == "Loading Chrome extensions into a WKWebView browser",
+                  "the page pane hosts the live web view", "window \(wv?.window === window), width \(Int(wv?.frame.width ?? 0)), title \(title ?? "nil")")
+            snapshot(window.contentView!, snaps.appendingPathComponent("6-split-page-and-note.png"))
+        }
+
         model.prepareForQuit()
         print(SelfTest.failures == 0 ? "\nSmoke test passed." : "\n\(SelfTest.failures) check(s) failed.")
         return SelfTest.failures == 0 ? 0 : 1

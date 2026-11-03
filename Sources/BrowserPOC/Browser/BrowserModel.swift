@@ -19,9 +19,25 @@ struct TabRecord: Codable {
     var createdAt: Date
 }
 
+/// Two items side by side. Either side can be a page or a note.
+struct SplitRecord: Codable, Identifiable, Equatable {
+    var id: UUID = UUID()
+    var left: UUID
+    var right: UUID
+    var ratio: Double = 0.5
+    var focusRight: Bool = false
+    var createdAt: Date = Date()
+
+    var focused: UUID { focusRight ? right : left }
+    var other: UUID { focusRight ? left : right }
+    func contains(_ id: UUID) -> Bool { left == id || right == id }
+}
+
 struct SavedState: Codable {
     var tabs: [TabRecord] = []
     var folders: [Folder] = []
+    var splits: [SplitRecord]? = nil
+    var selectedSplit: UUID? = nil
     var selectedTab: UUID?
     /// Older versions opened notes outside the tab list.
     var selectedDocument: String?
@@ -29,12 +45,16 @@ struct SavedState: Codable {
 
 enum Selection: Hashable {
     case tab(UUID)
+    case split(UUID)
 }
+
+enum PaneSide { case left, right }
 
 @MainActor
 final class BrowserModel: ObservableObject {
     @Published var tabs: [Tab] = []
     @Published var folders: [Folder] = []
+    @Published private(set) var splits: [SplitRecord] = []
     @Published private(set) var selection: Selection?
     /// The note shown in the focused pane, if it's a note.
     @Published private(set) var document: NoteDocument?
@@ -73,19 +93,39 @@ final class BrowserModel: ObservableObject {
 
     func tab(_ id: UUID) -> Tab? { tabs.first { $0.id == id } }
 
+    /// The focused item: the selected tab or note, or the focused pane of a split.
     var currentTab: Tab? {
-        if case .tab(let id) = selection { return tab(id) }
+        switch selection {
+        case .tab(let id): return tab(id)
+        case .split(let sid): return splits.first { $0.id == sid }.flatMap { tab($0.focused) }
+        case nil: return nil
+        }
+    }
+
+    var currentSplit: SplitRecord? {
+        if case .split(let sid) = selection { return splits.first { $0.id == sid } }
         return nil
     }
+
+    func split(containing id: UUID) -> SplitRecord? { splits.first { $0.contains(id) } }
+
+    private var splitTabIDs: Set<UUID> { Set(splits.flatMap { [$0.left, $0.right] }) }
 
     /// The focused web tab, for the address bar and navigation.
     var currentWebTab: Tab? { currentTab.flatMap { $0.kind == .web ? $0 : nil } }
 
-    var pinnedTabs: [Tab] { tabs.filter { $0.isPinned } }
-    var looseTabs: [Tab] { tabs.filter { !$0.isPinned && $0.folderID == nil }.sorted { $0.createdAt > $1.createdAt } }
-    func tabs(in folder: Folder) -> [Tab] { tabs.filter { $0.folderID == folder.id && !$0.isPinned } }
+    // Items in a split show as the split's joined row, not on their own.
+    var pinnedTabs: [Tab] { let s = splitTabIDs; return tabs.filter { $0.isPinned && !s.contains($0.id) } }
+    var looseTabs: [Tab] {
+        let s = splitTabIDs
+        return tabs.filter { !$0.isPinned && $0.folderID == nil && !s.contains($0.id) }.sorted { $0.createdAt > $1.createdAt }
+    }
+    func tabs(in folder: Folder) -> [Tab] { let s = splitTabIDs; return tabs.filter { $0.folderID == folder.id && !$0.isPinned && !s.contains($0.id) } }
 
-    func isSelected(_ tab: Tab) -> Bool { selection == .tab(tab.id) }
+    /// True for the focused item (a selected tab, or the focused pane of the selected split).
+    func isSelected(_ tab: Tab) -> Bool { currentTab?.id == tab.id }
+
+    func isVisible(_ tab: Tab) -> Bool { visibleTabs.contains { $0.id == tab.id } }
 
     // MARK: - Persistence
 
@@ -100,8 +140,12 @@ final class BrowserModel: ObservableObject {
             t.model = self
             return t
         }
+        let ids = Set(tabs.map { $0.id })
+        splits = (s.splits ?? []).filter { ids.contains($0.left) && ids.contains($0.right) && $0.left != $0.right }
         checkNotesOnDisk()
-        if let id = s.selectedTab, let t = tab(id) {
+        if let sid = s.selectedSplit, let sp = splits.first(where: { $0.id == sid }) {
+            selectSplit(sp)
+        } else if let id = s.selectedTab, let t = tab(id) {
             select(t)
         } else if let p = s.selectedDocument, FileManager.default.fileExists(atPath: p) {
             openNote(URL(fileURLWithPath: p))
@@ -122,7 +166,12 @@ final class BrowserModel: ObservableObject {
             TabRecord(id: $0.id, kind: $0.kind, url: $0.url?.absoluteString, title: $0.title,
                       isPinned: $0.isPinned, folderID: $0.folderID, createdAt: $0.createdAt)
         }
-        if case .tab(let id) = selection { s.selectedTab = id }
+        s.splits = splits
+        switch selection {
+        case .tab(let id): s.selectedTab = id
+        case .split(let sid): s.selectedSplit = sid
+        case nil: break
+        }
         Paths.ensure(Paths.root)
         if let data = try? JSONEncoder.pretty.encode(s) {
             try? data.write(to: Paths.stateFile, options: .atomic)
@@ -138,7 +187,10 @@ final class BrowserModel: ObservableObject {
     // MARK: - Selection
 
     /// Items on screen right now. Notes not on screen get saved and let go.
-    var visibleTabs: [Tab] { currentTab.map { [$0] } ?? [] }
+    var visibleTabs: [Tab] {
+        if let sp = currentSplit { return [tab(sp.left), tab(sp.right)].compactMap { $0 } }
+        return currentTab.map { [$0] } ?? []
+    }
 
     private func setSelection(_ new: Selection?) {
         let old = selection
@@ -147,8 +199,9 @@ final class BrowserModel: ObservableObject {
         if history.count > 50 { history.removeFirst(history.count - 50) }
         if case .tab(let id) = old, let t = tab(id) {
             endDwell(t)
-            if t.isBlank { tabs.removeAll { $0.id == t.id }; history.removeAll { $0 == .tab(t.id) } }
+            if t.isBlank && split(containing: t.id) == nil { tabs.removeAll { $0.id == t.id }; history.removeAll { $0 == .tab(t.id) } }
         }
+        if case .split(let sid) = old, let sp = splits.first(where: { $0.id == sid }), let t = tab(sp.focused) { endDwell(t) }
         selection = new
         refreshFocus()
         syncAddress()
@@ -182,7 +235,18 @@ final class BrowserModel: ObservableObject {
     }
 
     func select(_ tab: Tab) {
+        if let sp = split(containing: tab.id) {
+            // Picking an item that lives in a split brings the split back, focused on it.
+            selectSplit(sp, focus: sp.right == tab.id ? .right : .left)
+            return
+        }
         setSelection(.tab(tab.id))
+        contextForFocused()
+    }
+
+    /// Points the Related panel and the dwell clock at the focused item.
+    func contextForFocused() {
+        guard let tab = currentTab else { return }
         if tab.kind == .note, let u = tab.url {
             refreshFocus()
             IndexStore.shared.touchOpened(key: URLKey.fileKey(u))
@@ -221,6 +285,107 @@ final class BrowserModel: ObservableObject {
         return t
     }
 
+    // MARK: - Split view
+
+    func selectSplit(_ sp: SplitRecord, focus: PaneSide? = nil) {
+        if let focus, let i = splits.firstIndex(where: { $0.id == sp.id }) {
+            splits[i].focusRight = focus == .right
+        }
+        if selection == .split(sp.id) {
+            refreshFocus()
+            syncAddress()
+        } else {
+            setSelection(.split(sp.id))
+        }
+        for t in visibleTabs where t.kind == .web && t.url != nil { _ = t.ensureWebView() }
+        contextForFocused()
+        scheduleSave()
+    }
+
+    /// Pairs an item with what's on screen. In a split, it replaces the pane on that side.
+    func openInSplit(_ tab: Tab, side: PaneSide = .right) {
+        if let old = split(containing: tab.id) { splits.removeAll { $0.id == old.id } }
+        if let sp = currentSplit, let i = splits.firstIndex(where: { $0.id == sp.id }) {
+            if side == .left { splits[i].left = tab.id } else { splits[i].right = tab.id }
+            splits[i].focusRight = side == .right
+            if splits[i].left == splits[i].right { splits.remove(at: i); select(tab); return }
+            selectSplit(splits[i])
+            return
+        }
+        guard let cur = currentTab, cur.id != tab.id else { select(tab); return }
+        if let old = split(containing: cur.id) { splits.removeAll { $0.id == old.id } }
+        let sp = side == .right ? SplitRecord(left: cur.id, right: tab.id, focusRight: true)
+                                : SplitRecord(left: tab.id, right: cur.id, focusRight: false)
+        splits.append(sp)
+        selectSplit(sp)
+    }
+
+    /// Both items go back to being normal items.
+    func separate(_ sp: SplitRecord) {
+        let focused = tab(sp.focused)
+        splits.removeAll { $0.id == sp.id }
+        if selection == .split(sp.id) {
+            selection = nil
+            if let focused { select(focused) }
+        }
+        scheduleSave()
+    }
+
+    func swap(_ sp: SplitRecord) {
+        guard let i = splits.firstIndex(where: { $0.id == sp.id }) else { return }
+        let l = splits[i].left
+        splits[i].left = splits[i].right
+        splits[i].right = l
+        splits[i].focusRight.toggle()
+        scheduleSave()
+    }
+
+    func focusPane(_ side: PaneSide) {
+        guard let sp = currentSplit, let i = splits.firstIndex(where: { $0.id == sp.id }) else { return }
+        let right = side == .right
+        guard splits[i].focusRight != right else { return }
+        if let t = tab(sp.focused) { endDwell(t) }
+        splits[i].focusRight = right
+        refreshFocus()
+        syncAddress()
+        contextForFocused()
+        scheduleSave()
+    }
+
+    func setSplitRatio(_ r: Double, save: Bool) {
+        guard let sp = currentSplit, let i = splits.firstIndex(where: { $0.id == sp.id }) else { return }
+        splits[i].ratio = min(0.8, max(0.2, r))
+        if save { scheduleSave() }
+    }
+
+    /// The other pane stays, full width.
+    private func dissolveSplit(around removed: UUID) {
+        guard let sp = split(containing: removed) else { return }
+        let keep = sp.left == removed ? sp.right : sp.left
+        let wasSelected = selection == .split(sp.id)
+        splits.removeAll { $0.id == sp.id }
+        if wasSelected, let t = tab(keep) {
+            selection = nil
+            select(t)
+        }
+    }
+
+    /// A sidebar item dropped on one half of the content area.
+    func drop(tabID: UUID, side: PaneSide) {
+        guard let t = tab(tabID) else { return }
+        if currentTab == nil { select(t); return }
+        openInSplit(t, side: side)
+    }
+
+    /// Ctrl-Shift-=: split with a new tab whose address field is focused.
+    func splitWithNewTab() {
+        let t = Tab(url: nil)
+        t.model = self
+        tabs.append(t)
+        openInSplit(t, side: .right)
+        focusAddress()
+    }
+
     func newTabCommand() {
         if let t = currentTab, t.isBlank { focusAddress(); return }
         newTab(url: nil, select: true, focus: true)
@@ -249,6 +414,7 @@ final class BrowserModel: ObservableObject {
     /// Closing a page unloads it if it's pinned or filed and removes it otherwise.
     /// Closing a note only takes it out of the sidebar; the file stays.
     func close(_ tab: Tab) {
+        if split(containing: tab.id) != nil { dissolveSplit(around: tab.id) }
         let wasSelected = isSelected(tab)
         if tab.kind == .note {
             if let u = tab.url { docs[u.standardizedFileURL.path]?.saveNow() }
@@ -267,6 +433,7 @@ final class BrowserModel: ObservableObject {
 
     /// Takes any item out of the sidebar. For notes the file stays on disk.
     func remove(_ tab: Tab) {
+        if split(containing: tab.id) != nil { dissolveSplit(around: tab.id) }
         let wasSelected = isSelected(tab)
         if tab.kind == .note, let u = tab.url { docs[u.standardizedFileURL.path]?.saveNow() }
         tab.unload()
@@ -280,6 +447,7 @@ final class BrowserModel: ObservableObject {
         while let last = history.popLast() {
             if last == excluding { continue }
             if case .tab(let id) = last, let t = tab(id) { selection = nil; select(t); return }
+            if case .split(let sid) = last, let sp = splits.first(where: { $0.id == sid }) { selection = nil; selectSplit(sp); return }
         }
         if let t = looseTabs.first ?? pinnedTabs.first(where: { $0.isLoaded }) {
             selection = nil
@@ -291,7 +459,15 @@ final class BrowserModel: ObservableObject {
     }
 
     func closeCurrent() {
-        if let t = currentTab { close(t) }
+        guard let t = currentTab else { return }
+        if split(containing: t.id) != nil {
+            dissolveSplit(around: t.id)
+            if t.kind == .note || !(t.isPinned || t.folderID != nil) { remove(t) } else { t.unload() }
+            refreshFocus()
+            scheduleSave()
+            return
+        }
+        close(t)
     }
 
     func goBack() { currentWebTab?.webView?.goBack() }
@@ -608,6 +784,10 @@ final class BrowserModel: ObservableObject {
     /// The editable note on screen that Add to research writes into, if any.
     var researchNote: NoteDocument? {
         if let d = document, !d.isReadOnly, d.state == .ready { return d }
+        // Reading a page next to a note: the note is where research goes.
+        for t in visibleTabs where t.kind == .note {
+            if let u = t.url, let d = docs[u.standardizedFileURL.path], !d.isReadOnly, d.state == .ready { return d }
+        }
         return nil
     }
 

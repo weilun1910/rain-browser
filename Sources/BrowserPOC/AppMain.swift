@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var settingsWindow: NSWindow?
     private var termSource: DispatchSourceSignal?
     private var pendingURLs: [URL] = []
+    private var keyMonitor: Any?
 
     override init() {
         super.init()
@@ -62,6 +63,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window = w
         w.makeKeyAndOrderFront(nil)
         NSApp.activate()
+
+        // Ctrl-Shift-= reports "+" on most layouts, so match the key itself too.
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
+            let mods = e.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            if e.keyCode == 24 && mods == [.control, .shift] {
+                MainActor.assumeIsolated { self?.splitNewTabAction() }
+                return nil
+            }
+            return e
+        }
 
         // Graceful quit on SIGTERM so state and notes get saved.
         signal(SIGTERM, SIG_IGN)
@@ -138,6 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let file = NSMenu(title: "File")
         file.addItem(item("New Tab", #selector(newTabAction), "t", target: self))
         file.addItem(item("New Note", #selector(newNoteAction), "n", [.command, .shift], target: self))
+        file.addItem(item("Split with New Tab", #selector(splitNewTabAction), "=", [.control, .shift], target: self))
         file.addItem(item("Open Location", #selector(openLocationAction), "l", target: self))
         file.addItem(.separator())
         file.addItem(item("Close Tab", #selector(closeTabAction), "w", target: self))
@@ -195,6 +207,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc func settingsAction() { openSettings() }
     @objc func newTabAction() { showMain(); model.newTabCommand() }
     @objc func newNoteAction() { showMain(); model.newNote() }
+    @objc func splitNewTabAction() { showMain(); model.splitWithNewTab() }
     @objc func openLocationAction() { showMain(); model.focusAddress() }
     @objc func closeTabAction() {
         if NSApp.keyWindow === settingsWindow { settingsWindow?.performClose(nil); return }
