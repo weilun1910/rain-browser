@@ -13,7 +13,9 @@ struct Card: Identifiable {
 /// cards in place while the context stays roughly the same.
 @MainActor
 final class Resurfacer: ObservableObject {
-    @Published private(set) var cards: [Card] = []
+    @Published private(set) var siteCards: [Card] = []
+    @Published private(set) var docCards: [Card] = []
+    var cards: [Card] { siteCards + docCards }
     @Published private(set) var hasContext = false
     @Published private(set) var isWorking = false
 
@@ -58,7 +60,7 @@ final class Resurfacer: ObservableObject {
         guard let input, (input.title.count + input.text.count) >= 40 else {
             context = input
             hasContext = input != nil
-            if input == nil || input?.key != lastKey { cards = []; lastTerms = []; lastKey = input?.key }
+            if input == nil || input?.key != lastKey { siteCards = []; docCards = []; lastTerms = []; lastKey = input?.key }
             return
         }
         context = input
@@ -101,12 +103,26 @@ final class Resurfacer: ObservableObject {
         let sameItem = input.key == lastKey
         let overlap = Self.jaccard(newTerms, lastTerms)
         let bigChange = replace || (!sameItem && overlap < 0.3)
+        let old = cards
+        siteCards = merge(.sites, old: old, fresh: result.sites, result: result, params: params, bigChange: bigChange, sameItem: sameItem)
+        docCards = merge(.docs, old: old, fresh: result.docs, result: result, params: params, bigChange: bigChange, sameItem: sameItem)
+        contextTerms = result.terms
+        lastTerms = newTerms
+        lastKey = input.key
+        ReasonWriter.shared.cancelAll(except: input.key)
+        for c in cards where !c.reasonFromModel {
+            requestReason(for: c, input: input)
+        }
+    }
+
+    /// Keeps cards that still qualify in place, then appends new ones, within one section.
+    private func merge(_ sec: CardSection, old: [Card], fresh: [Match], result: RetrievalResult,
+                       params: RankParams, bigChange: Bool, sameItem: Bool) -> [Card] {
         var next: [Card] = []
         if !bigChange {
-            // Keep cards that still qualify, in their current order.
-            for c in cards {
-                let m = result.matches.first { $0.doc.id == c.id } ?? result.kept[c.id]
-                guard let m, m.score >= params.threshold * 0.85 else { continue }
+            for c in old {
+                let m = fresh.first { $0.doc.id == c.id } ?? result.kept[c.id]
+                guard let m, m.section == sec, m.score >= params.threshold * 0.85 else { continue }
                 var kept = c
                 kept.match = m
                 if !sameItem {
@@ -117,17 +133,10 @@ final class Resurfacer: ObservableObject {
                 next.append(kept)
             }
         }
-        for m in result.matches where next.count < params.limit && !next.contains(where: { $0.id == m.doc.id }) {
+        for m in fresh where next.count < params.limit && !next.contains(where: { $0.id == m.doc.id }) {
             next.append(Card(match: m, reason: Reasons.template(m)))
         }
-        cards = next
-        contextTerms = result.terms
-        lastTerms = newTerms
-        lastKey = input.key
-        ReasonWriter.shared.cancelAll(except: input.key)
-        for c in next where !c.reasonFromModel {
-            requestReason(for: c, input: input)
-        }
+        return Array(next.prefix(params.limit))
     }
 
     private func requestReason(for card: Card, input: ContextInput) {
@@ -146,19 +155,30 @@ final class Resurfacer: ObservableObject {
     }
 
     private func setReason(_ text: String, docID: Int64, key: String) {
-        guard key == lastKey, let i = cards.firstIndex(where: { $0.id == docID }) else { return }
-        cards[i].reason = text
-        cards[i].reasonFromModel = true
+        guard key == lastKey else { return }
+        if let i = siteCards.firstIndex(where: { $0.id == docID }) { siteCards[i].reason = text; siteCards[i].reasonFromModel = true }
+        if let i = docCards.firstIndex(where: { $0.id == docID }) { docCards[i].reason = text; docCards[i].reasonFromModel = true }
     }
 
     func dismiss(_ card: Card) {
         guard let key = lastKey else { return }
         IndexStore.shared.dismiss(docID: card.id, contextKey: key, terms: contextTerms)
-        cards.removeAll { $0.id == card.id }
+        siteCards.removeAll { $0.id == card.id }
+        docCards.removeAll { $0.id == card.id }
     }
 
     func setFeedback(_ text: String, for card: Card) {
-        if let i = cards.firstIndex(where: { $0.id == card.id }) { cards[i].feedback = text }
+        if let i = siteCards.firstIndex(where: { $0.id == card.id }) { siteCards[i].feedback = text }
+        if let i = docCards.firstIndex(where: { $0.id == card.id }) { docCards[i].feedback = text }
+    }
+
+    /// Felix's own call on which section a card belongs in. Remembered per item.
+    func move(_ card: Card, to sec: CardSection) {
+        let key = card.match.doc.key
+        Task.detached {
+            IndexStore.shared.setOverride(key: key, section: sec)
+            await MainActor.run { self.refresh(replace: false) }
+        }
     }
 
     static func jaccard(_ a: Set<String>, _ b: Set<String>) -> Double {

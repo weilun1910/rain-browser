@@ -37,9 +37,19 @@ struct RightPanelContent: View {
                 Spacer()
             } else {
                 ScrollView {
-                    VStack(spacing: 10) {
-                        ForEach(resurfacer.cards) { card in
-                            CardView(card: card, showScores: settings.published.showScores)
+                    VStack(alignment: .leading, spacing: 10) {
+                        if !resurfacer.siteCards.isEmpty {
+                            SectionLabel(CardSection.sites.title)
+                            ForEach(resurfacer.siteCards) { card in
+                                CardView(card: card, showScores: settings.published.showScores)
+                            }
+                        }
+                        if !resurfacer.docCards.isEmpty {
+                            SectionLabel(CardSection.docs.title)
+                                .padding(.top, resurfacer.siteCards.isEmpty ? 0 : 6)
+                            ForEach(resurfacer.docCards) { card in
+                                CardView(card: card, showScores: settings.published.showScores)
+                            }
                         }
                     }
                     .padding(.bottom, 12)
@@ -57,6 +67,17 @@ struct RightPanelContent: View {
     }
 }
 
+struct SectionLabel: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.tertiary)
+            .padding(.leading, 2)
+    }
+}
+
 struct CardView: View {
     let card: Card
     let showScores: Bool
@@ -67,8 +88,9 @@ struct CardView: View {
 
     var icon: String {
         switch m.doc.source {
-        case .web: return "globe"
-        case .chrome: return "clock.arrow.circlepath"
+        case .web, .chrome:
+            if m.section == .docs { return "doc.richtext" }
+            return m.doc.source == .web ? "globe" : "clock.arrow.circlepath"
         case .note, .markdown: return "note.text"
         }
     }
@@ -151,6 +173,14 @@ struct CardView: View {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(m.doc.url, forType: .string)
             }
+            if m.doc.source == .web || m.doc.source == .chrome {
+                if m.section == .sites {
+                    Button("Move to Notes / Docs") { model.resurfacer.move(card, to: .docs) }
+                } else {
+                    Button("Move to Sites") { model.resurfacer.move(card, to: .sites) }
+                }
+            }
+            Divider()
             Button("Dismiss") { model.resurfacer.dismiss(card) }
         }
     }

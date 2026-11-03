@@ -16,6 +16,8 @@ struct GeneralSettings: View {
     @ObservedObject var settings = Settings.shared
     @State private var excludeText = ""
     @State private var excludeSaved = false
+    @State private var writingText = ""
+    @State private var writingSaved = false
 
     var body: some View {
         Form {
@@ -45,14 +47,40 @@ struct GeneralSettings: View {
                 Text("One domain per line. Subdomains count too. Saving also removes matching pages already in the index.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section {
+                TextEditor(text: $writingText)
+                    .font(.system(size: 12, design: .monospaced))
+                    .frame(height: 100)
+                HStack {
+                    Button("Save list") {
+                        let list = writingText.split(whereSeparator: { $0.isNewline || $0 == "," })
+                            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+                            .filter { !$0.isEmpty }
+                        Settings.shared.update { $0.writingSites = list }
+                        AppDelegate.shared?.model.resurfacer.settingsChanged()
+                        writingSaved = true
+                    }
+                    Button("Restore defaults") { writingText = AppSettings.defaultWritingSites.joined(separator: "\n") }
+                    if writingSaved { Text("Saved").font(.caption).foregroundStyle(.secondary) }
+                }
+            } header: {
+                Text("Sites you write on")
+            } footer: {
+                Text("Related shows these under Notes / Docs instead of Sites. Notion and Google Docs, Sheets and Slides always count, and so does any page where you've typed about 200 characters. One per line, like coda.io or *.atlassian.net/wiki. You can also move a single card from its right-click menu.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("On-device model") {
                 LabeledContent("Apple Foundation Models", value: ReasonWriter.availabilityText)
                 LabeledContent("Sentence embeddings", value: Embedder.shared.isAvailable ? "available" : "not available")
             }
         }
         .formStyle(.grouped)
-        .onAppear { excludeText = settings.published.excludedDomains.joined(separator: "\n") }
+        .onAppear {
+            excludeText = settings.published.excludedDomains.joined(separator: "\n")
+            writingText = settings.published.writingSites.joined(separator: "\n")
+        }
         .onChange(of: excludeText) { excludeSaved = false }
+        .onChange(of: writingText) { writingSaved = false }
     }
 
 }

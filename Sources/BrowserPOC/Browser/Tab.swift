@@ -35,6 +35,8 @@ final class Tab: ObservableObject, Identifiable {
     weak var model: BrowserModel?
 
     var lastExtract: PageExtract?
+    var docsExport: String?
+    var docsExportStarted = false
     var captureWork: DispatchWorkItem?
     var contextWork: DispatchWorkItem?
     var activeSince: Date?

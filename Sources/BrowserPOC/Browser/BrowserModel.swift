@@ -62,6 +62,7 @@ final class BrowserModel: ObservableObject {
         c.preferences.javaScriptCanOpenWindowsAutomatically = false
         let major = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
         c.applicationNameForUserAgent = "Version/\(major).0 Safari/605.1.15"
+        TypingCounter.install(on: c.userContentController)
         webConfig = c
         resurfacer.model = self
         notes.onScan = { [weak self] in self?.checkNotesOnDisk() }
@@ -512,6 +513,8 @@ final class BrowserModel: ObservableObject {
     }
 
     func pageWillNavigate(_ tab: Tab) {
+        tab.docsExport = nil
+        tab.docsExportStarted = false
         endDwell(tab)
         tab.captureWork?.cancel()
         tab.contextWork?.cancel()
@@ -523,12 +526,28 @@ final class BrowserModel: ObservableObject {
         tab.captureWork?.cancel()
         tab.contextWork?.cancel()
         let indexable = URLKey.isIndexableWeb(url) && !Settings.shared.value.isExcluded(host: url.host)
-        // Context for the right panel, once the page settles.
+        let isGoogleDoc = DocsExport.url(for: url) != nil
+        // Context for the right panel, once the page settles. Google Docs draw text on a canvas,
+        // so their text comes from the export instead of the page.
         let ctx = DispatchWorkItem { [weak self, weak tab] in
             MainActor.assumeIsolated {
                 guard let self, let tab, tab.webView?.url == url else { return }
                 tab.extract { e in
-                    tab.lastExtract = e
+                    guard let e else { tab.lastExtract = nil; return }
+                    if isGoogleDoc && !tab.docsExportStarted {
+                        tab.docsExportStarted = true
+                        tab.fetchDocsExport { text in
+                            tab.docsExport = text
+                            tab.lastExtract = PageExtract(url: e.url, title: Tab.cleanDocsTitle(e.title), description: "", text: text ?? "")
+                            if self.isSelected(tab) { self.resurfacer.contextFromTab(tab) }
+                        }
+                        return
+                    }
+                    if isGoogleDoc {
+                        tab.lastExtract = PageExtract(url: e.url, title: Tab.cleanDocsTitle(e.title), description: "", text: tab.docsExport ?? "")
+                    } else {
+                        tab.lastExtract = e
+                    }
                     if self.isSelected(tab) { self.resurfacer.contextFromTab(tab) }
                 }
             }
@@ -542,6 +561,11 @@ final class BrowserModel: ObservableObject {
                 guard let tab, tab.webView?.url == url else { return }
                 tab.extract { e in
                     guard let e, tab.webView?.url == url else { return }
+                    if isGoogleDoc {
+                        // The export, or the title alone if the export didn't work.
+                        Indexer.indexPage(url: url, title: Tab.cleanDocsTitle(e.title), description: "", text: tab.docsExport ?? "")
+                        return
+                    }
                     tab.lastExtract = e
                     Indexer.indexPage(url: url, title: e.title, description: e.description, text: e.text)
                 }

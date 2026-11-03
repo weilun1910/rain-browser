@@ -166,3 +166,31 @@ enum SmokeTest {
         return SelfTest.failures == 0 ? 0 : 1
     }
 }
+
+/// `--extract-check <url>`: loads one public page headless with a throwaway WebKit store and prints
+/// what the capture script reads from it. For checking sites like notion.site by hand.
+@MainActor
+enum ExtractCheck {
+    static func run(_ s: String) -> Int32 {
+        guard let url = URL(string: s), URLKey.isIndexableWeb(url) else { print("Give an http or https URL"); return 2 }
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.prohibited)
+        let c = WKWebViewConfiguration()
+        c.websiteDataStore = .nonPersistent()
+        let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: 1200, height: 900), configuration: c)
+        wv.load(URLRequest(url: url))
+        _ = SmokeTest.wait(20) { !wv.isLoading && wv.url != nil }
+        _ = SmokeTest.wait(6) { false } // client-rendered pages fill in after load
+        var out: [String: Any]?
+        wv.evaluateJavaScript(Tab.extractJS, in: nil, in: .defaultClient) { r in
+            if case .success(let v) = r { out = v as? [String: Any] } else { out = [:] }
+        }
+        _ = SmokeTest.wait(10) { out != nil }
+        let title = out?["title"] as? String ?? ""
+        let text = out?["text"] as? String ?? ""
+        print("title: \(title)")
+        print("text length: \(text.count)")
+        print("start: \(text.prefix(300).replacingOccurrences(of: "\n", with: " | "))")
+        return text.count > 200 ? 0 : 1
+    }
+}

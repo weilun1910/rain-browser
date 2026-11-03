@@ -76,7 +76,9 @@ struct RankParams {
     var keywordWeight: Double
     var semanticWeight: Double
     var entityWeight: Double
-    var limit: Int = 5
+    /// Cards per section.
+    var limit: Int = 3
+    var writingSites: [String] = AppSettings.defaultWritingSites
     var now: Date = Date()
     var recentWindow: TimeInterval = 600
     /// Docs already on screen. They're scored even when slightly under the threshold so
@@ -85,7 +87,7 @@ struct RankParams {
 
     static func fromSettings(_ s: AppSettings) -> RankParams {
         RankParams(threshold: s.threshold, keywordWeight: s.keywordWeight,
-                   semanticWeight: s.semanticWeight, entityWeight: s.entityWeight)
+                   semanticWeight: s.semanticWeight, entityWeight: s.entityWeight, writingSites: s.writingSites)
     }
 }
 
@@ -101,10 +103,13 @@ struct Match {
     /// Shared terms that read as topics (nouns), for the reason line.
     var topicTerms: [String]
     var penalized: Bool
+    var section: CardSection = .sites
 }
 
 struct RetrievalResult {
-    var matches: [Match] = []
+    var sites: [Match] = []
+    var docs: [Match] = []
+    var matches: [Match] { sites + docs }
     var kept: [Int64: Match] = [:]
     var terms: [String] = []
     var termDisplay: [String: String] = [:]
@@ -181,6 +186,8 @@ final class IndexStore: @unchecked Sendable {
               at REAL NOT NULL
             );
             CREATE INDEX IF NOT EXISTS dismissals_doc ON dismissals(doc_id);
+            CREATE TABLE IF NOT EXISTS typing(key TEXT PRIMARY KEY, chars INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS overrides(key TEXT PRIMARY KEY, section TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS searches(
               id INTEGER PRIMARY KEY,
               query TEXT NOT NULL,
@@ -271,6 +278,53 @@ final class IndexStore: @unchecked Sendable {
         queue.sync {
             (try? db.query("SELECT text FROM reasons WHERE doc_id = ? AND context_key = ?", [docID, contextKey]) { $0.text(0) })?.first
         }
+    }
+
+    // MARK: - Sections
+
+    /// Characters typed into text areas and editable regions, per page or per document.
+    func addTyping(key: String, chars: Int) {
+        guard chars > 0 else { return }
+        queue.sync {
+            _ = try? db.run("INSERT INTO typing(key, chars) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET chars = chars + excluded.chars", [key, chars])
+        }
+    }
+
+    func typedChars(key: String) -> Int {
+        queue.sync { Int((try? db.scalarInt("SELECT chars FROM typing WHERE key = ?", [key])) ?? 0) }
+    }
+
+    /// Felix's own choice of section for an item. Nil clears it.
+    func setOverride(key: String, section: CardSection?) {
+        queue.sync {
+            if let section {
+                _ = try? db.run("INSERT OR REPLACE INTO overrides(key, section) VALUES(?, ?)", [key, section.rawValue])
+            } else {
+                _ = try? db.run("DELETE FROM overrides WHERE key = ?", [key])
+            }
+            generation += 1
+        }
+    }
+
+    func override(key: String) -> CardSection? {
+        queue.sync {
+            (try? db.query("SELECT section FROM overrides WHERE key = ?", [key]) { CardSection(rawValue: $0.text(0)) })?.first ?? nil
+        }
+    }
+
+    func section(key: String, writingSites: [String]) -> CardSection {
+        guard let m = doc(key: key) else { return .sites }
+        return WritingKey.section(source: m.source, url: m.url, typed: typedChars(key: key), override: override(key: key), writingSites: writingSites)
+    }
+
+    private func sectionMap(_ writingSites: [String]) throws -> [Int64: CardSection] {
+        let typed = Dictionary(try db.query("SELECT key, chars FROM typing") { ($0.text(0), Int($0.int(1))) }, uniquingKeysWith: { a, _ in a })
+        let over = Dictionary(try db.query("SELECT key, section FROM overrides") { ($0.text(0), CardSection(rawValue: $0.text(1))) }, uniquingKeysWith: { a, _ in a })
+        var out: [Int64: CardSection] = [:]
+        for (id, source, url, key) in try db.query("SELECT id, source, url, key FROM docs", [], { ($0.int(0), SourceType(rawValue: $0.text(1)) ?? .web, $0.text(2), $0.text(3)) }) {
+            out[id] = WritingKey.section(source: source, url: url, typed: typed[key] ?? 0, override: over[key] ?? nil, writingSites: writingSites)
+        }
+        return out
     }
 
     // MARK: - Past searches
@@ -617,9 +671,11 @@ final class IndexStore: @unchecked Sendable {
         rough.sort { $0.2 > $1.2 }
 
         // 2. Exact doc sets per term, ignoring the current item and recent ones.
+        let sectionOf = try sectionMap(p.writingSites)
+        // Each section gets its own budget, so hundreds of Chrome pages can't crowd out a few notes.
         let termQuery = try db.prepare("""
             SELECT pfts.rowid, p.doc_id FROM pfts JOIN passages p ON p.id = pfts.rowid
-            WHERE pfts MATCH ? LIMIT 5000
+            WHERE pfts MATCH ? LIMIT 40000
             """)
         var termDocs: [String: Set<Int64>] = [:]
         var termPassages: [String: Set<Int64>] = [:]
@@ -628,9 +684,16 @@ final class IndexStore: @unchecked Sendable {
             let expr = Self.variants(t).map(Self.ftsQuote).joined(separator: " OR ")
             termQuery.bind([expr])
             var docs = Set<Int64>(), pids = Set<Int64>()
+            var perSection: [CardSection: Int] = [:]
             while try termQuery.step() {
                 let did = termQuery.int(1)
                 if excluded.contains(did) { continue }
+                let sec = sectionOf[did] ?? .sites
+                if perSection[sec, default: 0] >= 4000 {
+                    if perSection.values.allSatisfy({ $0 >= 4000 }) { break }
+                    continue
+                }
+                perSection[sec, default: 0] += 1
                 docs.insert(did); pids.insert(termQuery.int(0))
             }
             if docs.isEmpty { continue }
@@ -706,8 +769,14 @@ final class IndexStore: @unchecked Sendable {
 
         // 6. Candidate pool.
         var pool = Set<Int64>()
-        pool.formUnion(docTerms.keys.sorted { (docTerms[$0]?.count ?? 0) > (docTerms[$1]?.count ?? 0) }.prefix(250))
-        pool.formUnion(semDoc.filter { $0.value >= 0.65 }.sorted { $0.value > $1.value }.prefix(40).map { $0.key })
+        for sec in CardSection.allCases {
+            let kw = docTerms.keys.filter { (sectionOf[$0] ?? .sites) == sec }
+                .sorted { (docTerms[$0]?.count ?? 0) > (docTerms[$1]?.count ?? 0) }.prefix(150)
+            pool.formUnion(kw)
+            let sem = semDoc.filter { $0.value >= 0.65 && (sectionOf[$0.key] ?? .sites) == sec }
+                .sorted { $0.value > $1.value }.prefix(25).map { $0.key }
+            pool.formUnion(sem)
+        }
         pool.formUnion(docEntities.keys)
         pool.formUnion(p.keepIDs.subtracting(excluded))
         guard !pool.isEmpty else { return result }
@@ -771,7 +840,7 @@ final class IndexStore: @unchecked Sendable {
                                 sharedTerms: shared.map { ctx.counts.display[$0] ?? $0 }, sharedEntities: ents,
                                 topicTerms: Self.topicOrder(shared.filter { ctx.nouns.contains($0) }, title: meta.title)
                                     .map { ctx.counts.display[$0] ?? $0 },
-                                penalized: pen != nil))
+                                penalized: pen != nil, section: sectionOf[d] ?? .sites))
         }
         scored.sort { $0.score > $1.score }
         if Self.debug {
@@ -781,8 +850,10 @@ final class IndexStore: @unchecked Sendable {
             }
         }
 
-        let above = scored.filter { $0.score >= p.threshold }.prefix(p.limit)
-        var chosen = Array(above)
+        // Each section ranks and thresholds on its own. A section with nothing above the bar stays empty.
+        let siteTop = Array(scored.filter { $0.section == .sites && $0.score >= p.threshold }.prefix(p.limit))
+        let docTop = Array(scored.filter { $0.section == .docs && $0.score >= p.threshold }.prefix(p.limit))
+        var chosen = siteTop + docTop
         for m in scored where p.keepIDs.contains(m.doc.id) {
             result.kept[m.doc.id] = m
         }
@@ -819,7 +890,8 @@ final class IndexStore: @unchecked Sendable {
             mm.passage = best(m)
             result.kept[id] = mm
         }
-        result.matches = chosen
+        result.sites = chosen.filter { $0.section == .sites }
+        result.docs = chosen.filter { $0.section == .docs }
         return result
     }
 }
