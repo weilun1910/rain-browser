@@ -4,7 +4,6 @@ import SwiftUI
 struct LeftSidebar: View {
     @EnvironmentObject var model: BrowserModel
     @ObservedObject var settings = Settings.shared
-    @FocusState private var addressFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -54,24 +53,23 @@ struct LeftSidebar: View {
         .padding(.top, 4)
     }
 
+    /// Shows the focused page's address. Clicking it opens the command bar, like Cmd-L.
     private var addressField: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(.tertiary)
-            TextField("Search or enter address", text: $model.addressText)
-                .textFieldStyle(.plain)
+            Text(model.addressText.isEmpty ? "Search or enter address" : Snippet.prettyURL(model.addressText))
                 .font(.system(size: 13))
-                .focused($addressFocused)
-                .onSubmit { model.submitAddress(); addressFocused = false }
-                .onExitCommand { addressFocused = false; model.addressEditing = false; model.syncAddress() }
+                .foregroundStyle(model.addressText.isEmpty ? .tertiary : .secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 10)
         .frame(height: 30)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(addressFocused ? 0.09 : 0.055)))
-        .onChange(of: model.addressFocusToken) { addressFocused = true }
-        .onChange(of: addressFocused) { _, f in
-            model.addressEditing = f
-            if !f { model.syncAddress() }
-        }
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.055)))
+        .contentShape(Rectangle())
+        .onTapGesture { model.focusAddress() }
+        .help(model.addressText)
     }
 
     // MARK: Sections

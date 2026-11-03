@@ -189,6 +189,14 @@ enum SmokeTest {
         model.updateSpace(model.currentSpaceID) { $0.color = "#4C8DF6" }
         snapshot(window.contentView!, snaps.appendingPathComponent("7-folder-and-two-spaces.png"))
 
+        // 9. The command bar with suggestions.
+        IndexStore.shared.addSearch("sourdough starter rye")
+        model.bar.open(.newTab, text: "sourdough")
+        check(model.bar.results.contains { $0.group == .notes } && model.bar.results.contains { $0.group == .history },
+              "the command bar suggests notes and history", model.bar.results.map { $0.title.prefix(24) }.joined(separator: " | "))
+        snapshot(window.contentView!, snaps.appendingPathComponent("8-command-bar.png"))
+        model.bar.close()
+
         model.prepareForQuit()
         print(SelfTest.failures == 0 ? "\nSmoke test passed." : "\n\(SelfTest.failures) check(s) failed.")
         return SelfTest.failures == 0 ? 0 : 1

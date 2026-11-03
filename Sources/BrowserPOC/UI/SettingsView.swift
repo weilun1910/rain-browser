@@ -161,6 +161,11 @@ struct SourcesSettings: View {
                         Text(Self.countText(s, c)).foregroundStyle(.secondary)
                     }
                 }
+                Button("Clear search history...") {
+                    if Prompt.confirm(title: "Clear search history?", message: "This removes past searches from the command bar, including ones brought in from Chrome.", ok: "Clear") {
+                        Task.detached { IndexStore.shared.clearSearches() }
+                    }
+                }
                 Button("Clear index...") {
                     if Prompt.confirm(title: "Clear the index?",
                                       message: "This removes every page, note and Chrome entry from the index. Your note files stay exactly as they are.",

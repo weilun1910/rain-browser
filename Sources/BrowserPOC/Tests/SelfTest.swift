@@ -237,6 +237,7 @@ enum SelfTest {
         SectionTests.run(dir: dir)
         SplitTests.run(dir: dir)
         SpaceTests.run(dir: dir)
+        CommandBarTests.run(dir: dir)
 
         print(failures == 0 ? "\nAll checks passed." : "\n\(failures) check(s) failed.")
         return failures == 0 ? 0 : 1

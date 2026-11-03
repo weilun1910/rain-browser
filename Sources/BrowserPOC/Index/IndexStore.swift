@@ -356,6 +356,100 @@ final class IndexStore: @unchecked Sendable {
         }
     }
 
+    struct NoteHit { let title: String; let url: String; let line: String; let project: String? }
+    struct HistoryHit { let title: String; let url: String; let visits: Int; let lastSeen: Double; let source: SourceType }
+
+    /// FTS query for what's typed so far: every word must match, the last one as a prefix.
+    static func prefixQuery(_ q: String) -> String? {
+        let words = TextAnalysis.rawWords(q).map { TextAnalysis.fold($0) }.filter { !$0.isEmpty }.prefix(8)
+        guard !words.isEmpty else { return nil }
+        return words.enumerated().map { i, w in
+            let quoted = "\"" + w.replacingOccurrences(of: "\"", with: "") + "\""
+            return i == words.count - 1 ? quoted + "*" : quoted
+        }.joined(separator: " ")
+    }
+
+    /// Notes whose title or text match, with the matching line.
+    func searchNotes(_ q: String, limit: Int = 4) -> [NoteHit] {
+        guard let expr = Self.prefixQuery(q) else { return [] }
+        let words = TextAnalysis.rawWords(q).map { TextAnalysis.fold($0) }
+        return queue.sync {
+            let rows = (try? db.query("""
+                SELECT d.id, d.title, d.url, p.text, d.project FROM pfts JOIN passages p ON p.id = pfts.rowid JOIN docs d ON d.id = p.doc_id
+                WHERE pfts MATCH ? AND d.source IN ('note','markdown') ORDER BY bm25(pfts, 4.0, 1.0) LIMIT 60
+                """, [expr]) { ($0.int(0), $0.text(1), $0.text(2), $0.text(3), $0.optText(4)) }) ?? []
+            var seen = Set<Int64>()
+            var out: [NoteHit] = []
+            for (id, title, url, text, project) in rows where !seen.contains(id) {
+                seen.insert(id)
+                out.append(NoteHit(title: title, url: url, line: Self.matchingLine(text, words: words), project: project))
+                if out.count == limit { break }
+            }
+            return out
+        }
+    }
+
+    static func matchingLine(_ text: String, words: [String]) -> String {
+        let lines = text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        // Body lines first; a heading usually just repeats the title.
+        for headings in [false, true] {
+            for l in lines where l.hasPrefix("#") == headings {
+                let f = TextAnalysis.fold(Substring(l))
+                if words.contains(where: { !$0.isEmpty && f.contains($0) }) {
+                    let clean = l.hasPrefix("#") ? String(l.drop(while: { $0 == "#" || $0 == " " })) : l
+                    return String(clean.prefix(140))
+                }
+            }
+        }
+        return String((lines.first { !$0.hasPrefix("#") } ?? lines.first ?? "").prefix(140))
+    }
+
+    /// Visited pages and Chrome history: title matches plus URL matches, ranked by visits and recency.
+    func searchHistory(_ q: String, limit: Int = 4, now: Date = Date()) -> [HistoryHit] {
+        let trimmed = q.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !trimmed.isEmpty else { return [] }
+        return queue.sync {
+            var byID: [Int64: (HistoryHit, Double)] = [:]
+            func add(_ id: Int64, _ h: HistoryHit, bonus: Double) {
+                let age = max(0, now.timeIntervalSince1970 - h.lastSeen) / 86400
+                let score = bonus + log(1 + Double(h.visits)) - age / 30
+                if let old = byID[id], old.1 >= score { return }
+                byID[id] = (h, score)
+            }
+            if let expr = Self.prefixQuery(q) {
+                let rows = (try? db.query("""
+                    SELECT d.id, d.title, d.url, d.visit_count, d.last_seen, d.source FROM pfts JOIN passages p ON p.id = pfts.rowid
+                    JOIN docs d ON d.id = p.doc_id
+                    WHERE pfts MATCH ? AND d.source IN ('web','chrome') LIMIT 200
+                    """, ["title : (" + expr + ")"]) { ($0.int(0), HistoryHit(title: $0.text(1), url: $0.text(2), visits: Int($0.int(3)), lastSeen: $0.double(4), source: SourceType(rawValue: $0.text(5)) ?? .web)) }) ?? []
+                for (id, h) in rows { add(id, h, bonus: 2) }
+            }
+            if !trimmed.contains(" ") && trimmed.count >= 2 {
+                let like = "%" + trimmed.replacingOccurrences(of: "%", with: "").replacingOccurrences(of: "_", with: "") + "%"
+                let rows = (try? db.query("""
+                    SELECT id, title, url, visit_count, last_seen, source FROM docs
+                    WHERE source IN ('web','chrome') AND url LIKE ? ORDER BY visit_count DESC LIMIT 60
+                    """, [like]) { ($0.int(0), HistoryHit(title: $0.text(1), url: $0.text(2), visits: Int($0.int(3)), lastSeen: $0.double(4), source: SourceType(rawValue: $0.text(5)) ?? .web)) }) ?? []
+                for (id, h) in rows {
+                    let host = URL(string: h.url)?.host?.lowercased() ?? ""
+                    add(id, h, bonus: host.contains(trimmed) ? 2.5 : 1)
+                }
+            }
+            return byID.values.sorted { $0.1 > $1.1 }.prefix(limit).map { $0.0 }
+        }
+    }
+
+    /// Past searches that start with the query, or have a word that does. Recent first.
+    func searchPastSearches(_ q: String, limit: Int = 3) -> [(query: String, at: Double)] {
+        let norm = Self.normalizeQuery(q).replacingOccurrences(of: "%", with: "").replacingOccurrences(of: "_", with: "")
+        guard !norm.isEmpty else { return [] }
+        return queue.sync {
+            (try? db.query("""
+                SELECT query, at FROM searches WHERE norm LIKE ? OR norm LIKE ? ORDER BY at DESC LIMIT ?
+                """, [norm + "%", "% " + norm + "%", limit]) { (query: $0.text(0), at: $0.double(1)) }) ?? []
+        }
+    }
+
     func searchCount() -> Int {
         queue.sync { Int((try? db.scalarInt("SELECT count(*) FROM searches")) ?? 0) }
     }

@@ -10,66 +10,72 @@ You need Xcode 26 (or its command line tools) on macOS 26 or later.
 
 ```
 cd "app.nosync"
-scripts/build.sh        # builds build/BrowserPOC.app (release, signed ad hoc)
-scripts/run.sh          # builds, then opens the app
+scripts/build.sh        # builds build/BrowserPOC.app (release)
+scripts/run.sh          # builds, then opens it
 ```
 
-The app ends up at `build/BrowserPOC.app`. You can also open it from Finder.
+The app ends up at `build/BrowserPOC.app`. Quit a running copy before rebuilding.
 
-Tests and the Chrome check run from the command line:
+The build is signed ad hoc, so every build has a different signature. macOS ties some permissions to the signature, so after a rebuild it may ask again before the app can read Chrome's history. To keep that permission across builds, sign with a certificate from your keychain:
 
 ```
-scripts/selftest.sh                                             # index and ranking checks on fixture docs
+SIGN_IDENTITY="Apple Development: Your Name (TEAMID)" scripts/build.sh
+```
+
+Tests and checks from the command line:
+
+```
+scripts/selftest.sh                                             # index, notes, sections, split, spaces and command bar checks
 .build/debug/BrowserPOC --smoketest                             # drives the real browser headless, no window on screen
 build/BrowserPOC.app/Contents/MacOS/BrowserPOC --chrome-dry-run # what a Chrome import would do, fetches nothing
+.build/debug/BrowserPOC --extract-check <url>                   # what capture reads from one public page
 ```
 
-Both tests use a throwaway folder and exit non-zero if a check fails. The dry run prints full URLs from your Chrome history, so keep its output to yourself.
+Both tests use throwaway folders and exit non-zero if a check fails. The self test moves one small note called "Fresh idea" to your Trash, to check that delete uses the Trash. The dry run prints full URLs from your Chrome history, so keep its output to yourself.
 
 ## What's in it
 
-**Browser.** One window. The left sidebar has the address field (Google for searches), back, forward and reload, then Pinned, Folders, Notes and Tabs. Tabs are newest first. Right-click a tab to pin it or move it into a folder, or drag it onto a folder. Folders can be created, renamed and deleted (their tabs go back to Tabs). Closing a pinned or filed tab only unloads it. Pins, folders and open tabs come back after a restart. Element full screen works, and pages can be inspected from Safari's Develop menu.
+**Spaces.** Each space has its own pinned items, folders, tabs and splits, a name, an icon or emoji and a colour that lightly tints the sidebar. Switch with the icons at the bottom of the sidebar, Ctrl-1 to Ctrl-9, or a two-finger sideways swipe on the sidebar. Right-click a space icon to rename it, change its icon or colour, move it, set where its new notes go, or delete it. Deleting asks first and closes that space's tabs. Notes on disk are never touched. Older saved state moves into a space called Home.
 
-Shortcuts: Cmd-T new tab, Cmd-L address field, Cmd-W close, Cmd-R reload, Cmd-[ and Cmd-] back and forward, Cmd-Shift-N new note, Cmd-Shift-R show or hide the right panel, Cmd-Shift-P note preview, Cmd-plus and Cmd-minus zoom.
+**Command bar.** Cmd-T, the New tab button and Ctrl-Shift-= open a search bar in the middle of the window. Nothing is created until you pick something, and Esc closes it. Suggestions come from what's open in this space, your notes in every space, your past searches, and pages you've visited here or in Chrome, then Search Google and New note. Arrow keys and Enter pick. A typed address shows as Open. Cmd-L, or clicking the address in the sidebar, opens the bar with the current address selected, and Enter loads in place. Searches you run from the bar are remembered, and the Chrome import brings in your Chrome searches too. Settings can clear them.
 
-**Notes.** Plain `.md` files in `~/Library/Application Support/BrowserPOC/Notes/` (you can pick another folder in Settings). They save as you type. There's a preview toggle. Markdown files from folders you add open read-only, with a Reveal in Finder button.
+**Tabs and notes.** Notes are items just like tabs. They show in Tabs when open, and you can pin them, put them in sidebar folders next to pages, split them, or move them to another space. Closing a note only takes it out of the sidebar; the file stays and the command bar finds it again. Right-click a note to rename it, reveal it in Finder, or delete it, which asks first and moves the file to the Trash. If a note's file is moved or deleted outside the app, its item shows as missing with Locate and Close.
 
-**Index.** When a page stays open about five seconds, its title, description and main text go into a local SQLite index with full-text search. It also stores Apple NaturalLanguage sentence vectors for each passage and the people, organisations and places in it. It skips anything that isn't http or https, and sites on the exclude list (banks and mail.google.com to start; edit it in Settings). Notes get indexed every time they save.
+**Split view.** Any two items can sit side by side: right-click and pick Open in split view, drag an item onto either half of the page, or press Ctrl-Shift-=. A split shows as one joined row in the sidebar, with Separate and Swap sides on right-click. Click a pane to focus it. The address, back and forward, reload, Cmd-L, Cmd-W and the Related panel all follow the focused pane. Drag the gap to resize and double-click it for half and half. Splits come back after a restart.
 
-**Related cards.** The right panel shows up to five things you've seen before that relate to the page or note in front of you. A card needs to clear a fairly high bar, so often you'll see nothing, which is on purpose. The current item and anything you opened in the last 10 minutes never show. Cards stay put while you read or type and only reset when you move to something quite different. Each card has a source icon, title, site or project, the matching passage and a short reason. The reason starts from your real history ("You read this on 28 Oct, 3 visits. Both cover WKWebExtension and Nook."). When Apple's on-device model is available, it writes a short reason in its place.
+**Notes folders.** You pick the folders that hold your Markdown notes. Every `.md` file in them is a note you can open and edit here, with autosave and a preview. Hidden folders, `node_modules`, `.build` and `.nosync` folders are left out. New notes go in the space's chosen folder, or the first notes folder. If you haven't picked any, notes live in the app's own folder.
 
-- Open: pages open in a new tab, notes and Markdown files open in the editor.
-- Add to research: in a note, adds a link under `## Related` at the end. On a page, adds the item to the tab's folder, or to a Research folder it creates.
-- Dismiss: hides the card for this page or note, and scores it lower in similar contexts later.
+These files may also be edited by other apps while this one is open, so the app is careful:
+- Opening, previewing or indexing a note never changes its bytes.
+- It writes only after you actually change the text, and only to a `.md` file inside a notes folder.
+- Before every save it checks the file on disk. If something else changed it, it doesn't save, and a bar offers Load disk version or Keep mine. If you had no unsaved edits, it just reloads.
+- It watches the folders, so new, renamed and changed files show up and get indexed. Files still in iCloud are downloaded and retried.
 
-**Seed sources.** On first launch a panel offers both. Nothing runs until you click.
+**Related panel.** The right panel shows things you've seen before that relate to what's in front of you, in two sections. Sites holds pages you read, here or in Chrome. Notes / Docs holds things you write: your notes, Notion pages, Google Docs, Sheets and Slides, sites on the "Sites you write on" list in Settings, and any page where you've typed about 200 characters. Right-click a card to move it to the other section, and that choice is remembered. Each section shows up to 3 cards and has to clear the same fairly high bar, so a section is often empty. The current item and anything opened in the last 10 minutes never show, and Related always looks across every space. Each card has the matching passage and a short reason, written by Apple's on-device model when it's available. Open, Add to research and Dismiss work as before. With a note in a split, Add to research puts the link in that note.
 
-- Import Chrome history copies Chrome's Default profile History file into the app's folder, reads the copy, then deletes it. The original is never opened as a database or written to. It imports the last 90 days, up to 2,000 pages, as title and URL. It then fetches text for up to 300 of the most visited pages without cookies, 4 at a time, 10 second timeout. It only fetches pages you opened at least twice. It skips anything that looks like a sign-in, unsubscribe, confirm, token or OAuth link, local addresses, search pages and logged-in apps like Gmail, Docs, Notion and LinkedIn. Redirects get the same checks. Pages that come back as a login wall stay title only.
-- Add Markdown folders indexes every `.md` file under the folders you pick, skipping `.git`, `node_modules`, `.build` and any `.nosync` folder. The project label is the first folder under the one you picked. These files are only read. Files that iCloud hasn't downloaded are skipped so reading them doesn't trigger a download. Folders rescan on launch and from the Rescan button.
+**Capture.** Pages that stay open about five seconds go into a local index with full-text search, sentence vectors and the names in them. Google Docs draw their text on a canvas, so for those the app asks Google for the doc's own text export, from inside your tab, once per load. The typing count only stores how many characters you typed in text areas and editable regions, never what you typed, and ignores search, address and password fields.
 
-**Settings.** General (notes folder, exclude list, model status), Sources (Chrome import with progress, Markdown folders, counts per source, Clear index) and Tuning (relevance threshold, weights for keywords, meaning and names, and Show scores on cards).
+**Chrome import.** It copies Chrome's History file, reads the copy and deletes it. The original is only opened read-only to copy it. It imports the last 90 days, up to 2,000 pages, plus your past searches, and fetches text without cookies for up to 300 of the pages you visited most, skipping anything that looks like a sign-in, token or unsubscribe link and logged-in apps. macOS asks once before this app can read Chrome's data. If the import says it needs your OK, click Allow in the macOS prompt, or open System Settings, go to Privacy & Security, then Files & Folders, find Browser POC and turn on Google Chrome. The import screen has a button for that.
 
 ## Not in this version
 
 - No extensions, passkeys, password autofill, find in page, history view, favicons or profiles.
-- Downloads go straight to Downloads with no download list.
-- Back and forward history isn't kept across restarts, only the tab's page.
-- Tabs can't be reordered by hand.
-- Semantic matching uses `NLEmbedding.sentenceEmbedding`. `NLContextualEmbedding` isn't used.
-- Chrome import reads the Default profile only, and uses the last visit date (not the first).
+- Tabs can't be reordered by hand, and folders on disk can't be renamed from the app.
+- Back and forward history isn't kept across restarts.
+- Semantic matching uses `NLEmbedding.sentenceEmbedding`.
 
 ## Where things live
 
-- App data: `~/Library/Application Support/BrowserPOC/` (state.json, settings.json, index.sqlite, Notes/).
-- WebKit keeps cookies and caches under `~/Library/WebKit/local.browserpoc` and `~/Library/Caches/local.browserpoc`. The window position is saved in `~/Library/Preferences/local.browserpoc.plist`.
-- Clearing the index in Settings removes indexed entries only. Notes and Markdown files aren't touched.
+- App data: `~/Library/Application Support/BrowserPOC/` (state.json, settings.json, index.sqlite, and Notes/ when no notes folders are chosen).
+- WebKit keeps cookies and caches under `~/Library/WebKit/local.browserpoc` and `~/Library/Caches/local.browserpoc`.
+- Clearing the index removes indexed entries only. Notes stay exactly as they are.
 
 ## Code map
 
-- `Sources/BrowserPOC/Browser`: tabs, WebKit delegates, the browser model.
-- `Sources/BrowserPOC/Notes`: notes, Markdown preview and the Related link helper.
-- `Sources/BrowserPOC/Index`: SQLite wrapper, text analysis, the index and ranking.
-- `Sources/BrowserPOC/Resurfacing`: the right panel's card logic and reasons.
-- `Sources/BrowserPOC/Sources`: Chrome import, URL safety rules, HTML text, Markdown folders.
-- `Sources/BrowserPOC/UI`: SwiftUI views.
-- `Sources/BrowserPOC/Tests`: `--selftest` and `--smoketest`.
+- `Sources/BrowserPOC/Browser`: tabs, notes as items, splits, spaces, WebKit delegates, writing signals.
+- `Sources/BrowserPOC/Notes`: notes folders, the note document with its disk checks, Markdown preview.
+- `Sources/BrowserPOC/Index`: SQLite wrapper, text analysis, the index, ranking and lookups.
+- `Sources/BrowserPOC/Resurfacing`: the Related panel's cards and reasons.
+- `Sources/BrowserPOC/Sources`: Chrome import, URL safety rules, HTML text, the notes indexer and folder watcher.
+- `Sources/BrowserPOC/UI`: SwiftUI views, including the command bar, split view and spaces.
+- `Sources/BrowserPOC/Tests`: `--selftest`, `--smoketest` and `--extract-check`.

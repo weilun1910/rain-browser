@@ -35,6 +35,7 @@ struct MainView: View {
             }
         }
         .background(VisualEffect().ignoresSafeArea())
+        .overlay { CommandBarOverlay(bar: model.bar) }
         .ignoresSafeArea()
         .frame(minWidth: 900, minHeight: 560)
     }
@@ -46,6 +47,13 @@ struct WindowDragArea: View {
         Color.clear
             .contentShape(Rectangle())
             .gesture(WindowDragGesture())
+    }
+}
+
+struct CommandBarOverlay: View {
+    @ObservedObject var bar: CommandBar
+    var body: some View {
+        if bar.isOpen { CommandBarView(bar: bar) }
     }
 }
 

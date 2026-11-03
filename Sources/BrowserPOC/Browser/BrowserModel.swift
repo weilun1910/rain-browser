@@ -109,6 +109,7 @@ final class BrowserModel: ObservableObject {
     let webConfig: WKWebViewConfiguration
     let notes = NotesStore()
     let resurfacer = Resurfacer()
+    let bar = CommandBar()
     /// Open note documents, by file path.
     private(set) var docs: [String: NoteDocument] = [:]
     private var history: [Selection] = []
@@ -128,6 +129,7 @@ final class BrowserModel: ObservableObject {
         TypingCounter.install(on: c.userContentController)
         webConfig = c
         resurfacer.model = self
+        bar.model = self
         notes.onScan = { [weak self] in self?.checkNotesOnDisk() }
         load()
     }
@@ -335,8 +337,62 @@ final class BrowserModel: ObservableObject {
         addressText = currentWebTab?.url?.absoluteString ?? ""
     }
 
+    /// Cmd-L: the bar with the focused page's address selected. Enter loads in that pane.
     func focusAddress() {
-        addressFocusToken += 1
+        if let t = currentWebTab, let u = t.url ?? t.webView?.url {
+            bar.open(.navigate(t.id), text: u.absoluteString)
+        } else if let t = currentWebTab {
+            bar.open(.navigate(t.id))
+        } else {
+            bar.open(.newTab)
+        }
+    }
+
+    /// What a pick in the command bar does, for each way the bar was opened.
+    func commandPick(_ kind: Suggestion.Kind, mode: CommandBar.Mode) {
+        switch kind {
+        case .tab(let id):
+            guard let t = tab(id) else { return }
+            if mode == .split { openInSplit(t, side: .right) } else { select(t) }
+        case .note(let u):
+            if mode == .split { openInSplit(openNote(u, select: false), side: .right) } else { openNote(u) }
+        case .newNote(let title):
+            guard let url = notes.create(in: newNotesFolder, title: title) else {
+                flash("Couldn't create a note in \(newNotesFolder.lastPathComponent)")
+                return
+            }
+            if mode == .split { openInSplit(openNote(url, select: false), side: .right) } else { openNote(url) }
+            DispatchQueue.main.async { NotificationCenter.default.post(name: .focusEditor, object: nil) }
+        case .openURL(let u), .history(let u):
+            openWeb(u, mode: mode)
+        case .google(let q), .pastSearch(let q):
+            IndexStore.shared.addSearch(q)
+            if let u = AddressParser.search(q) { openWeb(u, mode: mode) }
+        }
+    }
+
+    private func openWeb(_ u: URL, mode: CommandBar.Mode) {
+        switch mode {
+        case .navigate(let id):
+            if let t = tab(id), t.kind == .web {
+                t.load(u)
+                focusWeb(t)
+                scheduleSave()
+                return
+            }
+            let t = newTab(url: u, select: true)
+            focusWeb(t)
+        case .newTab:
+            let t = newTab(url: u, select: true)
+            focusWeb(t)
+        case .split:
+            let t = Tab(url: u)
+            t.model = self
+            tabs.append(t)
+            openInSplit(t, side: .right)
+            _ = t.ensureWebView()
+            focusWeb(t)
+        }
     }
 
     // MARK: - Tabs
@@ -449,18 +505,14 @@ final class BrowserModel: ObservableObject {
         openInSplit(t, side: side)
     }
 
-    /// Ctrl-Shift-=: split with a new tab whose address field is focused.
+    /// Ctrl-Shift-=: the bar, and whatever's picked opens as the second pane.
     func splitWithNewTab() {
-        let t = Tab(url: nil)
-        t.model = self
-        tabs.append(t)
-        openInSplit(t, side: .right)
-        focusAddress()
+        bar.open(currentTab == nil ? .newTab : .split)
     }
 
+    /// Cmd-T and New tab: the bar. Nothing is created until something is picked.
     func newTabCommand() {
-        if let t = currentTab, t.isBlank { focusAddress(); return }
-        newTab(url: nil, select: true, focus: true)
+        bar.open(.newTab)
     }
 
     func submitAddress() {
