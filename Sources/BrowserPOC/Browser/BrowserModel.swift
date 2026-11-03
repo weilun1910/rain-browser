@@ -49,9 +49,12 @@ final class BrowserModel: ObservableObject {
     private var saveWork: DispatchWorkItem?
     private var flashWork: DispatchWorkItem?
 
+    /// The smoke test uses a throwaway WebKit store so it leaves no cookies or site data behind.
+    static var useEphemeralStore = false
+
     init() {
         let c = WKWebViewConfiguration()
-        c.websiteDataStore = .default()
+        c.websiteDataStore = Self.useEphemeralStore ? .nonPersistent() : .default()
         c.preferences.isElementFullscreenEnabled = true
         c.preferences.javaScriptCanOpenWindowsAutomatically = false
         let major = ProcessInfo.processInfo.operatingSystemVersion.majorVersion

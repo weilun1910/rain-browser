@@ -67,6 +67,7 @@ enum SmokeTest {
         SelfTest.failures = 0
         func check(_ ok: Bool, _ label: String, _ detail: String = "") { SelfTest.check(ok, label, detail) }
 
+        BrowserModel.useEphemeralStore = true
         let model = BrowserModel()
         model.notes.reload()
         let snaps = dir.appendingPathComponent("snapshots", isDirectory: true)
