@@ -2,41 +2,86 @@ import AppKit
 import SwiftUI
 
 /// Peek: the page floats over the current one, which dims and settles back a little, like Zen's
-/// Glance. Expand, Split and Close sit at the top right.
+/// Glance. Expand, Split and Close sit above it at the top right.
+///
+/// It grows out of the point you clicked on a 0.3 s spring, fading in over the first 0.12 s, and
+/// its controls land just after it. Closing shrinks it back toward that point. Expanding fills the
+/// pane, and splitting moves it to the right half, before the model makes the change, so the page
+/// never jumps. Under Reduce Motion it fades in and out in place.
 struct PeekOverlay: View {
     let peek: PeekState
     @EnvironmentObject var model: BrowserModel
+    @ObservedObject private var motion = PeekMotion.shared
     @State private var shown = false
+    @State private var origin: CGPoint?
+
+    static let headerHeight: CGFloat = 26 + Theme.Space.s
 
     var body: some View {
         GeometryReader { g in
-            ZStack {
-                Theme.Palette.scrim.opacity(shown ? 1.6 : 0)
+            let w = g.size.width, h = g.size.height
+            let phase = motion.phase(for: peek.tab.id)
+            let rest = CGRect(x: w * 0.08, y: h * 0.05 + Self.headerHeight, width: w * 0.84, height: h * 0.9 - Self.headerHeight)
+            let frame: CGRect = {
+                switch phase {
+                case .expanding: return CGRect(origin: .zero, size: g.size)
+                case .splitting:
+                    let gap = SplitBranch.gap
+                    return CGRect(x: (w + gap) / 2, y: 0, width: (w - gap) / 2, height: h)
+                default: return rest
+                }
+            }()
+            let reduce = Motion.reduceMotion
+            let away = !shown || phase == .closing
+            let from = origin ?? CGPoint(x: rest.midX, y: rest.midY)
+            let scale: CGFloat = reduce || !away ? 1 : (origin == nil ? 0.94 : 0.08)
+            let center = reduce || !away ? CGPoint(x: frame.midX, y: frame.midY) : from
+            let controls = shown && phase == .open
+            let movement = phase == .closing ? Motion.peekOut : (phase == .open ? Motion.peek : Motion.peekExpand)
+
+            ZStack(alignment: .topLeading) {
+                Theme.Palette.scrim.opacity(away || phase != .open ? 0 : 1.6)
+                    .animation(Motion.animation(phase == .closing ? Motion.peekOut : Motion.scrim, fadeOnly: true), value: away)
+                    .animation(Motion.animation(Motion.peekExpand, fadeOnly: true), value: phase)
                     .contentShape(Rectangle())
                     .onTapGesture { model.closePeek() }
-                VStack(spacing: Theme.Space.s) {
-                    HStack(spacing: Theme.Space.s) {
-                        PeekTitle(tab: peek.tab)
-                        Spacer()
-                        HStack(spacing: 0) {
-                            PeekButton(symbol: "rectangle.split.2x1", help: "Open in split view") { model.splitPeek() }
-                            PeekButton(symbol: "arrow.up.left.and.arrow.down.right", help: "Open as a tab (Cmd-O)") { model.expandPeek() }
-                            PeekButton(symbol: "xmark", help: "Close (Esc)") { model.closePeek() }
-                        }
-                        .padding(.horizontal, 2)
-                        .floatingSurface(radius: Theme.Radius.row)
-                    }
-                    .padding(.horizontal, Theme.Space.xs)
-                    WebArea(tab: peek.tab)
-                        .paneCard()
-                        .themeShadow(.popover)
-                }
-                .frame(width: g.size.width * 0.84, height: g.size.height * 0.9)
-                .scaleEffect(shown || Motion.reduceMotion ? 1 : 0.96)
-                .opacity(shown ? 1 : 0)
+                WebArea(tab: peek.tab, role: .peek)
+                    .paneCard()
+                    .themeShadow(.popover)
+                    .frame(width: frame.width, height: frame.height)
+                    .opacity(away ? 0 : 1)
+                    .animation(Motion.animation(away ? Motion.peekOut : Motion.hover, fadeOnly: true), value: away)
+                    .scaleEffect(scale)
+                    .position(center)
+                    .animation(Motion.animation(movement), value: [shown, phase == .closing])
+                    .animation(Motion.animation(Motion.peekExpand), value: phase)
+                header
+                    .frame(width: rest.width)
+                    .position(x: rest.midX, y: rest.minY - Self.headerHeight / 2)
+                    .opacity(controls ? 1 : 0)
+                    .animation(Motion.animation(controls ? Motion.float.delay(0.18) : Motion.barOut, fadeOnly: true), value: controls)
             }
         }
-        .onAppear { Motion.run(Motion.peek, fadeOnly: true) { shown = true } }
+        .onAppear {
+            origin = PeekMotion.shared.recentClick
+            // One frame at the starting point, then grow.
+            DispatchQueue.main.async { shown = true }
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: Theme.Space.s) {
+            PeekTitle(tab: peek.tab)
+            Spacer()
+            HStack(spacing: 0) {
+                PeekButton(symbol: "rectangle.split.2x1", help: "Open in split view") { model.splitPeek() }
+                PeekButton(symbol: "arrow.up.left.and.arrow.down.right", help: "Open as a tab (Cmd-O)") { model.expandPeek() }
+                PeekButton(symbol: "xmark", help: "Close (Esc)") { model.closePeek() }
+            }
+            .padding(.horizontal, 2)
+            .floatingSurface(radius: Theme.Radius.row)
+        }
+        .padding(.horizontal, Theme.Space.xs)
     }
 }
 

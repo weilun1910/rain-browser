@@ -47,6 +47,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         appLog.notice("Sentence embedding: \(Embedder.shared.isAvailable ? "available" : "not available", privacy: .public)")
 
         model = BrowserModel()
+        // In the app, Peek waits for its own animations before it closes, expands or splits.
+        PeekMotion.live = true
         CurrentContextWriter.shared.start(model: model)
         GraphRecorder.shared.attach(model)
         RelatedShelf.launch(model)

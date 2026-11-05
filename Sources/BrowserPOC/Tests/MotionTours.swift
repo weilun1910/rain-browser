@@ -18,6 +18,12 @@ enum MotionTours {
     static func start(_ name: String, _ model: BrowserModel) {
         // Copying a link in a tour must never reach the real clipboard.
         BrowserModel.pasteboard = NSPasteboard(name: NSPasteboard.Name("local.browserpoc.motion-tour"))
+        // Keep the window above everything for the length of the tour. WebKit stops drawing pages in
+        // a window that's covered, so a recording of a covered window shows blank panes.
+        if let w = NSApp.windows.first(where: { $0.contentView is NSHostingView<ModifiedContent<MainView, _EnvironmentKeyWritingModifier<BrowserModel?>>> }) {
+            w.level = .floating
+            w.orderFrontRegardless()
+        }
         let s = MotionTour.Steps()
         switch name {
         case "spaces": spaces(s, model)
@@ -112,25 +118,44 @@ enum MotionTours {
 
     static func peek(_ s: MotionTour.Steps, _ m: BrowserModel) {
         var host: Tab?
+        let links = { Array(webTabs(m).compactMap(\.url).dropFirst()) }
         s.step(2.8, "pick a page") { host = webTabs(m).first; if let host { m.select(host) } }
-        s.step(1.6, "open peek") { if let u = webTabs(m).dropFirst().first?.url { m.openPeek(u, from: host) } }
+        // As if a link were clicked there: Peek grows from the click.
+        s.step(1.6, "open peek from a link") { PeekMotion.shared.recordClick(CGPoint(x: 520, y: 300)); if let u = links().first { m.openPeek(u, from: host) } }
         s.step(1.6, "close peek") { m.closePeek() }
-        s.step(1.2, "open again") { if let u = webTabs(m).dropFirst(2).first?.url { m.openPeek(u, from: host) } }
+        s.step(1.2, "open from another link") { PeekMotion.shared.recordClick(CGPoint(x: 260, y: 560)); if links().count > 1 { m.openPeek(links()[1], from: host) } }
         s.step(1.6, "expand") { m.expandPeek() }
+        s.step(1.4, "open with no click") { if links().count > 2 { m.openPeek(links()[2], from: m.currentTab) } }
+        s.step(1.6, "into a split") { m.splitPeek() }
     }
 
     // MARK: Split
 
     static func split(_ s: MotionTour.Steps, _ m: BrowserModel) {
         var tabs: [Tab] = []
-        s.step(2.8, "pick a page") { tabs = Array(webTabs(m).prefix(3)); if let a = tabs.first { m.select(a) } }
-        s.step(1.4, "split") { if tabs.count > 1 { m.openInSplit(tabs[1], side: .right) } }
-        s.step(1.4, "swap") { if let sp = m.currentSplit { m.swap(sp) } }
-        s.step(1.4, "third pane") { if tabs.count > 2 { m.openInSplit(tabs[2], side: .right) } }
-        s.step(1.4, "close a pane") { if tabs.count > 2 { m.focusPane(item: tabs[2].id); m.closeCurrent() } }
-        s.step(1.4, "pop out") { if tabs.count > 1 { m.popOut(tabs[1].id) } }
-        s.step(1.2, "split again") { if tabs.count > 1, let a = tabs.first { m.select(a); m.openInSplit(tabs[1], side: .right) } }
-        s.step(1.4, "separate") { if let sp = m.currentSplit { m.separate(sp) } }
+        func step(_ gap: Double, _ label: String, _ f: @escaping @MainActor () -> Void) {
+            s.step(gap, label) { f(); DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { MainActor.assumeIsolated { report(label, m) } } }
+        }
+        step(2.8, "pick a page") { tabs = Array(webTabs(m).prefix(3)); if let a = tabs.first { m.select(a) } }
+        step(1.4, "split") { if tabs.count > 1 { m.openInSplit(tabs[1], side: .right) } }
+        step(1.4, "swap") { if let sp = m.currentSplit { m.swap(sp) } }
+        step(1.4, "third pane") { if tabs.count > 2 { m.openInSplit(tabs[2], side: .right) } }
+        step(1.4, "close a pane") { if tabs.count > 2 { m.focusPane(item: tabs[2].id); m.closeCurrent() } }
+        step(1.4, "pop out") { if tabs.count > 1 { m.popOut(tabs[1].id) } }
+        step(1.2, "split again") { if tabs.count > 1, let a = tabs.first { m.select(a); m.openInSplit(tabs[1], side: .right) } }
+        step(1.4, "separate") { if let sp = m.currentSplit { m.separate(sp) } }
+    }
+
+    /// With RAIN_TOUR_DEBUG set, prints where each visible page's web view is, for checking that
+    /// every pane on screen holds its page.
+    static func report(_ label: String, _ m: BrowserModel) {
+        guard ProcessInfo.processInfo.environment["RAIN_TOUR_DEBUG"] != nil else { return }
+        let w = NSApp.windows.first { $0.contentView is NSHostingView<ModifiedContent<MainView, _EnvironmentKeyWritingModifier<BrowserModel?>>> }
+        print("REPORT \(label): visible \(m.visibleTabs.count), window on screen \(w?.occlusionState.contains(.visible) ?? false)")
+        for t in m.visibleTabs {
+            let wv = t.webView
+            print("REPORT   \(t.displayTitle.prefix(16)): in window \(wv?.window != nil), host \(wv?.superview.map { "\(type(of: $0))" } ?? "none"), \(wv.map { "\(Int($0.frame.width))x\(Int($0.frame.height))" } ?? "")")
+        }
     }
 
     // MARK: Compact mode

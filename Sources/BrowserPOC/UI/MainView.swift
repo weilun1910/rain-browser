@@ -162,6 +162,10 @@ struct ContentArea: View {
     @State private var dropTarget: DropTarget?
     @State private var frames: [UUID: CGRect] = [:]
     @Environment(\.spaceAccent) private var spaceAccent
+    @ObservedObject private var peekMotion = PeekMotion.shared
+
+    /// A Peek is up and not on its way out.
+    var underPeek: Bool { model.peek != nil && peekMotion.phase != .closing }
 
     var body: some View {
         GeometryReader { g in
@@ -174,10 +178,11 @@ struct ContentArea: View {
                     }
                 }
                 .relatedShelf(frame: RelatedShelf.paneFrame(model, frames: frames, size: g.size))
-                // Under Peek the page settles back a touch and dims, like Zen's Glance.
-                .scaleEffect(model.peek == nil || Motion.reduceMotion ? 1 : 0.985)
-                .opacity(model.peek == nil ? 1 : 0.7)
-                .motion(Motion.peek, value: model.peek == nil)
+                // Under Peek the page settles back a touch and dims, like Zen's Glance. It comes back
+                // as soon as the Peek starts to close.
+                .scaleEffect(!underPeek || Motion.reduceMotion ? 1 : 0.985)
+                .opacity(underPeek ? 0.7 : 1)
+                .motion(peekMotion.phase == .closing ? Motion.peekOut : Motion.peek, value: underPeek)
                 if let t = dropTarget {
                     Theme.Radius.shape(Theme.Radius.card)
                         .fill(spaceAccent.opacity(0.12))
@@ -208,6 +213,8 @@ struct ContentArea: View {
                 }
             }
             .motion(Motion.toast, value: model.toastState)
+            // Where the last click landed, so a Peek opened by it can grow from there.
+            .background(ClickRecorder())
             .coordinateSpace(name: "content")
             .onPreferenceChange(PaneFramesKey.self) { frames = $0 }
             .onDrop(of: [ItemDrag.type], delegate: ContentDropDelegate(frames: model.currentSplit == nil ? [:] : frames,
