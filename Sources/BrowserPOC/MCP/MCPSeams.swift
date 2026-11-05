@@ -311,8 +311,22 @@ final class RankingSnapshot {
     private let dir: URL
     var refreshInterval: TimeInterval = 30
 
+    static let prefix = "BrowserPOC-mcp-"
+    static func directory(pid: pid_t) -> URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent(prefix + "\(pid)", isDirectory: true)
+    }
+
     init() {
-        dir = FileManager.default.temporaryDirectory.appendingPathComponent("BrowserPOC-mcp-\(getpid())", isDirectory: true)
+        dir = Self.directory(pid: getpid())
+    }
+
+    /// Removes copies left by servers that were killed before they could clean up.
+    static func sweepStale() {
+        let tmp = FileManager.default.temporaryDirectory
+        for name in (try? FileManager.default.contentsOfDirectory(atPath: tmp.path)) ?? [] where name.hasPrefix(prefix) {
+            guard let pid = pid_t(name.dropFirst(prefix.count)), pid != getpid(), kill(pid, 0) != 0 else { continue }
+            try? FileManager.default.removeItem(at: tmp.appendingPathComponent(name))
+        }
     }
 
     func storeFor(_ reader: KnowledgeReader) -> IndexStore? {

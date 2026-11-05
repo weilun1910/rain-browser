@@ -74,6 +74,22 @@ final class MCPServer {
         setvbuf(stdout, nil, _IOLBF, 0)
         signal(SIGPIPE, SIG_IGN)
         let out = FileHandle(fileDescriptor: protocolFD, closeOnDealloc: false)
+        // Clients often end a server with a signal instead of closing stdin. Either way the private
+        // copy of the index goes, and so do copies from servers that were killed outright.
+        RankingSnapshot.sweepStale()
+        let copyDir = RankingSnapshot.directory(pid: getpid())
+        var signalSources: [DispatchSourceSignal] = []
+        for sig in [SIGTERM, SIGINT, SIGHUP] {
+            signal(sig, SIG_IGN)
+            let s = DispatchSource.makeSignalSource(signal: sig, queue: .global(qos: .userInitiated))
+            s.setEventHandler {
+                try? FileManager.default.removeItem(at: copyDir)
+                exit(0)
+            }
+            s.resume()
+            signalSources.append(s)
+        }
+        defer { signalSources.forEach { $0.cancel() } }
         let context = MCPContext(root: root)
         let server = MCPServer(toolbox: MCPToolbox(context: context), out: out)
         FileHandle.standardError.write(Data("Browser POC MCP server on \(root.path)\n".utf8))

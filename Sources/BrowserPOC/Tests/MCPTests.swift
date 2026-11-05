@@ -17,6 +17,7 @@ enum MCPTests {
         legacySession(bin: bin, fx: fx)
         modernSession(bin: bin, fx: fx)
         launcherSession(bin: bin, fx: fx)
+        copyCleanup(bin: bin, fx: fx)
         privacySession(bin: bin, fx: fx)
         writeSession(bin: bin, fx: fx)
         check(!FileManager.default.fileExists(atPath: fx.root.appendingPathComponent("index.sqlite-journal").path), "index was only read")
@@ -367,6 +368,25 @@ enum MCPTests {
         check(fresh == ["Zebra crossings"], "the server sees pages the app indexes while it runs", fresh.joined(separator: "; "))
         check(MCPLog.read(root: fx.root).contains { $0.client == "selftest-modern" && $0.protocolVersion == "2026-07-28" },
               "the log takes the client name and version from _meta")
+    }
+
+    // MARK: The private copy of the index
+
+    /// The ranking copy goes when a client ends the server with a signal, and copies left by a
+    /// killed server are swept when the next one starts.
+    static func copyCleanup(bin: String, fx: MCPFixture.Built) {
+        let stale = FileManager.default.temporaryDirectory.appendingPathComponent(RankingSnapshot.prefix + "99999999")
+        try? FileManager.default.createDirectory(at: stale, withIntermediateDirectories: true)
+        guard let c = try? Client(bin: bin, root: fx.root) else { check(false, "cleanup server starts"); return }
+        _ = c.result("initialize", ["protocolVersion": "2025-11-25", "capabilities": [:] as JSON])
+        _ = c.tool("related", ["item": "Sourdough plan"])
+        let copy = RankingSnapshot.directory(pid: c.process.processIdentifier)
+        let made = FileManager.default.fileExists(atPath: copy.path)
+        check(made && !FileManager.default.fileExists(atPath: stale.path), "a killed server's copy is swept at the next start")
+        c.process.terminate()
+        c.process.waitUntilExit()
+        c.close()
+        check(made && !FileManager.default.fileExists(atPath: copy.path), "SIGTERM removes the server's copy of the index")
     }
 
     // MARK: The packaged launcher
