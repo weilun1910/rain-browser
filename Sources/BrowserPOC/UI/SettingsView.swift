@@ -7,6 +7,7 @@ struct SettingsView: View {
             GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }
             SourcesSettings().tabItem { Label("Sources", systemImage: "tray.full") }
             TuningSettings().tabItem { Label("Tuning", systemImage: "slider.horizontal.3") }
+            AIClientsSettings().tabItem { Label("AI clients", systemImage: "point.3.connected.trianglepath.dotted") }
         }
         .frame(width: 580, height: 620)
     }
