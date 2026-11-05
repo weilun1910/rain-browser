@@ -14,7 +14,12 @@ if [ "${1:-}" != "--no-build" ]; then
 fi
 [ -d "$BUILT" ] || { echo "No build at $BUILT. Run scripts/build.sh first." >&2; exit 1; }
 
-running() { pgrep -f "$DEST/Contents/MacOS/BrowserPOC" >/dev/null 2>&1; }
+# Only the app itself has to close. AI clients run Rain's MCP server from the same binary
+# (BrowserPOC --mcp) for as long as they're open. Those keep the old build until the client
+# restarts them, and the swap doesn't disturb them.
+running() {
+  ps -axo command= | grep -F "$DEST/Contents/MacOS/BrowserPOC" | grep -v -e "--mcp" -e "grep -F" >/dev/null
+}
 if running; then
   echo "Rain is open. Quit it (Cmd-Q) and the new build goes in."
   while running; do sleep 2; done
@@ -38,3 +43,6 @@ BUILD="$(/usr/libexec/PlistBuddy -c 'Print :RainBuild' "$DEST/Contents/Info.plis
 echo "Installed build $BUILD at $DEST."
 [ -d "$ROOT/build/previous/Rain.app" ] && echo "The copy it replaced is in build/previous/Rain.app."
 echo "The first time it opens, it backs up your profile to Backups in ~/Library/Application Support/BrowserPOC."
+if pgrep -f "$DEST/Contents/MacOS/BrowserPOC --mcp" >/dev/null 2>&1; then
+  echo "AI clients still running Rain's MCP server keep the old build until you restart them."
+fi
