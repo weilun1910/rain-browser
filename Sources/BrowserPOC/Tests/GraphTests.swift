@@ -184,6 +184,9 @@ enum GraphTests {
         check(leftover == 0, "links from a deleted note are pruned from the table", "\(leftover)")
 
         recorderTests(dir: gdir, store: store)
+        GraphLayoutTests.builderTests(store)
+        GraphLayoutTests.simulationTests()
+        GraphLayoutTests.performanceTests()
     }
 
     /// Splits and sessions recorded from a real model, on a fake clock.

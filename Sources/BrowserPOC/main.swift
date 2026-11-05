@@ -24,6 +24,10 @@ if let i = args.firstIndex(of: "--extract-check"), i + 1 < args.count {
     exit(MainActor.assumeIsolated { ExtractCheck.run(target) })
 }
 
+if args.contains("--graph-bench") {
+    exit(GraphBench.run())
+}
+
 if args.contains("--chrome-dry-run") {
     exit(ChromeHistory.dryRun())
 }
@@ -37,7 +41,7 @@ if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
     MainActor.assumeIsolated { BrowserModel.dataStoreID = Paths.storeID(for: dir) }
 }
 
-let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--workdir", "--extract-check", "--data-dir"]
+let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--workdir", "--extract-check", "--data-dir", "--graph-bench"]
 if let unknown = args.dropFirst().first(where: { $0.hasPrefix("--") && !known.contains($0) }) {
     print("Unknown flag \(unknown). Flags: --selftest, --smoketest, --chrome-dry-run, each with optional --workdir <dir> for the tests, and --data-dir <dir> to run the app on a separate profile.")
     exit(2)
