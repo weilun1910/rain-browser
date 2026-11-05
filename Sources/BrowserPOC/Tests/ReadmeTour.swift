@@ -166,7 +166,9 @@ enum ReadmeTour {
         await waitForPages(model, "hero")
         guard let c = await settledCard(model, [pick("card") ?? "Nadia"], label: "hero") else { note("no cards"); return }
         note("hero opens \(c.match.doc.title)")
-        await pause(1.0)
+        // In a narrow pane the card can sit past the end of the row, so bring its pill into view.
+        ShelfState.shared.reveal(.card(c.id))
+        await pause(1.2)
         ShelfState.shared.enter(.card(c.id))
         await pause(1.2)
         await ready("hero")

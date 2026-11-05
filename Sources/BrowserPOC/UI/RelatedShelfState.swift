@@ -185,6 +185,11 @@ final class ShelfState: ObservableObject {
     @Published private(set) var open: ShelfTarget?
     /// True when the popover was opened by a click (the graph) rather than hover.
     @Published private(set) var pinned = false
+    /// A pill the row should scroll into view, for a card that's further along than the row shows.
+    @Published private(set) var revealRequest: ShelfTarget?
+
+    /// Scrolls the row so `t`'s pill is in view.
+    func reveal(_ t: ShelfTarget) { revealRequest = t }
     /// Test hook: stands in for the model download's progress.
     @Published var progressOverride: Double?
     /// Test hook: a picture drawn where the page is, since offscreen snapshots can't draw WebKit.

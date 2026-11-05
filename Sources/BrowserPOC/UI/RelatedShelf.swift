@@ -214,6 +214,7 @@ struct ShelfRow: View {
             Spacer(minLength: 0)
         }
         .onChange(of: focused) { state.focus(focused) }
+        .onChange(of: state.revealRequest) { reveal(state.revealRequest) }
         .onAppear { installWheel() }
         .onDisappear { if let w = wheel { NSEvent.removeMonitor(w) }; wheel = nil }
     }
@@ -262,6 +263,17 @@ struct ShelfRow: View {
         wheel = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { e in
             MainActor.assumeIsolated { handleWheel(e) } ? nil : e
         }
+    }
+
+    /// Scrolls just far enough that the pill for `t` sits inside the row, clear of the edge fade.
+    func reveal(_ t: ShelfTarget?) {
+        guard case .card(let id)? = t, let e = entries.first(where: { $0.card?.id == id }),
+              let minX = offsets[e.id], geo.content > geo.container + 1 else { return }
+        let maxX = geo.content - geo.container
+        let end = minX + ShelfMetrics.width(e) + ShelfStyle.edgeFade + Self.inner
+        let x = min(max(0, end - geo.container), maxX)
+        guard x > geo.x else { return }
+        withAnimation(ShelfStyle.motion(.easeOut(duration: 0.2))) { position.scrollTo(x: x) }
     }
 
     func handleWheel(_ e: NSEvent) -> Bool {
