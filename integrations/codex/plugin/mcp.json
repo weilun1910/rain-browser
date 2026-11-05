@@ -1,0 +1,11 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "browser": {
+      "type": "stdio",
+      "command": "${PLUGIN_ROOT}/scripts/browser-mcp",
+      "args": [],
+      "cwd": "${PLUGIN_ROOT}"
+    }
+  }
+}

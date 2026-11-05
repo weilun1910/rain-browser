@@ -28,6 +28,8 @@ struct CurrentContextFile: Codable, Equatable {
     var related: [Ref] = []
     /// The last things focused, newest first.
     var trail: [Ref] = []
+    /// This copy of the app, so the plugin launchers can find it.
+    var binary: String? = nil
 
     static func url(_ root: URL) -> URL { root.appendingPathComponent("current-context.json") }
 }
@@ -83,6 +85,7 @@ final class CurrentContextWriter {
     func snapshot() -> CurrentContextFile? {
         guard let m = model else { return nil }
         var f = CurrentContextFile(updatedAt: Date(), pid: getpid())
+        f.binary = Bundle.main.executablePath
         if let s = m.currentSpace { f.space = .init(id: s.id.uuidString, name: s.name) }
         let focused = m.currentTab.flatMap(ref)
         f.focused = focused

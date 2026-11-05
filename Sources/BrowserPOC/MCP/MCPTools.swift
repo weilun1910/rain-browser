@@ -233,11 +233,32 @@ final class MCPToolbox {
     /// Resolves an item and checks Felix lets AI clients see it.
     func item(_ a: JSON, _ key: String = "item") throws -> KItem {
         guard let ref = Self.str(a, key) else { throw ToolError(message: "Pass \(key): an item id, URL, note path or note title.") }
-        guard let it = context.reader.resolve(ref) else {
+        // A hidden item answers the same as a missing one, so its existence doesn't leak.
+        guard let it = context.reader.resolve(ref), context.visible(it) else {
             throw ToolError(message: "No item matches \"\(ref)\". Use search to find it, then pass its id.")
         }
-        guard context.visible(it) else { throw ToolError(message: "That item is hidden from AI clients in the user's settings.") }
         return it
+    }
+
+    /// A passage cut around the query words, as plain text: no note heading in front, no heading
+    /// marks, bullets or link syntax.
+    static func snippet(_ passage: String, words: [String], title: String) -> String {
+        var lines: [String] = []
+        for raw in passage.components(separatedBy: "\n") {
+            var l = raw.trimmingCharacters(in: .whitespaces)
+            if l.hasPrefix("#") {
+                l = String(l.drop(while: { $0 == "#" })).trimmingCharacters(in: .whitespaces)
+                if lines.isEmpty && l == title.trimmingCharacters(in: .whitespaces) { continue }
+                if !l.isEmpty && !".:!?".contains(l.last!) { l += "." }
+            }
+            for bullet in ["- ", "* ", "+ "] where l.hasPrefix(bullet) { l = String(l.dropFirst(2)) }
+            if !l.isEmpty { lines.append(l) }
+        }
+        var p = lines.joined(separator: " ")
+        p = p.replacingOccurrences(of: #"\[\[([^\]\|]+)\|([^\]]+)\]\]"#, with: "$2", options: .regularExpression)
+        p = p.replacingOccurrences(of: #"\[\[([^\]]+)\]\]"#, with: "$1", options: .regularExpression)
+        p = p.replacingOccurrences(of: #"\[([^\]]*)\]\([^)]*\)"#, with: "$1", options: .regularExpression)
+        return Snippet.make(p, terms: words, title: title)
     }
 
     static func slice(_ text: String, offset: Int, max: Int) -> (String, Int?) {
@@ -350,7 +371,7 @@ final class MCPToolbox {
             let rows: [JSON] = results.map { r in
                 var j = ctx.itemJSON(r.item)
                 j["score"] = J.round3(r.score)
-                j["snippet"] = r.item.hasText ? Snippet.make(r.passage, terms: words, title: r.item.title) : Snippet.prettyURL(r.item.url)
+                j["snippet"] = r.item.hasText ? Self.snippet(r.passage, words: words, title: r.item.title) : Snippet.prettyURL(r.item.url)
                 return j
             }
             ctx.log("tool", "search", q, served: results.map { ctx.title($0.item) }, hidden: hidden)
@@ -485,7 +506,7 @@ final class MCPToolbox {
                 j["signals"] = ["words": J.round3(m.keyword), "meaning": J.round3(m.semantic), "names": J.round3(m.entity)]
                 j["shared_terms"] = Array(m.sharedTerms.prefix(8))
                 j["shared_names"] = Array(m.sharedEntities.prefix(8))
-                j["passage"] = m.passage
+                j["passage"] = it.isNote ? Self.snippet(m.passage, words: m.sharedTerms, title: it.title) : m.passage
                 j["reason"] = Reasons.template(m)
                 if m.section == .docs { if docs.count < limit { docs.append(j); served.append(ctx.title(it)) } }
                 else if sites.count < limit { sites.append(j); served.append(ctx.title(it)) }

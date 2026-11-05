@@ -127,12 +127,12 @@ struct IndexGraphSource: MCPGraphSource {
             for m in ctx.ranking.related(to: it, ctx: ctx, minScore: 0.25, perSection: 6) {
                 if wanted("topic") && !m.sharedEntities.isEmpty {
                     let names = m.sharedEntities.prefix(4).joined(separator: ", ")
-                    add(MCPEdge(from: it.id, to: m.doc.id, type: "topic", directed: false, weight: J.round3(m.entity),
+                    add(MCPEdge(from: it.id, to: m.doc.id, type: "topic", directed: false, weight: m.entity,
                                 detail: names, why: "Both mention \(names)"))
                 }
                 if wanted("similar") && (m.semantic >= 0.35 || m.keyword >= 0.35) {
                     let terms = (m.topicTerms.isEmpty ? m.sharedTerms : m.topicTerms).prefix(4).joined(separator: ", ")
-                    add(MCPEdge(from: it.id, to: m.doc.id, type: "similar", directed: false, weight: J.round3(m.score),
+                    add(MCPEdge(from: it.id, to: m.doc.id, type: "similar", directed: false, weight: m.score,
                                 detail: terms, why: terms.isEmpty ? "Close in meaning" : "Close in meaning, both cover \(terms)"))
                 }
             }

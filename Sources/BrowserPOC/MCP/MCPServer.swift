@@ -216,6 +216,7 @@ final class MCPServer {
 enum J {
     static func clean(_ v: Any) -> Any {
         switch v {
+        case let n as NSDecimalNumber: return n
         case let d as Double: return d.isFinite ? d : 0
         case let f as Float: return f.isFinite ? Double(f) : 0
         case let dict as [String: Any]:
@@ -234,7 +235,10 @@ enum J {
         return String(decoding: d, as: UTF8.self)
     }
 
-    static func round3(_ x: Double) -> Double { x.isFinite ? (x * 1000).rounded() / 1000 : 0 }
+    /// Three decimals, written as 0.845 rather than 0.84499999999999997.
+    static func round3(_ x: Double) -> NSDecimalNumber {
+        NSDecimalNumber(string: String(format: "%.3f", x.isFinite ? x : 0), locale: Locale(identifier: "en_US_POSIX"))
+    }
 
     static let iso: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
