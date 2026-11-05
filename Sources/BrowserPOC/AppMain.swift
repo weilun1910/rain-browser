@@ -344,6 +344,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if model.switcher == nil { model.beginSwitcher(backwards: back) } else { model.advanceSwitcher(back ? -1 : 1) }
             return true
         }
+        // Cmd-. puts the keys in the sidebar, like Arc: arrows move, Return opens, Left and Right
+        // close and open folders, Esc leaves.
+        if e.keyCode == 47 && mods == [.command] && !model.bar.isOpen { model.toggleSidebarKeyboard(); return true }
+        if model.sidebarCursor != nil && !model.bar.isOpen && mods.subtracting(.shift).isEmpty {
+            switch e.keyCode {
+            case 126: model.moveSidebarCursor(-1); return true
+            case 125: model.moveSidebarCursor(1); return true
+            case 123: model.sidebarCursorLeft(); return true
+            case 124: model.sidebarCursorRight(); return true
+            case 36, 76, 49: model.activateSidebarCursor(); return true
+            case 53: model.sidebarCursor = nil; return true
+            default: model.sidebarCursor = nil
+            }
+        }
         if e.keyCode == 53 {
             if model.switcher != nil { model.switcher = nil; return true }
             if model.peek != nil && !model.bar.isOpen && mods.isEmpty { model.closePeek(); return true }
