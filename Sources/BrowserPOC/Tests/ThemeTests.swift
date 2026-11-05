@@ -18,6 +18,7 @@ enum ThemeTests {
             window()
         }
         punctuation()
+        iconDocument()
     }
 
     static func colour() {
@@ -159,6 +160,21 @@ enum ThemeTests {
               "the traffic lights sit centred on the sidebar's top row", "centre \(centreFromTop) pt from the top")
         check(lights.maxX < Theme.Space.trafficLightsWidth + Theme.Space.sidebarInset,
               "the traffic lights leave the top row's buttons room", "they end at \(lights.maxX) pt")
+    }
+
+    /// The Icon Composer document names layers that exist, or actool would build nothing.
+    static func iconDocument() {
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let doc = repo.appendingPathComponent("Resources/AppIcon.icon")
+        guard let data = try? Data(contentsOf: doc.appendingPathComponent("icon.json")),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            check(!FileManager.default.fileExists(atPath: repo.appendingPathComponent("Resources").path), "the Icon Composer document reads")
+            return
+        }
+        let names = (json["groups"] as? [[String: Any]] ?? []).flatMap { ($0["layers"] as? [[String: Any]] ?? []).compactMap { $0["image-name"] as? String } }
+        let missing = names.filter { !FileManager.default.fileExists(atPath: doc.appendingPathComponent("Assets/\($0)").path) }
+        check(!names.isEmpty && missing.isEmpty, "the Icon Composer document's layers all exist", missing.joined(separator: ", "))
     }
 
     /// The writing rules: only ASCII hyphens, no en or em dashes, no middle dots.

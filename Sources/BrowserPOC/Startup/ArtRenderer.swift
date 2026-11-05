@@ -10,14 +10,14 @@ struct AppIconArt: View {
 
     static let tileShare: CGFloat = 824.0 / 1024.0
     static let cornerShare: CGFloat = 185.4 / 824.0
-    static let glyphShare: CGFloat = 0.54
+    static let glyphShare: CGFloat = 0.58
 
     var body: some View {
         let tile = size * Self.tileShare
         let shape = RoundedRectangle(cornerRadius: tile * Self.cornerShare, style: .continuous)
         let glyph = tile * Self.glyphShare
         // Thin at large sizes, with a floor so the loop still reads at 16 px.
-        let weight = max(0.042, 1.25 / glyph)
+        let weight = max(0.058, 1.3 / glyph)
         ZStack {
             Color.clear
             ZStack {
@@ -73,6 +73,66 @@ enum ArtRenderer {
         return true
     }
 
+    /// SVG path data for the mark in a 1024 canvas, for Icon Composer layers.
+    static func markSVG(box: CGRect) -> (loop: String, dot: String) {
+        let glyph = box.width
+        let lw = glyph * max(0.058, 1.3 / glyph)
+        let path = MarkRibbon(progress: 1, lineWidth: lw).path(in: box)
+        var d = ""
+        path.forEach { el in
+            switch el {
+            case .move(let p): d += String(format: "M%.2f %.2f ", p.x, p.y)
+            case .line(let p): d += String(format: "L%.2f %.2f ", p.x, p.y)
+            case .quadCurve(let p, let c): d += String(format: "Q%.2f %.2f %.2f %.2f ", c.x, c.y, p.x, p.y)
+            case .curve(let p, let c1, let c2): d += String(format: "C%.2f %.2f %.2f %.2f %.2f %.2f ", c1.x, c1.y, c2.x, c2.y, p.x, p.y)
+            case .closeSubpath: d += "Z "
+            }
+        }
+        let e = MarkGeometry.end(in: box)
+        let r = lw * MarkGeometry.dotScale / 2
+        let svg = { (body: String) in
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1024\" height=\"1024\" viewBox=\"0 0 1024 1024\">\(body)</svg>\n"
+        }
+        return (svg("<path fill=\"#FFFFFF\" d=\"\(d)\"/>"),
+                svg(String(format: "<circle fill=\"#FFFFFF\" cx=\"%.2f\" cy=\"%.2f\" r=\"%.2f\"/>", e.x, e.y, r)))
+    }
+
+    /// An Icon Composer document: a graphite fill and two glass layers, the loop and the drop, so
+    /// macOS 26 can render its default, dark, clear and tinted looks from one source.
+    static func writeIconDocument(to doc: URL) -> Bool {
+        let assets = doc.appendingPathComponent("Assets", isDirectory: true)
+        try? FileManager.default.removeItem(at: doc)
+        Paths.ensure(assets)
+        // Same proportions as the .icns: the glyph is 58 percent of the 824 pt squircle.
+        let glyph = 824.0 * AppIconArt.glyphShare
+        let box = CGRect(x: (1024 - glyph) / 2, y: (1024 - glyph) / 2, width: glyph, height: glyph)
+        let (loop, dot) = markSVG(box: box)
+        let json = """
+        {
+          "fill" : {
+            "automatic-gradient" : "srgb:0.15000,0.15000,0.16000,1.00000"
+          },
+          "groups" : [
+            {
+              "layers" : [
+                { "glass" : true, "image-name" : "drop.svg", "name" : "drop" },
+                { "glass" : true, "image-name" : "loop.svg", "name" : "loop" }
+              ],
+              "shadow" : { "kind" : "neutral", "opacity" : 0.5 },
+              "translucency" : { "enabled" : true, "value" : 0.35 }
+            }
+          ],
+          "supported-platforms" : { "squares" : [ "macOS" ] }
+        }
+        """
+        do {
+            try loop.write(to: assets.appendingPathComponent("loop.svg"), atomically: true, encoding: .utf8)
+            try dot.write(to: assets.appendingPathComponent("drop.svg"), atomically: true, encoding: .utf8)
+            try json.write(to: doc.appendingPathComponent("icon.json"), atomically: true, encoding: .utf8)
+        } catch { return false }
+        return true
+    }
+
     static func run(_ out: URL) -> Int32 {
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.prohibited)
@@ -80,6 +140,8 @@ enum ArtRenderer {
         let iconset = out.appendingPathComponent("AppIcon.iconset", isDirectory: true)
         guard writeIconset(to: iconset) else { print("Couldn't render the icon"); return 1 }
         print("wrote \(iconset.path)")
+        let doc = out.appendingPathComponent("AppIcon.icon", isDirectory: true)
+        if writeIconDocument(to: doc) { print("wrote \(doc.path)") }
 
         // Mark previews on the frame colour, light and dark.
         for dark in [false, true] {
