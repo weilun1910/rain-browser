@@ -33,7 +33,7 @@ enum ThemeTests {
         var worst = (primary: 99.0, secondary: 99.0, name: "")
         for (name, hex) in Space.palette {
             for dark in [false, true] {
-                let bg = (dark ? P.frameDark : P.frameLight).under(RGB(hex: hex), alpha: P.tintAlpha(dark: dark))
+                let bg = (dark ? P.frameDark : P.frameLight).under(P.wash(hex, dark: dark), alpha: P.tintAlpha(dark: dark))
                 let c1 = RGB.contrast(P.label(on: bg, dark: dark, level: 0), bg)
                 let c2 = RGB.contrast(P.label(on: bg, dark: dark, level: 1), bg)
                 if c1 < worst.primary || c2 < worst.secondary {
@@ -49,12 +49,17 @@ enum ThemeTests {
         for (_, hex) in Space.palette {
             for dark in [false, true] {
                 let base = dark ? P.frameDark : P.frameLight
-                let t = base.under(RGB(hex: hex), alpha: P.tintAlpha(dark: dark))
+                let t = base.under(P.wash(hex, dark: dark), alpha: P.tintAlpha(dark: dark))
                 biggest = max(biggest, abs(t.r - base.r), abs(t.g - base.g), abs(t.b - base.b))
             }
         }
         check(biggest < 0.12, "the space tint stays a light wash", String(format: "largest channel shift %.3f", biggest))
         check(P.tintAlpha(dark: false, active: false) < P.tintAlpha(dark: false), "the tint dims when the window isn't key")
+
+        // In dark mode the tinted sidebar must stay darker than the card, or the card loses its edge.
+        let brightest = Space.palette.map { P.frameDark.under(P.wash($0.1, dark: true), alpha: P.tintAlpha(dark: true)).luminance }.max() ?? 0
+        check(brightest < P.cardDark.luminance * 0.85, "in dark mode the tinted sidebar stays darker than the card",
+              String(format: "brightest sidebar %.4f, card %.4f", brightest, P.cardDark.luminance))
     }
 
     static func layout() {

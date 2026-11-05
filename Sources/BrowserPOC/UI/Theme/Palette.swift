@@ -40,17 +40,23 @@ extension Theme {
 
         /// The window frame behind the sidebar and around the content card. Pure neutral grey.
         static let frameLight = RGB(white: 0.929)   // #EDEDED
-        static let frameDark = RGB(white: 0.082)    // #151515
+        static let frameDark = RGB(white: 0.071)    // #121212
         /// The content card: what a page or note sits on.
         static let cardLight = RGB(white: 1)
-        static let cardDark = RGB(white: 0.118)     // #1E1E1E
+        static let cardDark = RGB(white: 0.125)     // #202020, clearly lighter than the tinted frame
         /// Floating sheets like the command bar and the first run panel.
         static let sheetLight = RGB(white: 0.995)
-        static let sheetDark = RGB(white: 0.145)    // #252525, lighter than the card so it lifts off it
+        static let sheetDark = RGB(white: 0.161)    // #292929, lighter than the card so it lifts off it
 
         /// How strongly the space colour washes the sidebar side of the frame.
         static func tintAlpha(dark: Bool, active: Bool = true) -> Double {
-            (dark ? 0.085 : 0.14) * (active ? 1 : 0.55)
+            0.14 * (active ? 1 : 0.55)
+        }
+        /// The wash colour. In dark mode it's the space colour mixed half with black, the way Zen
+        /// darkens its accent there, so the hue shows without making the sidebar brighter than the card.
+        static func wash(_ hex: String?, dark: Bool) -> RGB {
+            let c = RGB(hex: hex ?? defaultTintHex)
+            return dark ? c.under(RGB(white: 0), alpha: 0.5) : c
         }
         /// The wash fades to this share of its strength at the window's trailing edge.
         static let tintTrailingShare = 0.2
@@ -76,7 +82,7 @@ extension Theme {
         static let raised = Color(nsColor: dynamic(NSColor(white: 1, alpha: 0.80), NSColor(white: 1, alpha: 0.055)))
         static let raisedHover = Color(nsColor: dynamic(NSColor(white: 1, alpha: 0.96), NSColor(white: 1, alpha: 0.085)))
         /// A thin line where an edge needs one.
-        static let hairline = Color(nsColor: dynamic(NSColor(white: 0, alpha: 0.07), NSColor(white: 1, alpha: 0.08)))
+        static let hairline = Color(nsColor: dynamic(NSColor(white: 0, alpha: 0.07), NSColor(white: 1, alpha: 0.09)))
         /// The selected sidebar row: a near-white chip, like Arc and Zen.
         static let rowSelected = Color(nsColor: dynamic(NSColor(white: 1, alpha: 0.85), NSColor(white: 1, alpha: 0.10)))
         static let rowHover = Color(nsColor: dynamic(NSColor(white: 0, alpha: 0.045), NSColor(white: 1, alpha: 0.055)))
@@ -90,8 +96,10 @@ extension Theme {
         /// Grey used when a space has no colour, matching the first palette entry.
         static let defaultTintHex = "#7A8CA8"
 
-        /// The space colour as a SwiftUI colour.
-        static func tint(_ hex: String?) -> Color { Color(nsColor: RGB(hex: hex ?? defaultTintHex).ns) }
+        /// The space colour as a wash, for backgrounds. Darkened in dark mode, see `wash`.
+        static func tint(_ hex: String?) -> Color {
+            Color(nsColor: dynamic(wash(hex, dark: false), wash(hex, dark: true)))
+        }
 
         /// The space colour toned for small marks (icons, rings, progress) so it holds up on both
         /// light and dark grounds. Darker in light mode, lighter in dark mode.

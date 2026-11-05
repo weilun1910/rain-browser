@@ -91,7 +91,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Background upkeep: scan and watch the notes folders.
         model.notes.reload()
 
-        if model.currentTab == nil && model.document == nil {
+        // On a fresh profile the first run panel comes first, without the command bar over it.
+        if model.currentTab == nil && model.document == nil && Settings.shared.value.firstRunDone {
             model.focusAddress()
         }
         if !pendingURLs.isEmpty { model.openFromSystem(pendingURLs); pendingURLs = [] }
