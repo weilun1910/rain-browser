@@ -1,0 +1,117 @@
+import AppKit
+import SwiftUI
+
+/// Every animation in the app. Short, mostly zero-bounce springs, each tied to something you did.
+/// Under Reduce Motion, movement turns into a short fade or nothing, all decided here.
+enum Motion {
+    /// Tests set this to check both paths. Nil follows the system setting.
+    nonisolated(unsafe) static var forceReduce: Bool?
+
+    static var reduceMotion: Bool {
+        forceReduce ?? NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    }
+
+    // MARK: The animations
+
+    /// Hover backgrounds and revealed controls.
+    static let hover = Animation.easeOut(duration: 0.12)
+    /// Pressing a button.
+    static let press = Animation.easeOut(duration: 0.1)
+    /// A tab, note or folder row arriving.
+    static let insert = Animation.smooth(duration: 0.2)
+    /// A row leaving.
+    static let remove = Animation.easeIn(duration: 0.14)
+    /// Folders opening and closing.
+    static let expand = Animation.spring(duration: 0.22, bounce: 0)
+    /// Moving between spaces: the list slides and the tint crossfades on the same spring.
+    static let spaceSwitch = Animation.spring(duration: 0.28, bounce: 0)
+    /// Side panels showing and hiding. A touch of settle, too small to read as bounce.
+    static let panel = Animation.spring(duration: 0.3, bounce: 0.06)
+    /// The command bar arriving and leaving.
+    static let barIn = Animation.spring(duration: 0.22, bounce: 0)
+    static let barOut = Animation.easeIn(duration: 0.12)
+    static let scrim = Animation.easeOut(duration: 0.18)
+    /// Split panes settling into their widths.
+    static let split = Animation.spring(duration: 0.28, bounce: 0)
+    /// The load progress line.
+    static let progress = Animation.easeOut(duration: 0.25)
+    /// Related cards arriving, one after another.
+    static func card(index: Int) -> Animation {
+        Animation.smooth(duration: 0.3).delay(Double(min(index, 6)) * 0.04)
+    }
+
+    /// The fade used instead of movement under Reduce Motion.
+    static let reducedFade = Animation.easeInOut(duration: 0.12)
+
+    /// `a`, or what to use instead under Reduce Motion. `fadeOnly` animations (opacity changes
+    /// with no movement) keep a short fade; movement is dropped entirely.
+    static func animation(_ a: Animation, reduce: Bool = reduceMotion, fadeOnly: Bool = false) -> Animation? {
+        guard reduce else { return a }
+        return fadeOnly ? reducedFade : nil
+    }
+
+    /// Runs `body` with animation `a`, or without movement under Reduce Motion.
+    @MainActor
+    static func run(_ a: Animation, fadeOnly: Bool = false, _ body: () -> Void) {
+        if let anim = animation(a, fadeOnly: fadeOnly) { withAnimation(anim, body) } else { body() }
+    }
+
+    // MARK: Transitions
+
+    enum Transitions {
+        /// Rows arriving and leaving: a fade and a slight scale from the top, like Zen's 0.95 to 1.
+        static var tabRow: AnyTransition {
+            if Motion.reduceMotion { return .opacity }
+            return .asymmetric(
+                insertion: .opacity.combined(with: .scale(scale: 0.97, anchor: .top)).animation(Motion.insert),
+                removal: .opacity.combined(with: .scale(scale: 0.97, anchor: .top)).animation(Motion.remove))
+        }
+        /// A folder's contents unfolding.
+        static var folderContents: AnyTransition {
+            if Motion.reduceMotion { return .opacity }
+            return .opacity.combined(with: .offset(y: -4))
+        }
+        /// A Related card arriving.
+        static var card: AnyTransition {
+            if Motion.reduceMotion { return .opacity }
+            return .asymmetric(insertion: .opacity.combined(with: .offset(y: 6)),
+                               removal: .opacity.animation(Motion.remove))
+        }
+        /// The command bar.
+        static var commandBar: AnyTransition {
+            if Motion.reduceMotion { return .opacity }
+            return .asymmetric(
+                insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .top)).combined(with: .offset(y: -6)).animation(Motion.barIn),
+                removal: .opacity.combined(with: .scale(scale: 0.99, anchor: .top)).animation(Motion.barOut))
+        }
+        /// The sidebar list when you move between spaces. `step` is +1 moving right, -1 moving left.
+        static func spaceSlide(_ step: Int) -> AnyTransition {
+            if Motion.reduceMotion || step == 0 { return .opacity }
+            let d: CGFloat = 24 * CGFloat(step)
+            return .asymmetric(insertion: .opacity.combined(with: .offset(x: d)),
+                               removal: .opacity.combined(with: .offset(x: -d)))
+        }
+        /// A side panel sliding in from its edge.
+        static func panel(edge: Edge) -> AnyTransition {
+            if Motion.reduceMotion { return .opacity }
+            return .move(edge: edge).combined(with: .opacity)
+        }
+    }
+}
+
+/// `.motion(_:value:)`: like `.animation(_:value:)`, but honours Reduce Motion.
+struct MotionModifier<V: Equatable>: ViewModifier {
+    let animation: Animation
+    let value: V
+    let fadeOnly: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduce
+    func body(content: Content) -> some View {
+        content.animation(Motion.animation(animation, reduce: reduce || Motion.reduceMotion, fadeOnly: fadeOnly), value: value)
+    }
+}
+
+extension View {
+    func motion<V: Equatable>(_ animation: Animation, value: V, fadeOnly: Bool = false) -> some View {
+        modifier(MotionModifier(animation: animation, value: value, fadeOnly: fadeOnly))
+    }
+}
