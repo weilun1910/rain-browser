@@ -9,6 +9,7 @@ struct SettingsView: View {
             SourcesSettings().tabItem { Label("Sources", systemImage: "tray.full") }
             ModelsSettings().tabItem { Label("Models", systemImage: "cpu") }
             TuningSettings().tabItem { Label("Tuning", systemImage: "slider.horizontal.3") }
+            AIClientsSettings().tabItem { Label("AI clients", systemImage: "point.3.connected.trianglepath.dotted") }
         }
         .frame(width: 580, height: 620)
     }
