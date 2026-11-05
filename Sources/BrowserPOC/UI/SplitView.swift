@@ -104,6 +104,17 @@ struct PaneFramesKey: PreferenceKey {
     static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) { value.merge(nextValue()) { $1 } }
 }
 
+extension SplitNode {
+    /// A stable identity for the views that draw this node: the item for a pane, and its items
+    /// for a branch.
+    var key: String {
+        switch self {
+        case .leaf(let id): return id.uuidString
+        case .branch(let axis, _, _): return axis.rawValue + ":" + leaves.map(\.uuidString).joined(separator: ",")
+        }
+    }
+}
+
 /// A split drawn from its tree: rows and columns of panes with dividers you can drag.
 struct SplitPanes: View {
     let split: SplitRecord
@@ -136,7 +147,9 @@ struct SplitBranch: View {
             let total = axis == .row ? g.size.width : g.size.height
             let avail = max(1, total - Self.gap * CGFloat(kids.count - 1))
             let layout = Group {
-                ForEach(Array(kids.enumerated()), id: \.offset) { i, kid in
+                // Keyed by what each child holds, so a pane keeps its own view when the split
+                // changes around it: panes glide to new places and their web views stay put.
+                ForEach(Array(kids.enumerated()), id: \.element.key) { i, kid in
                     SplitNodeView.make(split: split, node: kid, path: path + [i])
                         .frame(width: axis == .row ? avail * sizes[i] : nil, height: axis == .column ? avail * sizes[i] : nil)
                     if i < kids.count - 1 { divider(i, avail: avail) }

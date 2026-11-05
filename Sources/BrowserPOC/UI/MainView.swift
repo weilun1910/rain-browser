@@ -253,11 +253,13 @@ struct TabContent: View {
 
 struct WebArea: View {
     @ObservedObject var tab: Tab
+    /// Whether this is Peek's copy of the page or a pane's.
+    var role: WebHostRole = .pane
     @EnvironmentObject var model: BrowserModel
 
     var body: some View {
         ZStack(alignment: .top) {
-            WebContainer(tab: tab)
+            WebContainer(tab: tab, role: role)
             TintedProgressLine(progress: tab.progress, visible: tab.isLoading && tab.progress < 1)
             if let err = tab.loadError {
                 VStack(spacing: Theme.Space.m) {
@@ -283,11 +285,59 @@ struct WebArea: View {
     }
 }
 
+/// Hosts one page's web view in a pane, Peek or Little Arc.
+///
+/// A web view can only be in one place. Hosts come and go as splits change, as Peek becomes a tab
+/// or a split, and as panes switch pages, and SwiftUI may still update a host that's on its way
+/// out, or make one that never reaches the screen. So no host simply grabs its web view. Each
+/// says which web view it wants, and of the hosts on screen that want it, the newest gets it. When
+/// a host leaves the screen, its web view goes to the next one in line. Before this, an old host
+/// could pull a web view back and take it away when it went, which left panes blank.
 final class WebHostView: NSView {
     private weak var current: WKWebView?
+    /// The web view this host was last asked to show.
+    private(set) weak var wanted: WKWebView?
+    private let serial: Int
+    private static var made = 0
+    private static let hosts = NSHashTable<WebHostView>.weakObjects()
+
+    override init(frame: NSRect) {
+        Self.made += 1
+        serial = Self.made
+        super.init(frame: frame)
+        Self.hosts.add(self)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func show(_ wv: WKWebView) {
-        // A split relayout can move this web view into another host, so check where it is too.
+        let before = wanted
+        wanted = wv
+        if let before, before !== wv { Self.place(before) }
+        Self.place(wv)
+    }
+
+    /// This host no longer wants its web view, so the next host in line can have it.
+    func letGo() {
+        guard let wv = wanted else { return }
+        wanted = nil
+        Self.place(wv)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        // Moving a web view while AppKit is still moving this host in or out of the window leaves
+        // WebKit thinking the page isn't on screen, and it stops drawing. So wait a turn.
+        guard let wv = wanted else { return }
+        DispatchQueue.main.async { Self.place(wv) }
+    }
+
+    /// Puts `wv` in the newest on-screen host that wants it. With none, it stays where it is.
+    private static func place(_ wv: WKWebView) {
+        let best = hosts.allObjects.filter { $0.wanted === wv && $0.window != nil }.max { $0.serial < $1.serial }
+        best?.adopt(wv)
+    }
+
+    private func adopt(_ wv: WKWebView) {
         guard current !== wv || wv.superview !== self else { return }
         if let c = current, c !== wv, c.superview === self { c.removeFromSuperview() }
         wv.frame = bounds
@@ -297,12 +347,21 @@ final class WebHostView: NSView {
     }
 }
 
+/// Where a page's web view is drawn. A tab's web view can only sit in one place, so Peek and the
+/// panes each take it only while the model says it's theirs. Otherwise a Peek on its way out,
+/// which SwiftUI still updates once or twice, would pull the web view back from the pane that
+/// now shows it, and take it away when it goes.
+enum WebHostRole { case pane, peek }
+
 struct WebContainer: NSViewRepresentable {
     let tab: Tab
+    var role: WebHostRole = .pane
 
     func makeNSView(context: Context) -> WebHostView { WebHostView() }
 
     func updateNSView(_ v: WebHostView, context: Context) {
+        let inPeek = tab.model?.peek?.tab === tab
+        guard (role == .peek) == inPeek else { v.letGo(); return }
         v.show(tab.ensureWebView())
     }
 }
