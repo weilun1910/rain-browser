@@ -72,10 +72,12 @@ if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
     Paths.ensure(dir)
     MainActor.assumeIsolated { BrowserModel.dataStoreID = Paths.storeID(for: dir) }
 }
+// The Related shelf demo keeps nothing of WebKit's on disk.
+if args.contains("--shelf-demo") { MainActor.assumeIsolated { BrowserModel.useEphemeralStore = true } }
 
 let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--workdir", "--extract-check", "--data-dir",
                           "--eval", "--models-dir", "--verbose", "--notion-dry-run", "--granola-dry-run", "--download-models", "--scale",
-                          "--mcp", "--mcp-fixture", "--graph-bench"]
+                          "--mcp", "--mcp-fixture", "--graph-bench", "--shelf-demo"]
 if let unknown = args.dropFirst().first(where: { $0.hasPrefix("--") && !known.contains($0) }) {
     print("Unknown flag \(unknown). Flags: --selftest, --smoketest, --chrome-dry-run, each with optional --workdir <dir> for the tests, --data-dir <dir> to run the app on a separate profile, --mcp to serve the index to AI clients, and --mcp-fixture <dir> to write a test profile.")
     exit(2)

@@ -8,13 +8,17 @@ struct LocalGraphSlot: View {
     @ObservedObject var controller = GraphController.local
     @ObservedObject var store = GraphSettingsStore.shared
     @ObservedObject var resurfacer: Resurfacer
+    /// The Related shelf's popover shows the graph open, whatever the right panel's slot is set to.
+    var alwaysOpen = false
 
     static let canvasHeight: CGFloat = 200
+
+    private var isOpen: Bool { alwaysOpen || store.value.localExpanded }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             header
-            if store.value.localExpanded {
+            if isOpen {
                 ZStack {
                     GraphCanvas(controller: controller)
                     if controller.hasLoaded && controller.liveCount <= 1 && !controller.isBuilding {
@@ -65,10 +69,12 @@ struct LocalGraphSlot: View {
                 store.value.localExpanded.toggle()
             } label: {
                 HStack(spacing: 5) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 8, weight: .semibold))
-                        .rotationEffect(.degrees(store.value.localExpanded ? 90 : 0))
-                        .foregroundStyle(.tertiary)
+                    if !alwaysOpen {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8, weight: .semibold))
+                            .rotationEffect(.degrees(store.value.localExpanded ? 90 : 0))
+                            .foregroundStyle(.tertiary)
+                    }
                     Text("Graph")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.tertiary)
@@ -76,8 +82,9 @@ struct LocalGraphSlot: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .allowsHitTesting(!alwaysOpen)
             Spacer()
-            if store.value.localExpanded {
+            if isOpen {
                 HStack(spacing: 0) {
                     ForEach(1...3, id: \.self) { d in
                         Button { store.value.localDepth = d } label: {

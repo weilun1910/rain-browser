@@ -27,6 +27,7 @@ struct GeneralSettings: View {
             Section("Search") {
                 LabeledContent("Default search", value: "Google")
             }
+            RelatedLayoutSection()
             Section {
                 TextEditor(text: $excludeText)
                     .font(.system(size: 12, design: .monospaced))
