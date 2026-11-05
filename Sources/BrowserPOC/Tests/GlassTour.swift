@@ -123,6 +123,7 @@ enum GlassTour {
     header { background: rgba(255,255,255,0.7); }
     .hero { height: 300px; background: repeating-conic-gradient(from 10deg at 60% 50%, #111 0 9deg, #ffd23f 9deg 18deg, #ff5a36 18deg 27deg, #fff 27deg 36deg); }
     p, pre, h1, .meta { background: rgba(255,255,255,0.55); }
+    #cookie { display: none; }
     """
 
     static let darkCSS = """
