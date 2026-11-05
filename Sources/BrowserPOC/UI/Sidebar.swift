@@ -30,7 +30,7 @@ struct LeftSidebar: View {
             ScrollView {
                 // The list is keyed by space, so moving between spaces slides the new list in.
                 ZStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: Theme.Space.l) {
+                    VStack(alignment: .leading, spacing: Theme.Space.sectionGap) {
                         pinnedSection
                         foldersSection
                         tabsSection
@@ -94,8 +94,10 @@ struct LeftSidebar: View {
     @ViewBuilder private var pinnedSection: some View {
         let pinned = model.pinnedTabs
         if !pinned.isEmpty {
-            SectionBox(title: "Pinned", onDrop: { ids in model.moveTabs(ids: ids, to: nil, pin: true) }) {
+            // Like Zen, pins sit under the space's name with no label, and a hairline closes them off.
+            SectionBox(title: "", onDrop: { ids in model.moveTabs(ids: ids, to: nil, pin: true) }) {
                 ForEach(pinned) { TabRow(tab: $0).transition(Motion.Transitions.tabRow) }
+                SectionDivider()
             }
             .motion(Motion.insert, value: pinned.map { $0.id })
         }
@@ -103,14 +105,9 @@ struct LeftSidebar: View {
 
     private var foldersSection: some View {
         SectionBox(title: "Folders", trailing: AnyView(SmallIconButton(symbol: "plus", help: "New folder") { model.promptNewFolder() })) {
-            if model.spaceFolders.isEmpty {
-                Text("No folders yet")
-                    .font(Theme.Font.secondary).foregroundStyle(.secondary)
-                    .padding(.leading, Theme.Space.rowInset).frame(height: 24)
-            }
             ForEach(model.spaceFolders) { f in
                 FolderRow(folder: f)
-                if f.isExpanded {
+                FolderReveal(isOpen: f.isExpanded) {
                     VStack(spacing: Theme.Space.rowGap) {
                         ForEach(model.tabs(in: f)) { TabRow(tab: $0).transition(Motion.Transitions.tabRow) }
                         if model.tabs(in: f).isEmpty {
@@ -119,13 +116,12 @@ struct LeftSidebar: View {
                                 .padding(.leading, Theme.Space.rowInset).frame(height: 24)
                         }
                     }
-                    // Child icons line up under the folder's icon.
-                    .padding(.leading, Theme.Space.xl)
-                    .transition(Motion.Transitions.folderContents)
+                    .padding(.top, Theme.Space.rowGap)
+                    // Child icons line up under the folder's name.
+                    .padding(.leading, Theme.Space.folderIndent)
                 }
             }
         }
-        .motion(Motion.expand, value: model.spaceFolders)
         .motion(Motion.insert, value: model.spaceFolders.map { model.tabs(in: $0).map { $0.id } })
     }
 
@@ -175,8 +171,16 @@ struct SectionBox<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.rowGap) {
-            SectionHeader(title: title, highlighted: targeted) { trailing ?? AnyView(EmptyView()) }
-                .modifier(DropModifier(onDrop: onDrop, targeted: $targeted))
+            if title.isEmpty {
+                // No label: a thin drop strip above the rows.
+                Theme.Radius.shape(Theme.Radius.xs)
+                    .fill(targeted ? Theme.Palette.rowHover : .clear)
+                    .frame(height: 4)
+                    .modifier(DropModifier(onDrop: onDrop, targeted: $targeted))
+            } else {
+                SectionHeader(title: title, highlighted: targeted) { trailing ?? AnyView(EmptyView()) }
+                    .modifier(DropModifier(onDrop: onDrop, targeted: $targeted))
+            }
             content()
         }
     }
@@ -248,10 +252,14 @@ struct TabRow: View {
     }
 
     var body: some View {
-        HStack(spacing: Theme.Space.m) {
+        HStack(spacing: Theme.Space.rowIconGap) {
             ZStack {
-                if tab.isLoading {
-                    ProgressView().controlSize(.mini)
+                if tab.kind == .web {
+                    // The site's icon, or its monogram until one arrives. Loading shows as a soft fade.
+                    FaviconView(image: FaviconLookup.image(for: tab.url), size: Theme.Space.rowIcon,
+                                fallback: tab.url == nil ? .symbol("globe") : .site(tab.url))
+                        .opacity(tab.isLoading ? 0.45 : 1)
+                        .motion(Motion.hover, value: tab.isLoading, fadeOnly: true)
                 } else {
                     RowIcon(symbol: icon)
                 }
@@ -261,7 +269,10 @@ struct TabRow: View {
                 .font(Theme.Font.row)
                 .lineLimit(1)
                 .strikethrough(tab.isMissing, color: .secondary)
-                .foregroundStyle(tab.isMissing ? .secondary : (tab.isLoaded || tab.kind != .web || model.isSelected(tab) ? .primary : .secondary))
+                // Pages that aren't loaded are only a little quieter, so a folder of sources
+                // doesn't look half disabled.
+                .foregroundStyle(tab.isMissing ? AnyShapeStyle(.secondary)
+                                 : (tab.isLoaded || tab.kind != .web || model.isSelected(tab) ? AnyShapeStyle(.primary) : AnyShapeStyle(.primary.opacity(0.72))))
             if tab.isMissing && hovering {
                 Button("Locate") { model.locateNote(tab) }
                     .buttonStyle(QuietActionStyle())
@@ -358,14 +369,9 @@ struct FolderRow: View {
     @State private var targeted = false
 
     var body: some View {
-        HStack(spacing: Theme.Space.s) {
-            Image(systemName: "chevron.right")
-                .font(.system(size: 8, weight: .bold))
-                .rotationEffect(.degrees(folder.isExpanded ? 90 : 0))
-                .motion(Motion.expand, value: folder.isExpanded)
-                .foregroundStyle(.tertiary)
-                .frame(width: 10)
-            RowIcon(symbol: folder.isExpanded ? "folder" : "folder.fill")
+        HStack(spacing: Theme.Space.rowIconGap) {
+            // The glyph opens and closes with the folder, like Arc and Zen.
+            FolderGlyph(isOpen: folder.isExpanded)
             Text(folder.name).font(Theme.Font.row).lineLimit(1)
             Spacer(minLength: 0)
             Text("\(model.tabs(in: folder).count)")

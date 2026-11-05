@@ -168,7 +168,7 @@ enum LookRenders {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("BrowserPOC-renders-\(UUID().uuidString)")
         Paths.ensure(dir)
         defer { try? FileManager.default.removeItem(at: dir) }
-        for f in ["state.json", "settings.json", "index.sqlite", "index.sqlite-wal", "index.sqlite-shm"] {
+        for f in ["state.json", "settings.json", "index.sqlite", "index.sqlite-wal", "index.sqlite-shm", "favicons"] {
             try? FileManager.default.copyItem(at: profile.appendingPathComponent(f), to: dir.appendingPathComponent(f))
         }
         Paths.overrideRoot = dir

@@ -22,7 +22,11 @@ enum Motion {
     /// A row leaving.
     static let remove = Animation.easeIn(duration: 0.14)
     /// Folders opening and closing.
-    static let expand = Animation.spring(duration: 0.22, bounce: 0)
+    static let expand = Animation.spring(duration: 0.26, bounce: 0)
+    /// The folder glyph tipping open, on Zen's fast-settling curve, a touch quicker than the rows.
+    static let folderGlyph = Animation.timingCurve(0.42, 0, 0, 1, duration: 0.28)
+    /// A site icon arriving in place of its monogram.
+    static let favicon = Animation.easeOut(duration: 0.25)
     /// Moving between spaces: the list slides and the tint crossfades on the same spring.
     static let spaceSwitch = Animation.spring(duration: 0.28, bounce: 0)
     /// Side panels showing and hiding. A touch of settle, too small to read as bounce.
@@ -66,10 +70,11 @@ enum Motion {
                 insertion: .opacity.combined(with: .scale(scale: 0.97, anchor: .top)).animation(Motion.insert),
                 removal: .opacity.combined(with: .scale(scale: 0.97, anchor: .top)).animation(Motion.remove))
         }
-        /// A folder's contents unfolding.
+        /// A folder's contents sliding out from under the folder row as it opens, and back in as it
+        /// closes. Put it inside `FolderReveal` so the slide is clipped to the folder's own space.
         static var folderContents: AnyTransition {
             if Motion.reduceMotion { return .opacity }
-            return .opacity.combined(with: .offset(y: -4))
+            return .move(edge: .top).combined(with: .opacity)
         }
         /// A Related card arriving, `index` places in the list, so cards come in one after another.
         /// Cards leave at once, so a replaced list never overlaps the new one.

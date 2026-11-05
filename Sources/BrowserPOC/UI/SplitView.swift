@@ -194,8 +194,11 @@ struct SplitRow: View {
 
     func half(_ t: Tab?, focused: Bool) -> some View {
         HStack(spacing: Theme.Space.s) {
-            Image(systemName: t?.kind == .web ? "globe" : "note.text")
-                .font(.system(size: 11)).foregroundStyle(.secondary)
+            if t?.kind == .web {
+                FaviconView(image: FaviconLookup.image(for: t?.url), size: 14, fallback: .site(t?.url))
+            } else {
+                Image(systemName: "note.text").font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 14)
+            }
             Text(t?.displayTitle ?? "")
                 .font(focused ? Theme.Font.rowEmphasis : Theme.Font.row)
                 .foregroundStyle(focused || !selected ? .primary : .secondary)

@@ -207,12 +207,26 @@ struct SuggestionRow: View {
     let selected: Bool
     @Environment(\.spaceAccent) private var accent
 
+    /// The site behind a row, for its icon. Searches, notes and actions keep their symbols.
+    var siteURL: URL? {
+        switch s.kind {
+        case .openURL(let u), .history(let u): return u.scheme?.hasPrefix("http") == true ? u : nil
+        default: return nil
+        }
+    }
+
     var body: some View {
         HStack(spacing: Theme.Space.l) {
-            Image(systemName: s.icon)
-                .font(.system(size: 13))
-                .foregroundStyle(selected ? .primary : .secondary)
-                .frame(width: 20)
+            Group {
+                if let u = siteURL {
+                    FaviconView(image: FaviconLookup.image(for: u), size: 16, fallback: .site(u))
+                } else {
+                    Image(systemName: s.icon)
+                        .font(.system(size: 13))
+                        .foregroundStyle(selected ? .primary : .secondary)
+                }
+            }
+            .frame(width: 20)
             VStack(alignment: .leading, spacing: 1) {
                 Text(s.title).font(Theme.Font.row).lineLimit(1)
                     .foregroundStyle(.primary)
