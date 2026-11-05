@@ -32,7 +32,7 @@ build/BrowserPOC.app/Contents/MacOS/BrowserPOC --data-dir ~/Desktop/test-profile
 Tests and checks from the command line:
 
 ```
-scripts/selftest.sh                                             # index, notes, sections, split, spaces, command bar and MCP checks
+scripts/selftest.sh                                             # index, notes, sections, splits, spaces, sidebar, command bar and MCP checks
 .build/debug/BrowserPOC --smoketest                             # drives the real browser headless, no window on screen
 build/BrowserPOC.app/Contents/MacOS/BrowserPOC --chrome-dry-run # what a Chrome import would do, fetches nothing
 .build/debug/BrowserPOC --extract-check <url>                   # what capture reads from one public page
@@ -47,13 +47,40 @@ Both tests use throwaway folders and exit non-zero if a check fails. The self te
 
 ## What's in it
 
-**Spaces.** Each space has its own pinned items, folders, tabs and splits, a name, an icon or emoji and a colour that lightly tints the sidebar. Switch with the icons at the bottom of the sidebar, Ctrl-1 to Ctrl-9, or a two-finger sideways swipe on the sidebar. Right-click a space icon to rename it, change its icon or colour, move it, set where its new notes go, or delete it. Deleting asks first and closes that space's tabs. Notes on disk are never touched. Older saved state moves into a space called Home.
+The Arc and Zen parts below are built from how those browsers actually behave. The research, with every source and the files I read in Zen's code, is in `notes/research/2026-11-04-arc-zen-features.md` in the project folder.
 
-**Command bar.** Cmd-T, the New tab button and Ctrl-Shift-= open a search bar in the middle of the window. Nothing is created until you pick something, and Esc closes it. Suggestions come from what's open in this space, your notes in every space, your past searches, and pages you've visited here or in Chrome, then Search Google and New note. Arrow keys and Enter pick. A typed address shows as Open. Cmd-L, or clicking the address in the sidebar, opens the bar with the current address selected, and Enter loads in place. Searches you run from the bar are remembered, and the Chrome import brings in your Chrome searches too. Settings can clear them.
+**Spaces.** Each space has its own pinned items, folders, tabs and splits, a name, an icon or emoji and a colour that lightly tints the sidebar. Switch with the icons at the bottom of the sidebar, Ctrl-1 to Ctrl-9, Cmd-Opt-Left and Right, "Focus on" in the command bar, or a two-finger sideways swipe on the sidebar. Right-click a space icon to rename it, change its icon or colour, move it, set where its new notes go, pick its profile, or delete it. A profile keeps its own cookies and logins, like Arc's profiles, so a Work space can stay signed in to a different account. Deleting asks first and closes that space's tabs. Notes on disk are never touched. Older saved state moves into a space called Home.
 
-**Tabs and notes.** Notes are items just like tabs. They show in Tabs when open, and you can pin them, put them in sidebar folders next to pages, split them, or move them to another space. Closing a note only takes it out of the sidebar; the file stays and the command bar finds it again. Right-click a note to rename it, reveal it in Finder, or delete it, which asks first and moves the file to the Trash. If a note's file is moved or deleted outside the app, its item shows as missing with Locate and Close.
+**Command bar.** Cmd-T, the New tab button and Ctrl-Shift-= open a search bar in the middle of the window. Nothing is created until you pick something. Esc, a click outside, or a second Cmd-T closes it, and text you'd typed comes back if you press Cmd-T again within 45 seconds. It does four jobs in one field:
+- Switch to anything open, in this space or another, including pinned tabs, Essentials and splits. Rows say which space and whether it's in a split.
+- Run a command. About 40 actions mix into the results when you type their name, like "new space", "copy link" or "grid". Press Tab on an empty bar, or type "/ ", to list only the actions. They only show when they apply, they show their shortcut, and the ones you pick often rise to the top.
+- Open a page. Domains fill in as you type, from your tabs and visits, with the filled part selected. Tab or the right arrow accepts it and Backspace drops it. If a pinned tab is already on that domain, the top hit switches to it.
+- Search your notes, folders, past searches and history, here and from Chrome, then Google or a new note.
 
-**Split view.** Any two items can sit side by side: right-click and pick Open in split view, drag an item onto either half of the page, or press Ctrl-Shift-=. A split shows as one joined row in the sidebar, with Separate and Swap sides on right-click. Click a pane to focus it. The address, back and forward, reload, Cmd-L, Cmd-W and the Related panel all follow the focused pane. Drag the gap to resize and double-click it for half and half. Splits come back after a restart.
+Enter opens. Option-Enter opens in split view, Shift-Enter in Peek and Cmd-Enter in a background tab. Cmd-L, or clicking the address in the sidebar, opens the bar with the current address, and Enter loads in place.
+
+**Sidebar.** At the top sit Essentials, up to 12 icons shared by every space. Then come the space's pinned items, its folders and its tabs, newest at the top. Every page shows its site's icon, fetched without cookies and cached, with a quiet letter for sites that have none. Drag any row to reorder it or to move it between Pinned, a folder and Tabs. Drag a row onto the space's name to start Essentials. Cmd-click and Shift-click pick several rows, and right-click acts on all of them. Double-click a tab to rename it. Right-click for Duplicate, Mute, Copy link, Archive and more. Folders open and close in place and remember it. A closed folder still shows the tab you're on. Cmd-. moves the keys into the sidebar: arrows move, Return opens, Left and Right close and open folders, Esc leaves.
+
+**Pinned tabs and Essentials.** They remember the page you pinned. If you wander off inside one, a slash shows after its name. Click its icon to go back, or Cmd-click the icon to keep the page you're on in a new tab. Right-click to make the current page the pinned one. Links to other sites open in Peek, so the pinned page stays put. Cmd-W on one goes back to its pinned page, unloads it and moves on, like Zen.
+
+**Tabs and notes.** Notes are items just like tabs. They show in Tabs when open, and you can pin them, put them in sidebar folders next to pages, split them, or move them to another space. Closing a note only takes it out of the sidebar; the file stays and the command bar finds it again. Right-click a note to rename it, reveal it in Finder, or delete it, which asks first and moves the file to the Trash. If a note's file is moved or deleted outside the app, its item shows as missing with Locate and Close. Pages the app draws itself, like History, are items too.
+
+**Split view.** Up to four items share the screen, side by side, stacked or as a grid. Ways in:
+- Drag an item from the sidebar near any pane's edge. A preview shows where it lands.
+- Drag a tab onto another tab in the sidebar and hold for half a second.
+- Option-click a tab in the sidebar, or Option-click a link.
+- Pick two to four tabs with Cmd-click and choose Open in split view.
+- Ctrl-Shift-=, or Option-Enter in the command bar.
+
+Hover a pane for its controls: a handle to drag it to another pane's edge, Unsplit (Shift-click to stay in the split) and Close. Ctrl-Shift-1 to 4 focus a pane, Ctrl-Shift-[ and ] step through them, and Ctrl-Shift-- unsplits. Every divider drags, and double-clicking one evens it out. A split shows as one joined row in the sidebar, and right-click has Separate, Swap or Rotate, Layout, Pin and Move to space. A split made from a pinned tab stays pinned. The address, back and forward, find, Cmd-L, Cmd-W and the Related panel follow the focused pane. Splits come back after a restart.
+
+**Peek.** Shift-click a link, Shift-Enter in the bar, or click a link to another site from a pinned tab, and the page floats over the one you're on. Cmd-O or the expand button makes it a tab without reloading. The split button puts it next to the page. Esc, a click outside or Cmd-W closes it, and Cmd-Shift-T brings it back.
+
+**Archive and history.** Tabs you haven't looked at for 12 hours move to the Archive, like Arc. Pinned tabs, Essentials, filed tabs, anything on screen and anything playing stay. The Browsing settings change the timing or turn it off. Cmd-Shift-K or Clear archives everything in Tabs at once, with Undo. Cmd-Shift-T reopens the last closed tab with its back and forward history, and History > Recently Closed lists more. Cmd-Y shows every visit by day, with search, delete and clear. Back and forward also come back after a restart.
+
+**Everyday.** Cmd-Shift-C copies the link without tracking parameters, and Cmd-Opt-Shift-C copies it as Markdown. Cmd-F finds in the page with a match count. Cmd-1 to 8 pick a row, counting Essentials and pins first, and Cmd-9 picks the last. Cmd-Opt-Up and Down step through the sidebar. Ctrl-Tab shows recent tabs while you hold Ctrl. Cmd-S hides the sidebar, and it slides back when the pointer reaches the edge. View can put the sidebar on the right. A tab playing sound off screen gets play and mute controls at the bottom of the sidebar, and leaving a playing video asks for picture in picture. Downloads show progress next to Settings and list on their own page.
+
+**Little Arc.** Links you open from other apps get a small window with no sidebar. Cmd-O moves the page into the main window as a tab, without reloading. Cmd-Opt-N opens an empty one to search from.
 
 **Notes folders.** You pick the folders that hold your Markdown notes. Every `.md` file in them is a note you can open and edit here, with autosave and a preview. Hidden folders, `node_modules`, `.build` and `.nosync` folders are left out. New notes go in the space's chosen folder, or the first notes folder. If you haven't picked any, notes live in the app's own folder.
 
@@ -89,21 +116,23 @@ With "Let AI clients edit notes" on in Settings, three more tools can create a n
 
 ## Not in this version
 
-- No extensions, passkeys, password autofill, find in page, history view, favicons or profiles.
-- Tabs can't be reordered by hand, and folders on disk can't be renamed from the app.
-- Back and forward history isn't kept across restarts.
+- No extensions, passkeys or password autofill.
+- Folders on disk can't be renamed from the app, and sidebar folders don't nest.
+- No live folders, Boosts, link routing between spaces, or sharing a space as a link.
+- Picture in picture when you leave a video may need a click in the page first, because WebKit wants a user gesture for it.
 - The Granola sync is built against Granola's documented MCP tools but hasn't run against a real account yet.
 - The Notion sync reads only what the Notion app keeps on this Mac. Notion's hosted MCP would cover the rest.
 
 ## Where things live
 
 - App data: `~/Library/Application Support/BrowserPOC/` (state.json, settings.json, index.sqlite, and Notes/ when no notes folders are chosen). Round 3 adds Models/ (the downloaded models), sources.json (the source switches) and granola-auth.json (the Granola sign-in, readable only by my account). The AI client settings are in mcp.json, the served log in mcp-log.jsonl, and what's on screen in current-context.json.
-- WebKit keeps cookies and caches under `~/Library/WebKit/local.browserpoc` and `~/Library/Caches/local.browserpoc`.
+- Browsing data sits next to it: browser.json (Browsing settings), history.sqlite (visits), closed.json (recently closed and the archive), sessions/ (back and forward for each tab), favicons/ and downloads.json.
+- WebKit keeps cookies and caches under `~/Library/WebKit/local.browserpoc` and `~/Library/Caches/local.browserpoc`. Each named profile has its own WebKit store there too.
 - Clearing the index removes indexed entries only. Notes stay exactly as they are.
 
 ## Code map
 
-- `Sources/BrowserPOC/Browser`: tabs, notes as items, splits, spaces, WebKit delegates, writing signals.
+- `Sources/BrowserPOC/Browser`: tabs, notes as items, split trees, spaces, WebKit delegates, writing signals, and the Arc and Zen model: sidebar ordering and Essentials (`BrowserModel+Items`), splits (`BrowserModel+Split`), Peek and find (`BrowserModel+Peek`), command bar actions (`BarActions`), history, the archive, favicons, media, downloads, and app pages (`AppPages`, where other parts of the app register a page of their own).
 - `Sources/BrowserPOC/Notes`: notes folders, the note document with its disk checks, Markdown preview.
 - `Sources/BrowserPOC/Index`: SQLite wrapper, text analysis, the index, hybrid retrieval (`Retrieval.swift`), and the read API for the graph and MCP (`IndexStore+API.swift`: `semanticNeighbours`, `entities`, `topics`, `search`).
 - `Sources/BrowserPOC/Intelligence`: llama.cpp wrapper, model downloads, embeddings, the working-context description and judgment with Foundation Models, background re-embedding and topic tagging, and an MCP client with OAuth.

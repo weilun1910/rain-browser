@@ -203,6 +203,9 @@ enum SmokeTest {
         model.bar.close()
         MCPTests.smoke(model: model, snaps: snaps)
 
+        // 10. Arc and Zen: sessions, favicons, find, splits, Peek, media, archive, the bar, layouts.
+        ArcZenSmoke.run(model: model, window: window, snaps: snaps)
+
         model.prepareForQuit()
         print(SelfTest.failures == 0 ? "\nSmoke test passed." : "\n\(SelfTest.failures) check(s) failed.")
         return SelfTest.failures == 0 ? 0 : 1

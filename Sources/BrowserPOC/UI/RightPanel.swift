@@ -115,10 +115,8 @@ struct CardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top, spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 16, height: 16)
+                // Pages, Notion and Google Docs show the site's icon. Notes and meetings keep their symbols.
+                SourceIcon(url: m.doc.url, isPage: [.web, .chrome, .notion, .gdocs].contains(m.doc.source), symbol: icon, size: 16)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(m.doc.title)
                         .font(.system(size: 13, weight: .semibold))
