@@ -128,6 +128,12 @@ struct Match {
     var judgeReason: String? = nil
     /// Which retrievers found it: keyword, meaning, names, queries.
     var foundBy: [String] = []
+    /// Noun phrases the item's passage and the context both use, for the reason line.
+    var sharedPhrases: [String] = []
+    /// The passage's own main phrase, when none is shared word for word.
+    var itemPhrases: [String] = []
+    /// Distinctive single words both share, without names, dates or title words.
+    var ideaWords: [String] = []
 }
 
 struct RetrievalResult {

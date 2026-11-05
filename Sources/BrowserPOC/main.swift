@@ -111,7 +111,7 @@ let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--wo
                           "--eval", "--models-dir", "--verbose", "--notion-dry-run", "--granola-dry-run", "--download-models", "--scale",
                           "--mcp", "--mcp-fixture", "--graph-bench", "--shelf-demo",
                           "--seed-demo", "--demo-content", "--models-from", "--offline", "--no-topics", "--keep-dates",
-                          "--demo-eval", "--demo-snapshots", "--demo-diag", "--case", "--quit-check"]
+                          "--demo-eval", "--demo-snapshots", "--demo-diag", "--case", "--quit-check", "--reasons"]
 if let unknown = args.dropFirst().first(where: { $0.hasPrefix("--") && !known.contains($0) }) {
     print("Unknown flag \(unknown). Flags: --selftest, --smoketest, --chrome-dry-run, each with optional --workdir <dir> for the tests, --data-dir <dir> to run the app on a separate profile, --mcp to serve the index to AI clients, and --mcp-fixture <dir> to write a test profile.")
     exit(2)

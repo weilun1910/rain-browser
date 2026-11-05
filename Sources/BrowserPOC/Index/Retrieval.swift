@@ -315,7 +315,7 @@ extension IndexStore {
                 let kw = shared.reduce(0) { $0 + (termWeight[$1] ?? 0) }
                 let c = Candidate(
                     doc: meta, section: sec,
-                    passage: meta.hasText ? Snippet.make(chosen, terms: shared.map { q.counts.display[$0] ?? $0 } + (docEntities[did] ?? []), title: meta.title, length: 600) : Snippet.prettyURL(meta.url),
+                    passage: meta.hasText ? Snippet.make(readText, terms: shared.map { q.counts.display[$0] ?? $0 } + (docEntities[did] ?? []), title: meta.title, length: 600) : Snippet.prettyURL(meta.url),
                     fused: fused[did] ?? 0, keywordWeight: kw, dense: denseBest[did] ?? -1, meaning: meaningBest[did] ?? 0,
                     sharedTerms: shared.map { q.counts.display[$0] ?? $0 },
                     sharedEntities: docEntities[did] ?? [],

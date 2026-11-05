@@ -58,6 +58,14 @@ enum EngineDemoDiag {
                 print("       passage: \(cand.rawPassage.prefix(120).replacingOccurrences(of: "\n", with: " "))")
                 print("       query:   \(rq.prefix(140).replacingOccurrences(of: "\n", with: " "))")
             }
+            if args.contains("--reasons") {
+                let r = Pipeline.rank(q, params, store: store)
+                for m in r.sites.prefix(params.limit) + r.docs.prefix(params.limit) {
+                    print("  card: \(m.doc.title.prefix(44))")
+                    print("        \(Reasons.template(m, visits: store.visits(docID: m.doc.id, limit: 10)))")
+                    print("        passage: \(m.passage.prefix(90).replacingOccurrences(of: "\n", with: " "))")
+                }
+            }
             if Pipeline.debugRank {
                 let cent = Pipeline.chunkCentrality(q)
                 for (i, t) in q.queryTexts.enumerated() { print("  q\(i) c\(String(format: "%.2f", i < cent.count ? cent[i] : -1)): \(t.prefix(110).replacingOccurrences(of: "\n", with: " "))") }

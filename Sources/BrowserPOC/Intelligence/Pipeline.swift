@@ -343,12 +343,24 @@ enum Pipeline {
         for (c, s, rr) in scored where p.keepIDs.contains(c.doc.id) {
             out.kept[c.doc.id] = match(c, score: s, rerank: rr, norm: cands.keywordNorm)
         }
+        let contextPhrases = Phrases.extract(q.input.title + "\n" + Snippet.body(q.input.text, title: q.input.title))
+        func withPhrases(_ m: Match, _ c: Candidate) -> Match {
+            var m = m
+            let item = Phrases.extract(c.doc.title + "\n" + (c.rawPassage.isEmpty ? c.passage : c.rawPassage))
+            m.sharedPhrases = Phrases.shared(contextPhrases, item, titles: [q.input.title, c.doc.title])
+            m.itemPhrases = Phrases.top(item, titles: [q.input.title, c.doc.title])
+            // Single words may come from the context's title ("Both mention flights"), not the item's.
+            m.ideaWords = Phrases.ideaWords(m.topicTerms + m.sharedTerms, titles: [c.doc.title], names: m.sharedEntities,
+                                            context: q.input.text)
+            return m
+        }
         for sec in CardSection.allCases {
             let passing = scored.filter { $0.0.section == sec && $0.1 >= g.bar }
             let picked = select(passing, limit: p.limit + 2, keep: p.keepIDs, reranked: g.usesReranker)
-            let ms = picked.map { match($0.0, score: $0.1, rerank: $0.2, norm: cands.keywordNorm) }
+            let ms = picked.map { withPhrases(match($0.0, score: $0.1, rerank: $0.2, norm: cands.keywordNorm), $0.0) }
             if sec == .sites { out.sites = ms } else { out.docs = ms }
         }
+        for (id, m) in out.kept { if let c = out.candidates[id] { out.kept[id] = withPhrases(m, c) } }
         return out
     }
 
