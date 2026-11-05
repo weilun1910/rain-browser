@@ -1,4 +1,5 @@
-import Foundation
+import AppKit
+import SwiftUI
 
 /// The MCP server: spawns `--mcp --data-dir` on a fixture profile and drives a legacy and a
 /// modern session through every tool, resource and prompt. Also checks the privacy switches,
@@ -476,6 +477,26 @@ enum MCPTests {
         let skills = ["claude-code/plugins/browser-knowledge/skills/browser-knowledge/SKILL.md", "codex/plugin/skills/browser-knowledge/SKILL.md"]
         check(skills.allSatisfy { (try? String(contentsOf: dir.appendingPathComponent($0), encoding: .utf8))?.hasPrefix("---\nname: browser-knowledge\ndescription: ") == true },
               "skills have name and description frontmatter")
+    }
+
+    /// Smoke test: the context writer on the real model, and the AI clients pane drawn offscreen.
+    @MainActor
+    static func smoke(model: BrowserModel, snaps: URL) {
+        let w = CurrentContextWriter.shared
+        w.start(model: model)
+        w.stop()
+        let wrote = w.writeNow()
+        let f = try? JSONDecoder.iso.decode(CurrentContextFile.self, from: Data(contentsOf: CurrentContextFile.url(Paths.root)))
+        check(wrote && f?.focused != nil && f?.binary == Bundle.main.executablePath && !(f?.openTabs.isEmpty ?? true),
+              "the running model writes what's on screen", f?.focused?.title ?? "nothing focused")
+        for (i, name) in ["search", "related", "current_context"].enumerated() {
+            MCPLog.append(MCPLogEntry(at: Date().addingTimeInterval(Double(-60 * i)), client: "claude-code", kind: "tool", name: name,
+                                      detail: i == 0 ? "sourdough starter" : "", served: 3 - i, titles: ["Bread bake log"], hidden: i), root: Paths.root)
+        }
+        let view = NSHostingView(rootView: AIClientsSettings())
+        let win = SmokeTest.offscreenWindow(view, size: NSSize(width: 580, height: 1100))
+        SmokeTest.snapshot(win.contentView!, snaps.appendingPathComponent("20-ai-clients.png"))
+        check(view.fittingSize.height > 100, "the AI clients pane lays out")
     }
 
     /// The app side: the writer records the focused note and the trail.
