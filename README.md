@@ -1,8 +1,8 @@
 # Rain (proof of concept)
 
-Rain is the working name for a Mac browser I'm building. This repo is a proof of concept I'm using to test the idea. It isn't the product. I haven't designed anything yet, so the whole UI is placeholder, and the real browser will look and work very differently.
+Rain is a Mac browser I'm building, and this repo is its proof of concept.
 
-The idea I'm testing is a Mac browser on WebKit where pages and notes you've already seen come back on their own when what you're working on makes them relevant. You don't have to file or pin anything, and everything stays on your Mac.
+It's a browser on WebKit where pages and notes you've already seen come back on their own when what you're working on makes them relevant. You don't have to file or pin anything, and everything stays on your Mac.
 
 ## Build and run
 
