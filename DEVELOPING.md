@@ -11,9 +11,10 @@ From the repo folder:
 ```
 scripts/build.sh        # builds build/Rain.app (release)
 scripts/run.sh          # builds, then opens it
+scripts/install.sh      # builds, waits until Rain is closed, then swaps the copy in /Applications
 ```
 
-The app ends up at `build/Rain.app`. Quit a running copy before rebuilding.
+The app ends up at `build/Rain.app`. Quit a running copy before rebuilding. `scripts/install.sh` keeps the copy it replaces in `build/previous/Rain.app`.
 
 The build is signed ad hoc, so every build has a different signature. macOS ties some permissions to the signature, so after a rebuild it may ask again before the app can read Chrome's history. To keep that permission across builds, sign with a certificate from your keychain:
 
