@@ -148,7 +148,7 @@ struct HistoryPage: View {
                                 Button("Open in new tab") { model.newTab(url: u, select: true) }
                                 Button("Open in split view") { model.routeLink(u, .split, from: model.currentTab ?? Tab(url: nil)) }
                                 Button("Open in Peek") { model.openPeek(u, from: model.currentTab) }
-                                Button("Copy link") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(v.url, forType: .string) }
+                                Button("Copy link") { BrowserModel.copyText(v.url) }
                             }
                             Divider()
                             Button("Remove from history") { history.delete(v.id) }

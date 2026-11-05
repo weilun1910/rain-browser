@@ -66,7 +66,8 @@ struct MainView: View {
 
     @ViewBuilder func panel(leading: Bool) -> some View {
         if settings.published.rightPanelOpen {
-            RightPanel().frame(width: Self.panelWidth)
+            // On the left it starts below the window buttons.
+            RightPanel().frame(width: Self.panelWidth).padding(.top, leading ? 24 : 0)
         }
     }
 
@@ -265,8 +266,9 @@ final class WebHostView: NSView {
     private weak var current: WKWebView?
 
     func show(_ wv: WKWebView) {
-        guard current !== wv else { return }
-        current?.removeFromSuperview()
+        // A split relayout can move this web view into another host, so check where it is too.
+        guard current !== wv || wv.superview !== self else { return }
+        if let c = current, c !== wv, c.superview === self { c.removeFromSuperview() }
         wv.frame = bounds
         wv.autoresizingMask = [.width, .height]
         addSubview(wv)

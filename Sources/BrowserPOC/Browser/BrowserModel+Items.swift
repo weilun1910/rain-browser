@@ -350,8 +350,7 @@ extension BrowserModel {
     func copyMultiSelectedLinks() {
         let links = multiSelectedTabs.compactMap { $0.url.map { CleanURL.strip($0).absoluteString } }
         guard !links.isEmpty else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(links.joined(separator: "\n"), forType: .string)
+        Self.copyText(links.joined(separator: "\n"))
         toast(links.count == 1 ? "Copied link" : "Copied \(links.count) links")
     }
 
@@ -516,9 +515,16 @@ extension BrowserModel {
         guard let t = currentTab, let u = t.webView?.url ?? t.url else { return }
         let clean = CleanURL.strip(u)
         let s = markdown ? "[\(t.displayTitle.replacingOccurrences(of: "]", with: ")"))](\(clean.absoluteString))" : clean.absoluteString
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(s, forType: .string)
+        Self.copyText(s)
         toast(markdown ? "Copied as Markdown" : "Copied link")
+    }
+
+    /// The pasteboard copies go to. Tests use a private one, so they never touch the real clipboard.
+    static var pasteboard: NSPasteboard = .general
+
+    static func copyText(_ s: String) {
+        pasteboard.clearContents()
+        pasteboard.setString(s, forType: .string)
     }
 
     func toast(_ message: String, action: String? = nil, perform: (() -> Void)? = nil) {

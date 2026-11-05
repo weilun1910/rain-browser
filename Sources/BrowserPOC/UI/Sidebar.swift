@@ -617,8 +617,7 @@ struct TabMenu: View {
         }
         if let u = tab.url, tab.isWeb {
             Button("Copy link") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(CleanURL.strip(u).absoluteString, forType: .string)
+                BrowserModel.copyText(CleanURL.strip(u).absoluteString)
                 model.toast("Copied link")
             }
         }
