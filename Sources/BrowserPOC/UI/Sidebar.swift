@@ -103,8 +103,16 @@ struct LeftSidebar: View {
 struct SpacePage: View {
     let spaceID: UUID
     @EnvironmentObject var model: BrowserModel
+    /// Rows are matched by item across sections, so pinning, unpinning or moving a tab into a
+    /// folder glides the row to its new place instead of cutting, and a closed folder's visible
+    /// tab keeps its place while the rest of the folder slides away.
+    @Namespace private var rowSpace
 
     var isCurrent: Bool { model.currentSpaceID == spaceID }
+
+    private func row(_ ref: SidebarRef) -> some View {
+        SidebarRow(ref: ref).matchedGeometryEffect(id: ref, in: rowSpace)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
@@ -136,7 +144,7 @@ struct SpacePage: View {
                     .font(Theme.Font.secondary).foregroundStyle(.secondary)
                     .padding(.leading, Theme.Space.rowInset).frame(height: 24)
             }
-            ForEach(rows, id: \.self) { SidebarRow(ref: $0).transition(Motion.Transitions.tabRow) }
+            ForEach(rows, id: \.self) { row($0).transition(Motion.Transitions.tabRow) }
             if !rows.isEmpty { SectionDivider() }
         }
         .motion(Motion.insert, value: rows)
@@ -149,7 +157,7 @@ struct SpacePage: View {
                 FolderReveal(isOpen: f.isExpanded) {
                     VStack(spacing: Theme.Space.rowGap) {
                         let rows = model.refs(in: .folder(f.id))
-                        ForEach(rows, id: \.self) { SidebarRow(ref: $0).transition(Motion.Transitions.tabRow) }
+                        ForEach(rows, id: \.self) { row($0).transition(Motion.Transitions.tabRow) }
                         if rows.isEmpty {
                             Text("Empty")
                                 .font(Theme.Font.secondary).foregroundStyle(.secondary)
@@ -164,7 +172,7 @@ struct SpacePage: View {
                     // A closed folder still shows what's on screen, like Arc and Zen.
                     let shown = model.shownInClosedFolder(f)
                     if !shown.isEmpty {
-                        VStack(spacing: Theme.Space.rowGap) { ForEach(shown, id: \.self) { SidebarRow(ref: $0) } }
+                        VStack(spacing: Theme.Space.rowGap) { ForEach(shown, id: \.self) { row($0) } }
                             .padding(.leading, Theme.Space.folderIndent)
                             .transition(.opacity)
                     }
@@ -194,7 +202,7 @@ struct SpacePage: View {
                 }
             }
             .buttonStyle(SidebarActionRowStyle(selected: isCurrent && model.bar.isOpen && model.bar.mode == .newTab))
-            ForEach(rows, id: \.self) { SidebarRow(ref: $0).transition(Motion.Transitions.tabRow) }
+            ForEach(rows, id: \.self) { row($0).transition(Motion.Transitions.tabRow) }
         }
         .motion(Motion.insert, value: rows)
     }
