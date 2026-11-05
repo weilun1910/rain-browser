@@ -118,10 +118,18 @@ final class BrowserModel: ObservableObject {
 
     /// The smoke test uses a throwaway WebKit store so it leaves no cookies or site data behind.
     static var useEphemeralStore = false
+    /// Set by --data-dir. A separate persistent WebKit store for that profile.
+    static var dataStoreID: UUID?
 
     init() {
         let c = WKWebViewConfiguration()
-        c.websiteDataStore = Self.useEphemeralStore ? .nonPersistent() : .default()
+        if Self.useEphemeralStore {
+            c.websiteDataStore = .nonPersistent()
+        } else if let id = Self.dataStoreID {
+            c.websiteDataStore = WKWebsiteDataStore(forIdentifier: id)
+        } else {
+            c.websiteDataStore = .default()
+        }
         c.preferences.isElementFullscreenEnabled = true
         c.preferences.javaScriptCanOpenWindowsAutomatically = false
         let major = ProcessInfo.processInfo.operatingSystemVersion.majorVersion

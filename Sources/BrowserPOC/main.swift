@@ -28,9 +28,18 @@ if args.contains("--chrome-dry-run") {
     exit(ChromeHistory.dryRun())
 }
 
-let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--workdir", "--extract-check"]
+// --data-dir <dir> runs the app on its own support folder and its own WebKit store, so test
+// and demo runs never read or write the real profile.
+if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
+    let dir = URL(fileURLWithPath: (args[i + 1] as NSString).expandingTildeInPath, isDirectory: true)
+    Paths.overrideRoot = dir
+    Paths.ensure(dir)
+    MainActor.assumeIsolated { BrowserModel.dataStoreID = Paths.storeID(for: dir) }
+}
+
+let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--workdir", "--extract-check", "--data-dir"]
 if let unknown = args.dropFirst().first(where: { $0.hasPrefix("--") && !known.contains($0) }) {
-    print("Unknown flag \(unknown). Flags: --selftest, --smoketest, --chrome-dry-run, each with optional --workdir <dir> for the tests.")
+    print("Unknown flag \(unknown). Flags: --selftest, --smoketest, --chrome-dry-run, each with optional --workdir <dir> for the tests, and --data-dir <dir> to run the app on a separate profile.")
     exit(2)
 }
 

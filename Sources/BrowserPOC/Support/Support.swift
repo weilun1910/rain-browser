@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import os
 
@@ -17,6 +18,15 @@ enum Paths {
     static var indexFile: URL { root.appendingPathComponent("index.sqlite") }
     static var defaultNotesDir: URL { root.appendingPathComponent("Notes", isDirectory: true) }
     static var tmpDir: URL { root.appendingPathComponent("tmp", isDirectory: true) }
+
+    /// A stable WebKit store ID for a --data-dir folder, so each profile keeps its own cookies.
+    static func storeID(for dir: URL) -> UUID {
+        let digest = SHA256.hash(data: Data(dir.standardizedFileURL.path.utf8))
+        var b = Array(digest.prefix(16))
+        b[6] = (b[6] & 0x0F) | 0x40
+        b[8] = (b[8] & 0x3F) | 0x80
+        return UUID(uuid: (b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]))
+    }
 
     static func ensure(_ url: URL) {
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)

@@ -23,6 +23,12 @@ The build is signed ad hoc, so every build has a different signature. macOS ties
 SIGN_IDENTITY="Apple Development: Your Name (TEAMID)" scripts/build.sh
 ```
 
+To run the app on a separate profile, with its own support folder and its own cookies, pass `--data-dir`. Your normal profile isn't read or touched:
+
+```
+build/BrowserPOC.app/Contents/MacOS/BrowserPOC --data-dir ~/Desktop/test-profile
+```
+
 Tests and checks from the command line:
 
 ```
