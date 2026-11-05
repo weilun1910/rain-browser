@@ -36,6 +36,7 @@ scripts/selftest.sh                                             # index, notes, 
 .build/debug/BrowserPOC --smoketest                             # drives the real browser headless, no window on screen
 build/BrowserPOC.app/Contents/MacOS/BrowserPOC --chrome-dry-run # what a Chrome import would do, fetches nothing
 .build/debug/BrowserPOC --extract-check <url>                   # what capture reads from one public page
+build/BrowserPOC.app/Contents/MacOS/BrowserPOC --graph-bench    # the graph's 5,000 node timings on a release build
 ```
 
 Both tests use throwaway folders and exit non-zero if a check fails. The self test checks delete with a stand-in Trash folder inside its throwaway folder, so your real Trash is never touched. The dry run prints full URLs from your Chrome history, so keep its output to yourself.
@@ -59,6 +60,18 @@ These files may also be edited by other apps while this one is open, so the app 
 - It watches the folders, so new, renamed and changed files show up and get indexed. Files still in iCloud are downloaded and retried.
 
 **Related panel.** The right panel shows things you've seen before that relate to what's in front of you, in two sections. Sites holds pages you read, here or in Chrome. Notes / Docs holds things you write: your notes, Notion pages, Google Docs, Sheets and Slides, sites on the "Sites you write on" list in Settings, and any page where you've typed about 200 characters. Right-click a card to move it to the other section, and that choice is remembered. Each section shows up to 3 cards and has to clear the same fairly high bar, so a section is often empty. The current item and anything opened in the last 10 minutes never show, and Related always looks across every space. Each card has the matching passage and a short reason, written by Apple's on-device model when it's available. Open, Add to research and Dismiss work as before. With a note in a split, Add to research puts the link in that note.
+
+**Graph.** An Obsidian-style graph of everything in the index: notes, docs, sites and, once the Granola source lands, meetings. Open it with the graph button next to Settings, View > Graph (Cmd-Option-G), or its row in the sidebar. It's an item like a tab, so it can be pinned, filed or put in a split next to a note. Lines come in six kinds, each with its own colour and filter:
+- Links: `[[wikilinks]]`, Markdown links and URLs in a note or doc that match something indexed. A wikilink to a note that doesn't exist yet shows as a hollow node, and clicking it creates the note.
+- Navigation: a link you clicked on one page that took you to another.
+- Research: something you added to research from the Related panel.
+- Together: two items in a split, or two items you spent time on within ten minutes of each other in two separate sessions.
+- Similar meaning: each item's closest neighbours by meaning, kept only when the match goes both ways or is very close.
+- Shared topics: optional topic nodes for names that several items mention, like Obsidian's tag nodes.
+
+Hover a node to light up its neighbours, dim the rest and see why it's connected in the corner. Click to open, Option-click to open in a split, right-click for more, drag to move a node. Pinch, Cmd-scroll or the mouse wheel zooms, a two-finger scroll or a background drag pans, and `+`, `-`, `0` and the arrow keys work too. The search field takes plain words plus `type:note`, `site:github.com` and `project:Browser`. The settings panel has Obsidian's Filters, Groups, Display and Forces, plus a time range, a space and grouping pages by site (on its own above 1,500 items). Play runs a timelapse in the order things were first seen.
+
+The bottom of the right panel shows a local graph for whatever's focused, 1 to 3 steps out, and opens the full graph focused on it. The item next to the graph in a split gets a ring. The graph's own tables live in `index.sqlite` next to the index, and its settings in `graph.json`.
 
 **Capture.** Pages that stay open about five seconds go into a local index with full-text search, sentence vectors and the names in them. Google Docs draw their text on a canvas, so for those the app asks Google for the doc's own text export, from inside your tab, once per load. The typing count only stores how many characters you typed in text areas and editable regions, never what you typed, and ignores search, address and password fields.
 
@@ -84,5 +97,6 @@ These files may also be edited by other apps while this one is open, so the app 
 - `Sources/BrowserPOC/Index`: SQLite wrapper, text analysis, the index, ranking and lookups.
 - `Sources/BrowserPOC/Resurfacing`: the Related panel's cards and reasons.
 - `Sources/BrowserPOC/Sources`: Chrome import, URL safety rules, HTML text, the notes indexer and folder watcher.
-- `Sources/BrowserPOC/UI`: SwiftUI views, including the command bar, split view and spaces.
+- `Sources/BrowserPOC/Graph`: the graph's edge store and sync, link extraction, similarity, the layout builder, the force simulation, the Metal renderer and its colour tokens (`GraphTheme.swift`).
+- `Sources/BrowserPOC/UI`: SwiftUI views, including the command bar, split view, spaces and the graph panes.
 - `Sources/BrowserPOC/Tests`: `--selftest`, `--smoketest` and `--extract-check`.
