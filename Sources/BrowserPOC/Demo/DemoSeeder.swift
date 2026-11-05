@@ -85,7 +85,7 @@ enum DemoSeeder {
             print(String(format: "Demo profile ready in %.0f s: %@", s.seconds, target.path))
             print("  \(s.notes) notes, \(s.items) docs and meetings, \(s.pages) pages (text fetched for \(s.fetched)), \(s.visits) visits, \(s.searches) searches")
             print("  vectors \(s.vectors) from \(s.embedder), topics for \(s.tagged) items, \(s.edges) graph edges")
-            print("Open it: build/BrowserPOC.app/Contents/MacOS/BrowserPOC --data-dir \"\(target.path)\"")
+            print("Open it: build/Rain.app/Contents/MacOS/BrowserPOC --data-dir \"\(target.path)\"")
             return 0
         } catch {
             print("Seeding failed: \(error)")

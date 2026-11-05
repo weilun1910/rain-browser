@@ -58,7 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1380, height: 880),
                          styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                          backing: .buffered, defer: false)
-        w.title = "Browser POC"
+        w.title = "Rain"
         WindowChrome.configure(w)
         w.isMovableByWindowBackground = false
         w.collectionBehavior.insert(.fullScreenPrimary)
@@ -155,12 +155,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         appMenu.addItem(.separator())
         appMenu.addItem(item("Settings...", #selector(settingsAction), ",", target: self))
         appMenu.addItem(.separator())
-        appMenu.addItem(item("Hide Browser POC", #selector(NSApplication.hide(_:)), "h", target: NSApp))
+        appMenu.addItem(item("Hide Rain", #selector(NSApplication.hide(_:)), "h", target: NSApp))
         appMenu.addItem(item("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option], target: NSApp))
         appMenu.addItem(item("Show All", #selector(NSApplication.unhideAllApplications(_:)), target: NSApp))
         appMenu.addItem(.separator())
-        appMenu.addItem(item("Quit Browser POC", #selector(NSApplication.terminate(_:)), "q", target: NSApp))
-        addSubmenu(main, "Browser POC", appMenu)
+        appMenu.addItem(item("Quit Rain", #selector(NSApplication.terminate(_:)), "q", target: NSApp))
+        addSubmenu(main, "Rain", appMenu)
 
         let file = NSMenu(title: "File")
         file.addItem(item("New Tab", #selector(newTabAction), "t", target: self))

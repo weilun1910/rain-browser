@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds the Swift package and wraps it in build/BrowserPOC.app, signed ad hoc.
+# Builds the Swift package and wraps it in build/Rain.app, signed ad hoc.
 # Usage: scripts/build.sh [release|debug]
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -15,10 +15,10 @@ BIN_DIR="$(swift build -c "$CONFIG" --disable-keychain --scratch-path "$ROOT/.bu
 # The bundle is put together and signed in a temp folder outside iCloud Drive. iCloud's file
 # provider tags .app and .framework folders with Finder info while they sit in the project,
 # and codesign refuses to sign anything that carries it.
-OUT="$ROOT/build/BrowserPOC.app"
+OUT="$ROOT/build/Rain.app"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
-APP="$STAGE/BrowserPOC.app"
+APP="$STAGE/Rain.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/BrowserPOC" "$APP/Contents/MacOS/BrowserPOC"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"

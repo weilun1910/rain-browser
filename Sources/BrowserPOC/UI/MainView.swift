@@ -509,9 +509,9 @@ struct ChromePermissionHelp: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            Text("Browser POC needs your OK to read Chrome's history")
+            Text("Rain needs your OK to read Chrome's history")
                 .font(Theme.Font.rowEmphasis)
-            Text("macOS asks before one app reads another app's data. If a prompt came up, click Allow, then try again. If you clicked Don't Allow or no prompt came up, open System Settings, go to Privacy & Security, then Files & Folders, find Browser POC and turn on Google Chrome.")
+            Text("macOS asks before one app reads another app's data. If a prompt came up, click Allow, then try again. If you clicked Don't Allow or no prompt came up, open System Settings, go to Privacy & Security, then Files & Folders, find Rain and turn on Google Chrome.")
                 .font(Theme.Font.secondary)
                 .foregroundStyle(.secondary)
                 .lineSpacing(2)

@@ -61,7 +61,7 @@ enum ForeignDB {
         var description: String {
             switch self {
             case .notFound(let s), .failed(let s): return s
-            case .needsPermission(let app): return "macOS needs your OK before Browser POC can read \(app)'s data. If a prompt came up, click Allow, then try again. If you clicked Don't Allow or no prompt came up, open System Settings, go to Privacy & Security, then Files & Folders, find Browser POC and turn on \(app)."
+            case .needsPermission(let app): return "macOS needs your OK before Rain can read \(app)'s data. If a prompt came up, click Allow, then try again. If you clicked Don't Allow or no prompt came up, open System Settings, go to Privacy & Security, then Files & Folders, find Rain and turn on \(app)."
             }
         }
     }

@@ -9,10 +9,10 @@ The Mac app runs Codex inside it and reads the same `~/.codex/config.toml` as th
 To add it in the app instead:
 1. Open Settings, then MCP servers, then Add server.
 2. Pick STDIO.
-3. Command: the app's binary, for example `/Applications/BrowserPOC.app/Contents/MacOS/BrowserPOC`. Arguments: `--mcp`.
+3. Command: the app's binary, for example `/Applications/Rain.app/Contents/MacOS/BrowserPOC`. Arguments: `--mcp`.
 4. Save and restart ChatGPT.
 
-The Browser POC's Settings, under AI clients, shows these values with your real path.
+Rain's Settings, under AI clients, shows these values with your real path.
 
 OpenAI documents local servers for Codex and Work threads that run on your Mac. In ordinary Chat threads the tools often don't show up yet (there's an open report at https://github.com/openai/codex/issues/38162). Use a Codex or Work thread.
 
@@ -26,7 +26,7 @@ The safe way to reach the knowledge base from there is OpenAI's Secure MCP Tunne
 
 ```
 tunnel-client init --sample sample_mcp_stdio_local --profile browser --tunnel-id <your tunnel id> \
-  --mcp-command "/Applications/BrowserPOC.app/Contents/MacOS/BrowserPOC --mcp"
+  --mcp-command "/Applications/Rain.app/Contents/MacOS/BrowserPOC --mcp"
 tunnel-client run --profile browser
 ```
 
@@ -35,7 +35,7 @@ Then add it in ChatGPT at chatgpt.com/plugins as a custom MCP server using the t
 Things to know before you do this:
 - What ChatGPT reads goes through OpenAI's tunnel service. It goes to OpenAI anyway once the model reads it, but it's a step beyond the Mac-only routes.
 - Which ChatGPT plans can add custom MCP servers on the web isn't settled in OpenAI's docs as of November 2026.
-- Choose what AI clients can see in the Browser POC's Settings first. The served log there shows everything that went out.
+- Choose what AI clients can see in Rain's Settings first. The served log there shows everything that went out.
 
 Don't put the server behind a public tunnel like ngrok or cloudflared with no authentication. Anyone who learned the address could read your notes. This proof of concept doesn't open a local HTTP port for that reason.
 

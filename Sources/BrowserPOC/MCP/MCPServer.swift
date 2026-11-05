@@ -28,14 +28,14 @@ enum MCPProtocol {
 
     static let serverInfo: JSON = [
         "name": "browser-poc-knowledge",
-        "title": "Browser POC knowledge",
+        "title": "Rain knowledge",
         "version": "0.3.0",
-        "description": "Pages, notes, docs and connections from the Browser POC on this Mac.",
+        "description": "Pages, notes, docs and connections from Rain on this Mac.",
     ]
 
     /// The first 512 characters stand on their own (OpenAI's guidance); the whole text stays under 4,096 (Claude Code's cap).
     static let instructions = """
-    This server is the user's personal knowledge base from their Browser POC app, kept on their Mac: web pages they read, \
+    This server is the user's personal knowledge base from their Rain app, kept on their Mac: web pages they read, \
     their Markdown notes, Google Docs, Notion pages, Granola meeting notes, and how these connect. Use it to understand \
     what the user knows, is working on and has read before. Call search first for a topic, get_item to read one item, \
     related and connections for what links to it, and current_context or recent_activity for what they're doing now. \
@@ -92,7 +92,7 @@ final class MCPServer {
         defer { signalSources.forEach { $0.cancel() } }
         let context = MCPContext(root: root)
         let server = MCPServer(toolbox: MCPToolbox(context: context), out: out)
-        FileHandle.standardError.write(Data("Browser POC MCP server on \(root.path)\n".utf8))
+        FileHandle.standardError.write(Data("Rain MCP server on \(root.path)\n".utf8))
         while let line = readLine(strippingNewline: true) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.isEmpty { continue }

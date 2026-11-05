@@ -1,10 +1,10 @@
 {
   "manifest_version": "0.3",
   "name": "browser-knowledge",
-  "display_name": "Browser POC knowledge",
+  "display_name": "Rain knowledge",
   "version": "0.3.0",
-  "description": "Your Browser POC knowledge base in Claude: notes, pages, docs, connections and what you're working on now. Proof of concept.",
-  "long_description": "Reads the knowledge base the Browser POC app keeps on your Mac: Markdown notes in your notes folders, pages you read, Chrome history, Google Docs and Notion pages, your spaces and folders, and what you have open right now. Everything stays on your Mac. Choose what AI clients can see in the app's Settings, under AI clients. This is a proof of concept, not a finished product.",
+  "description": "Your Rain knowledge base in Claude: notes, pages, docs, connections and what you're working on now. Proof of concept.",
+  "long_description": "Reads the knowledge base Rain app keeps on your Mac: Markdown notes in your notes folders, pages you read, Chrome history, Google Docs and Notion pages, your spaces and folders, and what you have open right now. Everything stays on your Mac. Choose what AI clients can see in the app's Settings, under AI clients. This is a proof of concept, not a finished product.",
   "author": { "name": "Felix Lee" },
   "repository": { "type": "git", "url": "https://github.com/weilun1910/kvbrowser" },
   "server": {
@@ -22,8 +22,8 @@
   "user_config": {
     "app_path": {
       "type": "string",
-      "title": "Browser POC app",
-      "description": "Path to BrowserPOC.app. Leave empty to find it automatically.",
+      "title": "Rain app",
+      "description": "Path to Rain.app. Leave empty to find it automatically.",
       "required": false,
       "default": ""
     },

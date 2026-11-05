@@ -11,11 +11,11 @@ You need Xcode 26 (or its command line tools) on macOS 26 or later.
 From the repo folder:
 
 ```
-scripts/build.sh        # builds build/BrowserPOC.app (release)
+scripts/build.sh        # builds build/Rain.app (release)
 scripts/run.sh          # builds, then opens it
 ```
 
-The app ends up at `build/BrowserPOC.app`. Quit a running copy before rebuilding.
+The app ends up at `build/Rain.app`. Quit a running copy before rebuilding.
 
 The build is signed ad hoc, so every build has a different signature. macOS ties some permissions to the signature, so after a rebuild it may ask again before the app can read Chrome's history. To keep that permission across builds, sign with a certificate from your keychain:
 
@@ -26,7 +26,7 @@ SIGN_IDENTITY="Apple Development: Your Name (TEAMID)" scripts/build.sh
 To run the app on a separate profile, with its own support folder and its own cookies, pass `--data-dir`. Your normal profile isn't read or touched:
 
 ```
-build/BrowserPOC.app/Contents/MacOS/BrowserPOC --data-dir ~/Desktop/test-profile
+build/Rain.app/Contents/MacOS/BrowserPOC --data-dir ~/Desktop/test-profile
 ```
 
 Tests and checks from the command line:
@@ -34,7 +34,7 @@ Tests and checks from the command line:
 ```
 scripts/selftest.sh                                             # index, notes, sections, splits, spaces, sidebar, command bar, Related shelf, MCP and look checks
 .build/debug/BrowserPOC --smoketest                             # drives the real browser headless, no window on screen
-build/BrowserPOC.app/Contents/MacOS/BrowserPOC --chrome-dry-run # what a Chrome import would do, fetches nothing
+build/Rain.app/Contents/MacOS/BrowserPOC --chrome-dry-run # what a Chrome import would do, fetches nothing
 .build/debug/BrowserPOC --extract-check <url>                   # what capture reads from one public page
 .build/debug/BrowserPOC --eval --models-dir <folder>            # resurfacing quality, old pipeline against new
 .build/debug/BrowserPOC --notion-dry-run                        # counts and field names from Notion's cache, no content
@@ -46,7 +46,7 @@ scripts/make-icon.sh                                            # redraws the ap
 .build/debug/BrowserPOC --data-dir <folder> --motion-tour glass dark --reduce-transparency  # each glass layer over a bright, busy and dark page, in a window; light or dark, and the solid fallback with --reduce-transparency
 .build/debug/BrowserPOC --data-dir <folder> --motion-tour spaces # plays one area's motion in a window for recording, then quits (also rows, peek, split, compact, toasts)
 scripts/mcp-e2e.sh                                              # Claude Code and Codex against a made-up profile, temporary configs only
-build/BrowserPOC.app/Contents/MacOS/BrowserPOC --graph-bench    # the graph's 5,000 node timings on a release build
+build/Rain.app/Contents/MacOS/BrowserPOC --graph-bench    # the graph's 5,000 node timings on a release build
 ```
 
 Both tests use throwaway folders and exit non-zero if a check fails. The self test checks delete with a stand-in Trash folder inside its throwaway folder, so your real Trash is never touched. The dry run prints full URLs from your Chrome history, so keep its output to yourself.
@@ -174,7 +174,7 @@ With `BROWSERPOC_GRAPH_SCRIPT=<seconds>` set, the graph drives itself through ho
 
 With "Let AI clients edit notes" on in Settings, three more tools can create a note, add to the end of one, and add a link under its Related heading. They follow the same disk rules as the app, and refuse to write if the note changed since the client read it. Settings, under AI clients, has the install steps for each client with copy buttons, a switch for each source (notes, pages, Chrome, Google Docs, Notion, Granola and past searches, which start off), a switch for what I'm working on now, and a log of everything that was served. The Google Docs and Notion switches cover those docs whether they came from their sync or from reading them in the browser. Sign-in links, links with tokens and sites on the never-index list never go out. The packaging is in `integrations/`: a Claude Code plugin with a skill, a Claude Desktop extension, a Codex plugin and config snippet, and the ChatGPT routes. ChatGPT on the web can only reach the Mac through OpenAI's Secure MCP Tunnel, so that route is written up but not set up.
 
-**Chrome import.** It copies Chrome's History file, reads the copy and deletes it. The original is only opened read-only to copy it. It imports the last 90 days, up to 2,000 pages, plus your past searches, and fetches text without cookies for up to 300 of the pages you visited most, skipping anything that looks like a sign-in, token or unsubscribe link and logged-in apps. macOS asks once before this app can read Chrome's data. If the import says it needs your OK, click Allow in the macOS prompt, or open System Settings, go to Privacy & Security, then Files & Folders, find Browser POC and turn on Google Chrome. The import screen has a button for that.
+**Chrome import.** It copies Chrome's History file, reads the copy and deletes it. The original is only opened read-only to copy it. It imports the last 90 days, up to 2,000 pages, plus your past searches, and fetches text without cookies for up to 300 of the pages you visited most, skipping anything that looks like a sign-in, token or unsubscribe link and logged-in apps. macOS asks once before this app can read Chrome's data. If the import says it needs your OK, click Allow in the macOS prompt, or open System Settings, go to Privacy & Security, then Files & Folders, find Rain and turn on Google Chrome. The import screen has a button for that.
 
 ## Not in this version
 

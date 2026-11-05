@@ -1,5 +1,5 @@
 #!/bin/bash
-# Starts the Browser POC knowledge server (MCP over stdio) for Claude, Codex and ChatGPT.
+# Starts Rain's knowledge server (MCP over stdio) for Claude, Codex and ChatGPT.
 #
 # It looks for the app in this order:
 #   1. BROWSER_POC_APP, the .app or the binary inside it
@@ -19,7 +19,7 @@ if [ -n "${BROWSER_POC_APP:-}" ]; then candidates+=("${BROWSER_POC_APP/#\~/$HOME
 if [ -f "$SUPPORT/current-context.json" ]; then
   last=$(/usr/bin/plutil -extract binary raw -o - "$SUPPORT/current-context.json" 2>/dev/null) && candidates+=("$last")
 fi
-candidates+=("/Applications/BrowserPOC.app" "$HOME/Applications/BrowserPOC.app")
+candidates+=("/Applications/Rain.app" "$HOME/Applications/Rain.app" "/Applications/BrowserPOC.app")
 while IFS= read -r found; do candidates+=("$found"); done < <(/usr/bin/mdfind "kMDItemCFBundleIdentifier == 'local.browserpoc'" 2>/dev/null)
 
 for c in "${candidates[@]}"; do
@@ -37,5 +37,5 @@ for c in "${candidates[@]}"; do
   fi
 done
 
-echo "Browser POC wasn't found. Set BROWSER_POC_APP to the app, for example /Applications/BrowserPOC.app." >&2
+echo "Rain wasn't found. Set BROWSER_POC_APP to the app, for example /Applications/Rain.app." >&2
 exit 1

@@ -2,7 +2,7 @@
 
 This is part of a proof of concept, not a finished product.
 
-The Browser POC can serve its knowledge base to AI clients over MCP. The app's binary does it with `--mcp`, reading the same profile the app uses (add `--data-dir <dir>` for a separate profile). It reads the index without changing it, and writes to notes only if you turn that on in Settings.
+Rain can serve its knowledge base to AI clients over MCP. The app's binary does it with `--mcp`, reading the same profile the app uses (add `--data-dir <dir>` for a separate profile). It reads the index without changing it, and writes to notes only if you turn that on in Settings.
 
 The app's Settings, under AI clients, shows every step below with your app's real path and copy buttons. These folders are what those steps install.
 
@@ -18,7 +18,7 @@ The app's Settings, under AI clients, shows every step below with your app's rea
 
 ```
 claude plugin marketplace add <this repo>/integrations/claude-code
-claude plugin install browser-knowledge@browser-poc --config app_path=<path to BrowserPOC.app>
+claude plugin install browser-knowledge@browser-poc --config app_path=<path to Rain.app>
 ```
 
 `app_path` is optional. Without it the launcher finds the app on its own. To try it for one session without installing: `claude --plugin-dir <this repo>/integrations/claude-code/plugins/browser-knowledge`.

@@ -190,7 +190,7 @@ final class MCPToolbox {
         context.refresh()
         guard let tool = tools.first(where: { $0.name == name }) else { throw RPCError.invalidParams("Unknown tool: \(name)") }
         if tool.writes && !context.mcp.allowWrites {
-            return errorResult("Maintenance tools are off. The user can turn them on in Browser POC, Settings, AI clients, \"Let AI clients edit notes\".")
+            return errorResult("Maintenance tools are off. The user can turn them on in Rain, Settings, AI clients, \"Let AI clients edit notes\".")
         }
         do {
             let out = try tool.run(arguments)
@@ -286,7 +286,7 @@ final class MCPToolbox {
 
     private func overviewTool() -> MCPTool {
         MCPTool(name: "overview", title: "Knowledge base overview",
-                description: "What's in the user's Browser POC knowledge base: how many notes, pages and docs, which notes folders and spaces exist, whether the app is running, what the user has hidden from AI clients, and whether note editing is on. Call it once to orient yourself.",
+                description: "What's in the user's Rain knowledge base: how many notes, pages and docs, which notes folders and spaces exist, whether the app is running, what the user has hidden from AI clients, and whether note editing is on. Call it once to orient yourself.",
                 input: S.obj([:], extra: false),
                 output: S.obj([
                     "app_running": S.bool("The app is open right now"),

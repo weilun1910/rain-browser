@@ -2,7 +2,7 @@
 # The app's Settings, under AI clients, shows the same block with your app's real path.
 
 [mcp_servers.browser]
-command = "/Applications/BrowserPOC.app/Contents/MacOS/BrowserPOC"
+command = "/Applications/Rain.app/Contents/MacOS/BrowserPOC"
 args = ["--mcp"]
 startup_timeout_sec = 30
 

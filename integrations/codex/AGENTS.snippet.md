@@ -1,6 +1,6 @@
 ## Browser knowledge base
 
-The `browser` MCP server reads the knowledge base my Browser POC app keeps on this Mac: my Markdown notes, pages I read, Chrome history, Google Docs and Notion pages, how they connect, and what I have open right now.
+The `browser` MCP server reads the knowledge base my Rain app keeps on this Mac: my Markdown notes, pages I read, Chrome history, Google Docs and Notion pages, how they connect, and what I have open right now.
 
 - Search it before answering anything about my own projects, notes, plans or past reading. My notes beat general knowledge about my work.
 - Start with `search`. Use `related` with a paragraph of text for fuzzy topics, `get_item` to read, and `connections` to see what links to what.

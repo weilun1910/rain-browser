@@ -2,15 +2,15 @@
   "name": "browser-knowledge",
   "displayName": "Browser knowledge",
   "version": "0.3.0",
-  "description": "Your Browser POC knowledge base in Claude: search your notes, pages and docs, see how they connect, and know what you're working on now. Proof of concept.",
+  "description": "Your Rain knowledge base in Claude: search your notes, pages and docs, see how they connect, and know what you're working on now. Proof of concept.",
   "author": { "name": "Felix Lee" },
   "repository": "https://github.com/weilun1910/kvbrowser",
   "keywords": ["knowledge", "notes", "browser", "mcp", "personal context"],
   "userConfig": {
     "app_path": {
       "type": "string",
-      "title": "Browser POC app",
-      "description": "Path to BrowserPOC.app or the binary inside it. Leave empty to find it automatically.",
+      "title": "Rain app",
+      "description": "Path to Rain.app or the binary inside it. Leave empty to find it automatically.",
       "default": ""
     },
     "data_dir": {

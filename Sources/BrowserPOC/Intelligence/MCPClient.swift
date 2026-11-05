@@ -42,7 +42,7 @@ final class OAuthClient: @unchecked Sendable {
     let scope: String
     static let loopbackPort: UInt16 = 47815
 
-    init(resource: URL, tokenFile: URL, clientName: String = "Browser POC", scope: String = "mcp offline_access") {
+    init(resource: URL, tokenFile: URL, clientName: String = "Rain", scope: String = "mcp offline_access") {
         self.resource = resource
         self.tokenFile = tokenFile
         self.clientName = clientName

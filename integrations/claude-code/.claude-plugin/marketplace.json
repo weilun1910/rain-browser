@@ -2,13 +2,13 @@
   "name": "browser-poc",
   "owner": { "name": "Felix Lee" },
   "metadata": {
-    "description": "Plugins for the Browser POC, a proof of concept. Not a finished product."
+    "description": "Plugins for Rain, a proof of concept. Not a finished product."
   },
   "plugins": [
     {
       "name": "browser-knowledge",
       "source": "./plugins/browser-knowledge",
-      "description": "Lets Claude read your Browser POC knowledge base: notes, pages, docs, connections and what you're working on now."
+      "description": "Lets Claude read your Rain knowledge base: notes, pages, docs, connections and what you're working on now."
     }
   ]
 }

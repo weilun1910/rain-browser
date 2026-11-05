@@ -59,10 +59,10 @@ else
   exit 1
 fi
 
-if [ "$build" = 1 ] || [ ! -x "$ROOT/build/BrowserPOC.app/Contents/MacOS/BrowserPOC" ]; then
+if [ "$build" = 1 ] || [ ! -x "$ROOT/build/Rain.app/Contents/MacOS/BrowserPOC" ]; then
   "$ROOT/scripts/build.sh" release
 fi
-BIN="$ROOT/build/BrowserPOC.app/Contents/MacOS/BrowserPOC"
+BIN="$ROOT/build/Rain.app/Contents/MacOS/BrowserPOC"
 
 if [ "$need_seed" = 1 ]; then
   args=(--seed-demo "$PROFILE" --demo-content "$ROOT/Demo")
@@ -76,5 +76,5 @@ fi
 
 if [ "$seed_only" = 0 ]; then
   # -n starts a separate copy, so a copy already open on your own profile stays as it is.
-  open -n "$ROOT/build/BrowserPOC.app" --args --data-dir "$PROFILE"
+  open -n "$ROOT/build/Rain.app" --args --data-dir "$PROFILE"
 fi

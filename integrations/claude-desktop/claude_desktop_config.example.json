@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "browser": {
-      "command": "/Applications/BrowserPOC.app/Contents/MacOS/BrowserPOC",
+      "command": "/Applications/Rain.app/Contents/MacOS/BrowserPOC",
       "args": ["--mcp"]
     }
   }

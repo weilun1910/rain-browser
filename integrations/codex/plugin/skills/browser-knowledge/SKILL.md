@@ -1,11 +1,11 @@
 ---
 name: browser-knowledge
-description: Use the user's Browser POC knowledge base (their notes, pages they read, Google Docs, Notion pages, Granola meeting notes, how these connect, and what they have open right now) whenever a question touches their own work, projects, meetings, notes, past reading or research, or when they say "I read something about", "my notes", "what did we decide", "what do I know about", "this page" or "what I'm working on". Also use it to keep their notes well linked when they ask.
+description: Use the user's Rain knowledge base (their notes, pages they read, Google Docs, Notion pages, Granola meeting notes, how these connect, and what they have open right now) whenever a question touches their own work, projects, meetings, notes, past reading or research, or when they say "I read something about", "my notes", "what did we decide", "what do I know about", "this page" or "what I'm working on". Also use it to keep their notes well linked when they ask.
 ---
 
 # Using the Browser knowledge base
 
-The `browser` MCP server reads the knowledge base the user's Browser POC app keeps on their Mac. It covers Markdown notes in their notes folders, pages they read in the app, their Chrome history, Google Docs, Notion pages, Granola meeting notes, the spaces and folders in their sidebar, and what they have open right now. Search and Related use the browser's own on-device ranking. Everything stays on their Mac. Items they hid from AI clients never come back, so don't guess at them.
+The `browser` MCP server reads the knowledge base the user's Rain app keeps on their Mac. It covers Markdown notes in their notes folders, pages they read in the app, their Chrome history, Google Docs, Notion pages, Granola meeting notes, the spaces and folders in their sidebar, and what they have open right now. Search and Related use the browser's own on-device ranking. Everything stays on their Mac. Items they hid from AI clients never come back, so don't guess at them.
 
 ## When to reach for it
 
