@@ -149,79 +149,90 @@ struct CommandBarView: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        ZStack(alignment: .top) {
-            Color.black.opacity(0.18)
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture { bar.close() }
-            VStack(spacing: 0) {
-                HStack(spacing: 10) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    CommandField(text: $bar.query, selectAllToken: bar.selectAllToken,
-                                 onUp: { bar.move(-1) }, onDown: { bar.move(1) },
-                                 onEnter: { bar.submit() }, onEscape: { bar.close() })
-                        .frame(height: 26)
-                }
-                .padding(.horizontal, 16)
-                .frame(height: 52)
-                if !bar.results.isEmpty {
-                    Divider().opacity(0.6)
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 1) {
-                            ForEach(Array(bar.results.enumerated()), id: \.element.id) { i, s in
-                                if i == 0 || bar.results[i - 1].group != s.group, !s.group.rawValue.trimmingCharacters(in: .whitespaces).isEmpty {
-                                    Text(s.group.rawValue)
-                                        .font(.system(size: 11, weight: .semibold))
-                                        .foregroundStyle(.tertiary)
-                                        .padding(.horizontal, 16)
-                                        .padding(.top, i == 0 ? 6 : 10)
-                                        .padding(.bottom, 2)
-                                }
-                                SuggestionRow(s: s, selected: i == bar.selected)
-                                    .onTapGesture { bar.pick(s) }
-                                    .onHover { if $0 { bar.selected = i } }
-                            }
-                        }
-                        .padding(.vertical, 6)
+        GeometryReader { g in
+            ZStack(alignment: .top) {
+                Theme.Palette.scrim
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { bar.close() }
+                VStack(spacing: 0) {
+                    HStack(spacing: Theme.Space.l) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        CommandField(text: $bar.query, selectAllToken: bar.selectAllToken,
+                                     onUp: { bar.move(-1) }, onDown: { bar.move(1) },
+                                     onEnter: { bar.submit() }, onEscape: { bar.close() })
+                            .frame(height: 28)
                     }
-                    .frame(maxHeight: 420)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Theme.Space.xxl - 2)
+                    .frame(height: 58)
+                    if !bar.results.isEmpty {
+                        Rectangle().fill(Theme.Palette.hairline).frame(height: 1)
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                                ForEach(Array(bar.results.enumerated()), id: \.element.id) { i, s in
+                                    if i == 0 || bar.results[i - 1].group != s.group, !s.group.rawValue.trimmingCharacters(in: .whitespaces).isEmpty {
+                                        Text(s.group.rawValue)
+                                            .font(Theme.Font.label)
+                                            .foregroundStyle(.secondary)
+                                            .padding(.horizontal, Theme.Space.xxl - 2)
+                                            .padding(.top, i == 0 ? Theme.Space.s : Theme.Space.l)
+                                            .padding(.bottom, Theme.Space.xxs)
+                                    }
+                                    SuggestionRow(s: s, selected: i == bar.selected)
+                                        .onTapGesture { bar.pick(s) }
+                                        .onHover { if $0 { bar.selected = i } }
+                                }
+                            }
+                            .padding(.vertical, Theme.Space.m)
+                        }
+                        .frame(maxHeight: 440)
+                        .fixedSize(horizontal: false, vertical: true)
+                        // Results swap instantly as you type.
+                        .transaction { $0.animation = nil }
+                    }
                 }
+                .frame(width: min(680, max(520, g.size.width * 0.6)))
+                .floatingSheet()
+                .appearEffect(scale: 0.98, y: -6, animation: Motion.barIn)
+                .padding(.top, max(72, g.size.height * 0.15))
             }
-            .frame(width: 640)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.regularMaterial))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.primary.opacity(0.1)))
-            .shadow(color: .black.opacity(0.25), radius: 30, y: 10)
-            .padding(.top, 110)
         }
-        .transaction { $0.animation = nil }
     }
 }
 
 struct SuggestionRow: View {
     let s: Suggestion
     let selected: Bool
+    @Environment(\.spaceAccent) private var accent
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Theme.Space.l) {
             Image(systemName: s.icon)
-                .font(.system(size: 12))
-                .foregroundStyle(selected ? Color.white : Color.secondary)
-                .frame(width: 18)
+                .font(.system(size: 13))
+                .foregroundStyle(selected ? .primary : .secondary)
+                .frame(width: 20)
             VStack(alignment: .leading, spacing: 1) {
-                Text(s.title).font(.system(size: 13)).lineLimit(1)
-                    .foregroundStyle(selected ? Color.white : Color.primary)
+                Text(s.title).font(Theme.Font.row).lineLimit(1)
+                    .foregroundStyle(.primary)
                 if !s.subtitle.isEmpty {
-                    Text(s.subtitle).font(.system(size: 11)).lineLimit(1)
-                        .foregroundStyle(selected ? Color.white.opacity(0.8) : Color.secondary)
+                    Text(s.subtitle).font(Theme.Font.caption).lineLimit(1)
+                        .foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: 0)
+            Image(systemName: "return")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .opacity(selected ? 1 : 0)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 8).fill(selected ? Color.accentColor : .clear))
-        .padding(.horizontal, 6)
+        .padding(.horizontal, Theme.Space.m + 2)
+        .frame(minHeight: 36)
+        .padding(.vertical, 2)
+        // The selected row is tinted with the space's colour, quietly, with the text left as it is.
+        .background(Theme.Radius.shape(Theme.Radius.row).fill(selected ? accent.opacity(0.16) : .clear))
+        .padding(.horizontal, Theme.Space.m)
         .contentShape(Rectangle())
     }
 }
@@ -262,7 +273,7 @@ struct CommandField: NSViewRepresentable {
         f.isBordered = false
         f.drawsBackground = false
         f.focusRingType = .none
-        f.font = .systemFont(ofSize: 18)
+        f.font = Theme.Font.fieldNS
         f.placeholderString = "Search or enter address"
         f.delegate = context.coordinator
         f.stringValue = text
