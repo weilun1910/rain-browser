@@ -83,6 +83,8 @@ if args.contains("--granola-dry-run") { exit(GranolaSource.dryRun()) }
 
 // --reduce-motion: behave as if Reduce Motion were on, for checking it without changing System Settings.
 if args.contains("--reduce-motion") { Motion.forceReduce = true }
+// --reduce-transparency: the glass falls back to its solid surfaces, as it does when Reduce Transparency is on.
+if args.contains("--reduce-transparency") { Theme.GlassStyle.forceReduceTransparency = true }
 
 // --data-dir <dir> runs the app on its own support folder and its own WebKit store, so test
 // and demo runs never read or write the real profile.
@@ -96,7 +98,7 @@ if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
 if args.contains("--shelf-demo") { MainActor.assumeIsolated { BrowserModel.useEphemeralStore = true } }
 
 let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--workdir", "--extract-check", "--data-dir",
-                          "--render-art", "--render-review", "--profile", "--query", "--motion-tour", "--reduce-motion",
+                          "--render-art", "--render-review", "--profile", "--query", "--motion-tour", "--reduce-motion", "--reduce-transparency",
                           "--eval", "--models-dir", "--verbose", "--notion-dry-run", "--granola-dry-run", "--download-models", "--scale",
                           "--mcp", "--mcp-fixture", "--graph-bench", "--shelf-demo"]
 if let unknown = args.dropFirst().first(where: { $0.hasPrefix("--") && !known.contains($0) }) {
