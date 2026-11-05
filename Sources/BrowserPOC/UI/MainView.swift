@@ -17,27 +17,121 @@ struct VisualEffect: NSViewRepresentable {
 struct MainView: View {
     @EnvironmentObject var model: BrowserModel
     @ObservedObject var settings = Settings.shared
+    @ObservedObject var prefs = BrowserPrefs.shared
+    /// Compact mode: the sidebar is showing because the pointer reached the edge.
+    @State private var peeking = false
+    @State private var hideWork: DispatchWorkItem?
+
+    static let sidebarWidth: CGFloat = Theme.Space.sidebarWidth
+    static let panelWidth: CGFloat = Theme.Space.panelWidth
 
     @MainActor static func host(_ model: BrowserModel) -> NSView {
         NSHostingView(rootView: MainView().environmentObject(model))
     }
 
+    var hidden: Bool { prefs.value.sidebarHidden }
+    var right: Bool { prefs.value.sidebarOnRight }
+
     var body: some View {
         HStack(spacing: 0) {
-            LeftSidebar()
-                .frame(width: 252)
+            if right { panel(leading: true) } else { sidebarSlot }
             ContentArea()
-                .padding(.vertical, 8)
-                .padding(.trailing, settings.published.rightPanelOpen ? 0 : 8)
-            if settings.published.rightPanelOpen {
-                RightPanel()
-                    .frame(width: 300)
-            }
+                .padding(.vertical, Theme.Space.windowMargin)
+                .padding(.top, right && !hidden ? 22 : 0)
+                .padding(.leading, (hidden && !right) || (right && !settings.published.rightPanelOpen) ? Theme.Space.windowMargin : 0)
+                .padding(.trailing, (hidden && right) || (!right && !settings.published.rightPanelOpen) ? Theme.Space.windowMargin : 0)
+            if right { sidebarSlot } else { panel(leading: false) }
         }
-        .background(VisualEffect().ignoresSafeArea())
-        .overlay { CommandBarOverlay(bar: model.bar) }
+        // The frame: neutral grey with the space's colour on the sidebar's side, fading across.
+        .background(SpaceTintBackground(hex: model.currentSpace?.color,
+                                        sidebarWidth: hidden ? 0 : Self.sidebarWidth, fromTrailing: right))
+        .overlay(alignment: right ? .trailing : .leading) { compactSidebar }
+        .overlay {
+            CommandBarOverlay(bar: model.bar,
+                              leadingClear: hidden || right ? 0 : Self.sidebarWidth,
+                              trailingClear: hidden || !right ? 0 : Self.sidebarWidth)
+        }
+        .overlay { if let s = model.switcher { SwitcherOverlay(state: s) } }
+        .overlay { StartupOverlayHost() }
+        .background(TrafficLights(hidden: hidden && !peeking))
+        .spaceTint(model.currentSpace?.color)
         .ignoresSafeArea()
         .frame(minWidth: 900, minHeight: 560)
+        .motion(Motion.panel, value: hidden)
+        .motion(Motion.panel, value: right)
+        .motion(Motion.panel, value: settings.published.rightPanelOpen)
+    }
+
+    @ViewBuilder var sidebarSlot: some View {
+        if !hidden {
+            LeftSidebar().frame(width: Self.sidebarWidth)
+                .transition(Motion.Transitions.panel(edge: right ? .trailing : .leading))
+        }
+    }
+
+    @ViewBuilder func panel(leading: Bool) -> some View {
+        if settings.published.rightPanelOpen {
+            // On the left it starts below the window buttons.
+            RightPanel().frame(width: Self.panelWidth).padding(.top, leading ? 24 : 0)
+                .transition(Motion.Transitions.panel(edge: leading ? .leading : .trailing))
+        }
+    }
+
+    /// Compact mode: a thin edge that brings the sidebar back as an overlay. It hides one second
+    /// after the pointer leaves, like Zen.
+    @ViewBuilder var compactSidebar: some View {
+        if hidden {
+            ZStack(alignment: right ? .trailing : .leading) {
+                Color.clear.frame(width: 6).contentShape(Rectangle())
+                    .onHover { if $0 { show() } }
+                if peeking {
+                    // The sidebar floats over the page on the space's colour, like Zen's compact mode.
+                    LeftSidebar()
+                        .frame(width: Self.sidebarWidth)
+                        .background(
+                            ZStack {
+                                Theme.Palette.sidebarColor(model.currentSpace?.color)
+                                GrainOverlay()
+                            }
+                            .clipShape(Theme.Radius.shape(Theme.Radius.card))
+                            .themeShadow(.floating)
+                        )
+                        .overlay(Theme.Radius.shape(Theme.Radius.card).strokeBorder(Theme.Palette.hairline, lineWidth: 0.5))
+                        .clipShape(Theme.Radius.shape(Theme.Radius.card))
+                        .padding(Theme.Space.windowMargin)
+                        .onHover { inside in if inside { show() } else { scheduleHide() } }
+                        .transition(Motion.Transitions.panel(edge: right ? .trailing : .leading))
+                }
+            }
+            .frame(maxHeight: .infinity)
+        }
+    }
+
+    func show() {
+        hideWork?.cancel()
+        if !peeking { Motion.run(Motion.panel) { peeking = true } }
+    }
+
+    func scheduleHide() {
+        hideWork?.cancel()
+        let w = DispatchWorkItem { Motion.run(Motion.remove) { peeking = false } }
+        hideWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: w)
+    }
+}
+
+/// Hides the window buttons in compact mode, so they don't sit on top of the page.
+struct TrafficLights: NSViewRepresentable {
+    let hidden: Bool
+    func makeNSView(context: Context) -> NSView { NSView() }
+    func updateNSView(_ v: NSView, context: Context) {
+        DispatchQueue.main.async {
+            for b in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+                v.window?.standardWindowButton(b)?.isHidden = hidden
+            }
+            // The quiet dots go with them.
+            if let w = v.window { WindowChrome.setTrafficLightsHidden(w, hidden) }
+        }
     }
 }
 
@@ -52,8 +146,11 @@ struct WindowDragArea: View {
 
 struct CommandBarOverlay: View {
     @ObservedObject var bar: CommandBar
+    var leadingClear: CGFloat = 0
+    var trailingClear: CGFloat = 0
     var body: some View {
-        if bar.isOpen { CommandBarView(bar: bar) }
+        // Always present: the backdrop and the panel come and go inside it on their own timings.
+        CommandBarView(bar: bar, leadingClear: leadingClear, trailingClear: trailingClear)
     }
 }
 
@@ -61,29 +158,72 @@ struct ContentArea: View {
     @EnvironmentObject var model: BrowserModel
     @ObservedObject var settings = Settings.shared
 
-    @State private var dropSide: PaneSide?
+    @State private var dropTarget: DropTarget?
+    @State private var frames: [UUID: CGRect] = [:]
+    @Environment(\.spaceAccent) private var spaceAccent
 
     var body: some View {
         GeometryReader { g in
             ZStack {
-                if let sp = model.currentSplit, let l = model.tab(sp.left), let r = model.tab(sp.right) {
-                    SplitPanes(split: sp, left: l, right: r, width: g.size.width)
-                } else {
-                    PaneView(tab: model.currentTab).paneCard()
-                }
-                if let side = dropSide {
-                    HStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 9).fill(Color.accentColor.opacity(side == .left ? 0.12 : 0))
-                        RoundedRectangle(cornerRadius: 9).fill(Color.accentColor.opacity(side == .right ? 0.12 : 0))
+                Group {
+                    if let sp = model.currentSplit, sp.items.allSatisfy({ model.tab($0) != nil }) {
+                        SplitPanes(split: sp)
+                    } else {
+                        PaneView(tab: model.currentTab).paneCard()
                     }
-                    .allowsHitTesting(false)
+                }
+                .relatedShelf(frame: RelatedShelf.paneFrame(model, frames: frames, size: g.size))
+                // Under Peek the page settles back a touch and dims, like Zen's Glance.
+                .scaleEffect(model.peek == nil || Motion.reduceMotion ? 1 : 0.985)
+                .opacity(model.peek == nil ? 1 : 0.7)
+                .motion(Motion.peek, value: model.peek == nil)
+                if let t = dropTarget {
+                    Theme.Radius.shape(Theme.Radius.card)
+                        .fill(spaceAccent.opacity(0.12))
+                        .overlay(Theme.Radius.shape(Theme.Radius.card).strokeBorder(spaceAccent.opacity(0.5), lineWidth: 1))
+                        .frame(width: t.preview.width, height: t.preview.height)
+                        .position(x: t.preview.midX, y: t.preview.midY)
+                        .allowsHitTesting(false)
+                        .motion(Motion.hover, value: t)
+                }
+                if model.find.visible, model.currentWebTab != nil {
+                    FindBar()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                        .padding(.top, findTop)
+                        .padding(.trailing, findTrailing(width: g.size.width))
+                }
+                if let p = model.peek {
+                    PeekOverlay(peek: p).id(p.tab.id)
+                }
+                if let t = model.toastState {
+                    ToastView(toast: t)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                        .padding(.bottom, 18 + RelatedShelf.toastLift(model))
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .id(t.id)
                 }
                 if !settings.published.firstRunDone {
-                    FirstRunPanel().clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    FirstRunPanel().clipShape(Theme.Radius.shape(Theme.Radius.card))
                 }
             }
-            .onDrop(of: [ItemDrag.type], delegate: PaneDropDelegate(width: g.size.width, side: $dropSide, model: model))
+            .motion(Motion.toast, value: model.toastState)
+            .coordinateSpace(name: "content")
+            .onPreferenceChange(PaneFramesKey.self) { frames = $0 }
+            .onDrop(of: [ItemDrag.type], delegate: ContentDropDelegate(frames: model.currentSplit == nil ? [:] : frames,
+                                                                      bounds: CGRect(origin: .zero, size: g.size),
+                                                                      target: $dropTarget, model: model))
         }
+    }
+
+    /// The find bar sits at the top right of the focused pane.
+    var findTop: CGFloat {
+        if let id = model.currentTab?.id, let f = frames[id], model.currentSplit != nil { return f.minY + 10 }
+        return 10
+    }
+
+    func findTrailing(width: CGFloat) -> CGFloat {
+        if let id = model.currentTab?.id, let f = frames[id], model.currentSplit != nil { return width - f.maxX + 10 }
+        return 10
     }
 }
 
@@ -117,24 +257,26 @@ struct WebArea: View {
     var body: some View {
         ZStack(alignment: .top) {
             WebContainer(tab: tab)
-            if tab.isLoading && tab.progress < 1 {
-                GeometryReader { g in
-                    Rectangle()
-                        .fill(Color.accentColor.opacity(0.7))
-                        .frame(width: max(8, g.size.width * tab.progress), height: 2)
-                }
-                .frame(height: 2)
-                .allowsHitTesting(false)
-            }
+            TintedProgressLine(progress: tab.progress, visible: tab.isLoading && tab.progress < 1)
             if let err = tab.loadError {
-                VStack(spacing: 10) {
-                    Text("Couldn't open this page").font(.title3.weight(.semibold))
-                    Text(err).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 420)
+                VStack(spacing: Theme.Space.m) {
+                    Text("Couldn't open this page")
+                        .font(Theme.Font.display(22))
+                        .displayTracking()
+                    Text(err)
+                        .font(Theme.Font.row)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(3)
+                        .frame(maxWidth: 420)
                     Button("Try again") { model.reload() }
+                        .controlSize(.large)
+                        .padding(.top, Theme.Space.m)
                 }
-                .padding(28)
+                .padding(Theme.Space.x4)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(nsColor: .textBackgroundColor))
+                .background(Theme.Palette.card)
+                .transition(.opacity)
             }
         }
     }
@@ -144,8 +286,9 @@ final class WebHostView: NSView {
     private weak var current: WKWebView?
 
     func show(_ wv: WKWebView) {
-        guard current !== wv else { return }
-        current?.removeFromSuperview()
+        // A split relayout can move this web view into another host, so check where it is too.
+        guard current !== wv || wv.superview !== self else { return }
+        if let c = current, c !== wv, c.superview === self { c.removeFromSuperview() }
         wv.frame = bounds
         wv.autoresizingMask = [.width, .height]
         addSubview(wv)
@@ -167,18 +310,34 @@ struct StartView: View {
     @EnvironmentObject var model: BrowserModel
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: Theme.Space.l) {
             Text("Search or enter an address")
-                .font(.title3)
-                .foregroundStyle(.tertiary)
-            HStack(spacing: 18) {
-                Button("New tab") { model.newTabCommand() }
-                Button("New note") { model.newNote() }
+                .font(Theme.Font.display(22))
+                .displayTracking()
+                .foregroundStyle(.secondary)
+            HStack(spacing: Theme.Space.x3) {
+                StartAction(title: "New tab", keys: "\u{2318}T") { model.newTabCommand() }
+                StartAction(title: "New note", keys: "\u{21E7}\u{2318}N") { model.newNote() }
             }
-            .buttonStyle(.link)
-            .font(.callout)
         }
+        .padding(.bottom, 40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct StartAction: View {
+    let title: String
+    let keys: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Theme.Space.s) {
+                Text(title)
+                Text(keys).foregroundStyle(.tertiary)
+            }
+            .font(Theme.Font.row)
+        }
+        .buttonStyle(QuietActionStyle())
     }
 }
 
@@ -188,47 +347,79 @@ struct FirstRunPanel: View {
     @ObservedObject var settings = Settings.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Start with what you've already seen")
-                .font(.title2.weight(.semibold))
-            Text("Cards on the right come from pages and notes you've looked at before. Pick the folders that hold your notes and bring in your Chrome history now, or later in Settings.")
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            VStack(alignment: .leading, spacing: 4) {
-                Button("Import Chrome history") { chrome.start() }
-                    .disabled(chrome.isRunning)
-                Text("Reads a copy of your Chrome history from the last 90 days. Text is fetched without cookies, only for pages you opened at least twice.")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if chrome.phase == .needsPermission {
-                    ChromePermissionHelp()
-                } else if chrome.phase != .idle {
-                    Text(ChromeStatus.text(chrome.phase)).font(.caption).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: Theme.Space.x3) {
+            VStack(alignment: .leading, spacing: Theme.Space.m) {
+                HStack(spacing: Theme.Space.m) {
+                    BrandMark(weight: 0.08, color: .primary, opacity: 0.85)
+                        .frame(width: 24, height: 24)
+                    Wordmark(size: 17)
                 }
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                Button("Choose notes folders...") { SourcesActions.addNotesFolders() }
-                Text("The .md files in these folders become your notes here. You can open and edit them like any note, and new notes go in the first folder.")
-                    .font(.caption).foregroundStyle(.secondary)
+                .padding(.bottom, Theme.Space.s)
+                Text("Start with what you've already seen")
+                    .font(Theme.Font.display(26))
+                    .displayTracking()
+                Text("Cards on the right come from pages and notes you've looked at before. Pick the folders that hold your notes and bring in your Chrome history now, or later in Settings.")
+                    .font(Theme.Font.row)
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
-                if !Settings.shared.value.usesFallbackNotes {
-                    Text(Settings.shared.value.notesFolders.map { URL(fileURLWithPath: $0).lastPathComponent }.joined(separator: ", "))
-                        .font(.caption).foregroundStyle(.secondary)
+            }
+            VStack(alignment: .leading, spacing: Theme.Space.m) {
+                FirstRunStep(title: "Import Chrome history", disabled: chrome.isRunning,
+                             detail: "Reads a copy of your Chrome history from the last 90 days. Text is fetched without cookies, only for pages you opened at least twice.",
+                             action: { chrome.start() }) {
+                    if chrome.phase == .needsPermission {
+                        ChromePermissionHelp()
+                    } else if chrome.phase != .idle {
+                        Text(ChromeStatus.text(chrome.phase)).font(Theme.Font.secondary).foregroundStyle(.secondary)
+                    }
+                }
+                FirstRunStep(title: "Choose notes folders...", disabled: false,
+                             detail: "The .md files in these folders become your notes here. You can open and edit them like any note, and new notes go in the first folder.",
+                             action: { SourcesActions.addNotesFolders() }) {
+                    if !Settings.shared.value.usesFallbackNotes {
+                        Text(Settings.shared.value.notesFolders.map { URL(fileURLWithPath: $0).lastPathComponent }.joined(separator: ", "))
+                            .font(Theme.Font.secondary).foregroundStyle(.secondary)
+                    }
                 }
             }
             HStack {
                 Spacer()
                 Button("Done") { Settings.shared.update { $0.firstRunDone = true } }
                     .keyboardShortcut(.defaultAction)
+                    .controlSize(.large)
             }
         }
-        .padding(24)
-        .frame(width: 460)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(nsColor: .windowBackgroundColor)))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.1)))
-        .shadow(color: .black.opacity(0.15), radius: 20, y: 6)
+        .padding(Theme.Space.x4)
+        .frame(width: 500)
+        .floatingSheet()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black.opacity(0.04))
+        .background(Theme.Palette.card)
+    }
+}
+
+/// One step on the first run panel: a button, what it does, and its status.
+private struct FirstRunStep<Status: View>: View {
+    let title: String
+    let disabled: Bool
+    let detail: String
+    let action: () -> Void
+    @ViewBuilder var status: () -> Status
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            Button(title, action: action)
+                .disabled(disabled)
+            Text(detail)
+                .font(Theme.Font.secondary)
+                .foregroundStyle(.secondary)
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+            status()
+        }
+        .padding(Theme.Space.xl)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Radius.shape(Theme.Radius.card).fill(Theme.Palette.field))
     }
 }
 
@@ -250,12 +441,13 @@ struct ChromePermissionHelp: View {
     @ObservedObject var chrome = ChromeImporter.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
             Text("Browser POC needs your OK to read Chrome's history")
-                .font(.system(size: 12, weight: .semibold))
+                .font(Theme.Font.rowEmphasis)
             Text("macOS asks before one app reads another app's data. If a prompt came up, click Allow, then try again. If you clicked Don't Allow or no prompt came up, open System Settings, go to Privacy & Security, then Files & Folders, find Browser POC and turn on Google Chrome.")
-                .font(.system(size: 12))
+                .font(Theme.Font.secondary)
                 .foregroundStyle(.secondary)
+                .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button("Open System Settings") {
@@ -266,8 +458,9 @@ struct ChromePermissionHelp: View {
                 Button("Try again") { chrome.start() }
             }
         }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
+        .padding(Theme.Space.l)
+        .background(Theme.Radius.shape(Theme.Radius.row).fill(Theme.Palette.sheet))
+        .overlay(Theme.Radius.shape(Theme.Radius.row).strokeBorder(Theme.Palette.hairline, lineWidth: 0.5))
     }
 }
 

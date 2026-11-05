@@ -2,6 +2,20 @@ import Foundation
 
 enum SourceType: String, CaseIterable {
     case web, note, markdown, chrome
+    /// Pages from the Notion desktop app's local cache.
+    case notion
+    /// Google Docs, Sheets and Slides fetched through their text export.
+    case gdocs
+    /// Granola meeting notes, through Granola's MCP server.
+    case granola
+
+    /// Things Felix wrote or that hold his own words, as opposed to pages he read.
+    var isWriting: Bool {
+        switch self {
+        case .note, .markdown, .notion, .gdocs, .granola: return true
+        case .web, .chrome: return false
+        }
+    }
 }
 
 struct DocMeta {
@@ -104,6 +118,16 @@ struct Match {
     var topicTerms: [String]
     var penalized: Bool
     var section: CardSection = .sites
+    /// Round 3: the cross-encoder's score in 0...1, when it ran.
+    var rerank: Double? = nil
+    /// Reciprocal rank fusion score across the retrievers.
+    var fused: Double = 0
+    /// The on-device model's judgment, when it ran: helpful, its confidence (0...1) and its reason.
+    var judgedHelpful: Bool? = nil
+    var judgeConfidence: Double? = nil
+    var judgeReason: String? = nil
+    /// Which retrievers found it: keyword, meaning, names, queries.
+    var foundBy: [String] = []
 }
 
 struct RetrievalResult {
@@ -124,13 +148,16 @@ struct SourceCount {
 final class IndexStore: @unchecked Sendable {
     nonisolated(unsafe) static var shared: IndexStore!
 
-    private let queue = DispatchQueue(label: "local.browserpoc.index")
-    private let db: SQLiteDB
-    /// doc id -> [(passage id, unit vector)]
-    private var vectors: [Int64: [(Int64, [Float])]] = [:]
-    private var dim = 0
+    let queue = DispatchQueue(label: "local.browserpoc.index")
+    let db: SQLiteDB
+    /// embedder -> doc id -> [(passage id, unit vector)]. Vectors from different models are kept apart.
+    var vectorSets: [EmbedderID: [Int64: [(Int64, [Float])]]] = [:]
+    var vectorDims: [EmbedderID: Int] = [:]
+    /// The round 2 pipeline reads the sentence vectors.
+    private var vectors: [Int64: [(Int64, [Float])]] { vectorSets[.sentence] ?? [:] }
+    private var dim: Int { vectorDims[.sentence] ?? 0 }
     /// Bumped on every write so the UI can tell the index changed.
-    private(set) var generation = 0
+    var generation = 0
 
     init(url: URL) throws {
         Paths.ensure(url.deletingLastPathComponent())
@@ -202,7 +229,28 @@ final class IndexStore: @unchecked Sendable {
               text TEXT NOT NULL,
               PRIMARY KEY(doc_id, context_key)
             );
+            CREATE TABLE IF NOT EXISTS visits(
+              doc_id INTEGER NOT NULL,
+              at REAL NOT NULL,
+              kind TEXT NOT NULL,
+              during TEXT
+            );
+            CREATE INDEX IF NOT EXISTS visits_doc ON visits(doc_id);
+            CREATE TABLE IF NOT EXISTS topics(
+              doc_id INTEGER NOT NULL,
+              topic TEXT NOT NULL,
+              source TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS topics_doc ON topics(doc_id);
+            CREATE INDEX IF NOT EXISTS topics_topic ON topics(topic);
+            CREATE TABLE IF NOT EXISTS source_state(source TEXT PRIMARY KEY, value TEXT NOT NULL);
             """)
+            // Round 3: every vector records the model that made it.
+            let cols = try db.query("PRAGMA table_info(passages)") { $0.text(1) }
+            if !cols.contains("vec_model") {
+                try db.exec("ALTER TABLE passages ADD COLUMN vec_model TEXT")
+                try db.exec("UPDATE passages SET vec_model = 'nlsent' WHERE vec IS NOT NULL")
+            }
             // Notes from chosen folders used to be a separate read-only source.
             try db.exec("UPDATE docs SET source = 'note' WHERE source = 'markdown'")
             try loadVectors()
@@ -210,24 +258,33 @@ final class IndexStore: @unchecked Sendable {
     }
 
     private func loadVectors() throws {
-        vectors = [:]
-        let rows = try db.query("SELECT id, doc_id, vec FROM passages WHERE vec IS NOT NULL") { s in
-            (s.int(0), s.int(1), s.blob(2))
+        vectorSets = [:]
+        vectorDims = [:]
+        let rows = try db.query("SELECT id, doc_id, vec, vec_model FROM passages WHERE vec IS NOT NULL") { s in
+            (s.int(0), s.int(1), s.blob(2), s.optText(3))
         }
-        for (pid, did, blob) in rows {
-            guard let blob else { continue }
-            let v = Embedder.decode(blob)
-            if dim == 0 { dim = v.count }
-            guard v.count == dim else { continue }
-            vectors[did, default: []].append((pid, v))
+        for (pid, did, blob, model) in rows {
+            guard let blob, let m = EmbedderID(rawValue: model ?? "nlsent") else { continue }
+            addVector(Embedder.decode(blob), pid: pid, did: did, model: m)
         }
+    }
+
+    /// Keeps one dimension per model, so a stray vector can't break a scan.
+    func addVector(_ v: [Float], pid: Int64, did: Int64, model: EmbedderID) {
+        if vectorDims[model] == nil { vectorDims[model] = v.count }
+        guard v.count == vectorDims[model] else { return }
+        vectorSets[model, default: [:]][did, default: []].append((pid, v))
+    }
+
+    func removeVectors(did: Int64) {
+        for k in vectorSets.keys { vectorSets[k]?[did] = nil }
     }
 
     // MARK: - Reads
 
-    private static let metaColumns = "id, key, source, url, title, description, project, root, first_seen, last_seen, visit_count, dwell, last_opened, has_text, mtime"
+    static let metaColumns = "id, key, source, url, title, description, project, root, first_seen, last_seen, visit_count, dwell, last_opened, has_text, mtime"
 
-    private static func meta(_ s: Statement) -> DocMeta {
+    static func meta(_ s: Statement) -> DocMeta {
         DocMeta(id: s.int(0), key: s.text(1), source: SourceType(rawValue: s.text(2)) ?? .web,
                 url: s.text(3), title: s.text(4), description: s.text(5), project: s.optText(6),
                 root: s.optText(7), firstSeen: s.double(8), lastSeen: s.double(9),
@@ -317,7 +374,7 @@ final class IndexStore: @unchecked Sendable {
         return WritingKey.section(source: m.source, url: m.url, typed: typedChars(key: key), override: override(key: key), writingSites: writingSites)
     }
 
-    private func sectionMap(_ writingSites: [String]) throws -> [Int64: CardSection] {
+    func sectionMap(_ writingSites: [String]) throws -> [Int64: CardSection] {
         let typed = Dictionary(try db.query("SELECT key, chars FROM typing") { ($0.text(0), Int($0.int(1))) }, uniquingKeysWith: { a, _ in a })
         let over = Dictionary(try db.query("SELECT key, section FROM overrides") { ($0.text(0), CardSection(rawValue: $0.text(1))) }, uniquingKeysWith: { a, _ in a })
         var out: [Int64: CardSection] = [:]
@@ -640,10 +697,12 @@ final class IndexStore: @unchecked Sendable {
             do {
                 try db.exec("""
                 DELETE FROM docs; DELETE FROM passages; DELETE FROM pfts; DELETE FROM entities;
-                DELETE FROM dismissals; DELETE FROM reasons;
+                DELETE FROM dismissals; DELETE FROM reasons; DELETE FROM visits; DELETE FROM topics;
+                DELETE FROM source_state;
                 """)
                 try? db.exec("VACUUM")
-                vectors = [:]
+                vectorSets = [:]
+                vectorDims = [:]
                 generation += 1
             } catch {
                 appLog.error("clear failed: \(String(describing: error), privacy: .public)")
@@ -668,30 +727,29 @@ final class IndexStore: @unchecked Sendable {
         try db.run("DELETE FROM entities WHERE doc_id = ?", [id])
         try db.run("DELETE FROM dismissals WHERE doc_id = ?", [id])
         try db.run("DELETE FROM reasons WHERE doc_id = ?", [id])
+        try db.run("DELETE FROM visits WHERE doc_id = ?", [id])
+        try db.run("DELETE FROM topics WHERE doc_id = ?", [id])
         try db.run("DELETE FROM docs WHERE id = ?", [id])
-        vectors[id] = nil
+        removeVectors(did: id)
     }
 
-    private func replacePassages(docID: Int64, title: String, analysis: Analysis) throws {
+    func replacePassages(docID: Int64, title: String, analysis: Analysis) throws {
         let pids = try db.query("SELECT id FROM passages WHERE doc_id = ?", [docID]) { $0.int(0) }
         for pid in pids { try db.run("DELETE FROM pfts WHERE rowid = ?", [pid]) }
         try db.run("DELETE FROM passages WHERE doc_id = ?", [docID])
         try db.run("DELETE FROM entities WHERE doc_id = ?", [docID])
-        // Old reasons were written for old text.
+        // Old reasons and topics were written for old text.
         try db.run("DELETE FROM reasons WHERE doc_id = ?", [docID])
-        var vecs: [(Int64, [Float])] = []
+        try db.run("DELETE FROM topics WHERE doc_id = ? AND source = 'model'", [docID])
+        removeVectors(did: docID)
         for (i, p) in analysis.passages.enumerated() {
             let v = i < analysis.vectors.count ? analysis.vectors[i] : nil
-            try db.run("INSERT INTO passages(doc_id, idx, text, vec) VALUES(?,?,?,?)",
-                       [docID, i, p, v.map(Embedder.encode)])
+            try db.run("INSERT INTO passages(doc_id, idx, text, vec, vec_model) VALUES(?,?,?,?,?)",
+                       [docID, i, p, v.map(Embedder.encode), v == nil ? nil : analysis.vectorModel.rawValue])
             let pid = db.lastInsertRowID
             try db.run("INSERT INTO pfts(rowid, title, body) VALUES(?,?,?)", [pid, title, p])
-            if let v {
-                if dim == 0 { dim = v.count }
-                if v.count == dim { vecs.append((pid, v)) }
-            }
+            if let v { addVector(v, pid: pid, did: docID, model: analysis.vectorModel) }
         }
-        vectors[docID] = vecs.isEmpty ? nil : vecs
         for e in analysis.entities {
             try db.run("INSERT INTO entities(doc_id, name, display, kind, count) VALUES(?,?,?,?,?)",
                        [docID, e.name, e.display, e.kind, e.count])

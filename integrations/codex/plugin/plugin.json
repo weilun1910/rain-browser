@@ -1,0 +1,17 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "browser-knowledge",
+  "version": "0.3.0",
+  "description": "Your Browser POC knowledge base in Codex and ChatGPT: search your notes, pages and docs, see how they connect, and know what you're working on now. Proof of concept.",
+  "author": { "name": "Felix Lee" },
+  "repository": "https://github.com/weilun1910/kvbrowser",
+  "keywords": ["knowledge", "notes", "browser", "mcp", "personal context"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Browser knowledge",
+        "shortDescription": "Your notes, reading and connections from the Browser POC"
+      }
+    }
+  }
+}

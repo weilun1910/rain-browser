@@ -9,6 +9,8 @@ enum Indexer {
                           done: (@Sendable () -> Void)? = nil) {
         let settings = Settings.shared.value
         guard URLKey.isIndexableWeb(url), !settings.isExcluded(host: url.host) else { return }
+        // What Felix was doing when he read it, for the reason line later.
+        let during = ActivityTracker.shared.current(excluding: URLKey.key(for: url))
         work.async {
             let key = URLKey.key(for: url)
             let now = Date().timeIntervalSince1970
@@ -18,6 +20,7 @@ enum Indexer {
                               description: description, body: trimmed, firstSeen: now, lastSeen: now,
                               visitCount: 1, dwell: dwell)
             IndexStore.shared.recordCapture(d, analysis: a)
+            IndexStore.shared.recordVisit(key: key, at: now, kind: "read", during: during)
             done?()
         }
     }
@@ -204,9 +207,15 @@ final class NotesIndexer: @unchecked Sendable {
 final class FolderWatcher {
     private var stream: FSEventStreamRef?
     private let callback: () -> Void
+    /// The watched folders as FSEvents reports them (symlinks resolved), each ending in "/".
+    private let roots: [String]
 
     init?(paths: [String], callback: @escaping () -> Void) {
         self.callback = callback
+        self.roots = paths.map {
+            let r = URL(fileURLWithPath: $0).resolvingSymlinksInPath().standardizedFileURL.path
+            return r.hasSuffix("/") ? r : r + "/"
+        }
         guard !paths.isEmpty else { return nil }
         var ctx = FSEventStreamContext(version: 0, info: nil, retain: nil, release: nil, copyDescription: nil)
         ctx.info = Unmanaged.passUnretained(self).toOpaque()
@@ -215,7 +224,10 @@ final class FolderWatcher {
             let me = Unmanaged<FolderWatcher>.fromOpaque(info).takeUnretainedValue()
             let list = unsafeBitCast(paths, to: NSArray.self) as? [String] ?? []
             let relevant = list.prefix(count).contains { p in
-                let comps = p.split(separator: "/")
+                // Only the part inside a notes folder decides whether a change counts. A notes
+                // folder that itself sits under a hidden or .nosync folder still gets live updates.
+                let rel = me.roots.first(where: { p.hasPrefix($0) }).map { String(p.dropFirst($0.count)) } ?? p
+                let comps = rel.split(separator: "/")
                 if comps.contains(where: { $0.hasPrefix(".") || $0 == "node_modules" || $0.lowercased().hasSuffix(".nosync") }) { return false }
                 let ext = (p as NSString).pathExtension.lowercased()
                 return ext == "md" || ext.isEmpty

@@ -1,0 +1,57 @@
+{
+  "manifest_version": "0.3",
+  "name": "browser-knowledge",
+  "display_name": "Browser POC knowledge",
+  "version": "0.3.0",
+  "description": "Your Browser POC knowledge base in Claude: notes, pages, docs, connections and what you're working on now. Proof of concept.",
+  "long_description": "Reads the knowledge base the Browser POC app keeps on your Mac: Markdown notes in your notes folders, pages you read, Chrome history, Google Docs and Notion pages, your spaces and folders, and what you have open right now. Everything stays on your Mac. Choose what AI clients can see in the app's Settings, under AI clients. This is a proof of concept, not a finished product.",
+  "author": { "name": "Felix Lee" },
+  "repository": { "type": "git", "url": "https://github.com/weilun1910/kvbrowser" },
+  "server": {
+    "type": "binary",
+    "entry_point": "server/browser-mcp",
+    "mcp_config": {
+      "command": "${__dirname}/server/browser-mcp",
+      "args": [],
+      "env": {
+        "BROWSER_POC_APP": "${user_config.app_path}",
+        "BROWSER_POC_DATA_DIR": "${user_config.data_dir}"
+      }
+    }
+  },
+  "user_config": {
+    "app_path": {
+      "type": "string",
+      "title": "Browser POC app",
+      "description": "Path to BrowserPOC.app. Leave empty to find it automatically.",
+      "required": false,
+      "default": ""
+    },
+    "data_dir": {
+      "type": "string",
+      "title": "Profile folder",
+      "description": "Only for a separate profile started with --data-dir. Leave empty for your normal profile.",
+      "required": false,
+      "default": ""
+    }
+  },
+  "tools": [
+    { "name": "overview", "description": "What's in the knowledge base and what AI clients can see" },
+    { "name": "search", "description": "Search notes, pages and docs" },
+    { "name": "get_item", "description": "Read one item" },
+    { "name": "related", "description": "Related items, ranked like the browser's Related panel" },
+    { "name": "connections", "description": "Graph neighbours with connection types and reasons" },
+    { "name": "current_context", "description": "What you have open right now" },
+    { "name": "recent_activity", "description": "What you opened, read and edited lately" },
+    { "name": "list_spaces", "description": "Spaces, pins and folders" },
+    { "name": "list_notes", "description": "Notes in your notes folders" },
+    { "name": "read_note", "description": "A note's current Markdown" }
+  ],
+  "prompts": [
+    { "name": "what_do_i_know", "description": "Everything you know about a topic, with citations", "arguments": ["topic"], "text": "What do I know about ${arguments.topic}? Use the Browser knowledge tools and cite every item." },
+    { "name": "catch_me_up", "description": "What you're working on and what you did lately", "text": "Catch me up on what I'm doing, using current_context and recent_activity." },
+    { "name": "tidy_my_notes", "description": "Notes that should link to each other, duplicates and loose ends", "arguments": ["topic"], "text": "Help me keep my notes on ${arguments.topic} in good shape. Propose changes first and only write after I say yes." }
+  ],
+  "keywords": ["knowledge", "notes", "browser", "personal context"],
+  "compatibility": { "platforms": ["darwin"] }
+}

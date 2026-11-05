@@ -2,7 +2,8 @@ import AppKit
 import WebKit
 
 enum TabKind: String, Codable {
-    case web, note, file
+    /// `app` is a page the app draws itself, addressed as browser://<host>. See AppPages.
+    case web, note, file, app
 }
 
 struct PageExtract {
@@ -21,8 +22,22 @@ final class Tab: ObservableObject, Identifiable {
     @Published var title: String
     @Published var isPinned: Bool
     @Published var folderID: UUID?
-    /// The space this item lives in.
+    /// The space this item lives in. Essentials show in every space.
     var spaceID: UUID?
+    /// In the Essentials grid at the top of the sidebar, shared by every space.
+    @Published var isEssential = false
+    /// The address a pinned tab or Essential goes back to.
+    @Published var pinnedURL: URL?
+    /// A name you gave it. Shown instead of the page title.
+    @Published var customTitle: String?
+    /// Sort key inside its sidebar section. Lower comes first.
+    var order: Double = 0
+    /// When it was last on screen, for auto-archive.
+    var lastActiveAt = Date()
+    @Published var isMuted = false
+    /// Set from the page: something is playing, and whether a video is among it.
+    @Published var mediaPlaying = false
+    @Published var hasVideo = false
     @Published var isLoading = false
     @Published var progress: Double = 0
     @Published var canGoBack = false
@@ -43,6 +58,8 @@ final class Tab: ObservableObject, Identifiable {
     var contextWork: DispatchWorkItem?
     var activeSince: Date?
     var activeKey: String?
+    /// The last session state written to disk, to skip rewriting the same bytes.
+    var savedSessionHash: Int?
 
     init(id: UUID = UUID(), kind: TabKind = .web, url: URL?, title: String = "", isPinned: Bool = false,
          folderID: UUID? = nil, createdAt: Date = Date()) {
@@ -55,7 +72,13 @@ final class Tab: ObservableObject, Identifiable {
         self.createdAt = createdAt
     }
 
+    var isNote: Bool { kind == .note || kind == .file }
+    var isWeb: Bool { kind == .web }
+    var isApp: Bool { kind == .app }
+
     var displayTitle: String {
+        if let c = customTitle, !c.isEmpty { return c }
+        if isApp { return AppPages.page(for: url)?.title ?? (title.isEmpty ? "Page" : title) }
         if !title.isEmpty { return title }
         if kind != .web, let url { return url.deletingPathExtension().lastPathComponent }
         if kind != .web { return "Note" }
@@ -66,10 +89,30 @@ final class Tab: ObservableObject, Identifiable {
     var isBlank: Bool { kind == .web && url == nil && webView?.url == nil }
     var isLoaded: Bool { webView != nil }
 
+    /// Keeps a pinned address: pinned web tabs and Essentials.
+    var keepsPinnedURL: Bool { kind == .web && (isPinned || isEssential) }
+
+    /// A pinned tab or Essential that has wandered off the address it was pinned at.
+    var isAwayFromPin: Bool {
+        guard keepsPinnedURL, let p = pinnedURL, let u = url else { return false }
+        return !Self.samePage(p, u)
+    }
+
+    /// Same page, ignoring the fragment and a trailing slash.
+    static func samePage(_ a: URL, _ b: URL) -> Bool {
+        func norm(_ u: URL) -> String {
+            var s = u.absoluteString
+            if let h = s.firstIndex(of: "#") { s = String(s[..<h]) }
+            if s.hasSuffix("/") { s.removeLast() }
+            return s.lowercased()
+        }
+        return norm(a) == norm(b)
+    }
+
     func ensureWebView(configuration: WKWebViewConfiguration? = nil) -> WKWebView {
         if let webView { return webView }
         guard let model else { fatalError("tab without model") }
-        let wv = WKWebView(frame: .zero, configuration: configuration ?? model.webConfig)
+        let wv = WKWebView(frame: .zero, configuration: configuration ?? model.configuration(for: self))
         wv.isInspectable = true
         wv.allowsBackForwardNavigationGestures = true
         wv.allowsMagnification = true
@@ -80,7 +123,12 @@ final class Tab: ObservableObject, Identifiable {
         observers = [
             wv.observe(\.title, options: [.new]) { [weak self] wv, _ in
                 let t = wv.title ?? ""
-                Task { @MainActor in if !t.isEmpty { self?.title = t; self?.model?.scheduleSave() } }
+                Task { @MainActor in
+                    guard let self, !t.isEmpty else { return }
+                    self.title = t
+                    if let u = wv.url { HistoryStore.shared.updateTitle(url: u, title: t) }
+                    self.model?.scheduleSave()
+                }
             },
             wv.observe(\.url, options: [.new]) { [weak self] wv, _ in
                 let u = wv.url
@@ -104,8 +152,15 @@ final class Tab: ObservableObject, Identifiable {
             },
         ]
         webView = wv
-        if kind == .web, let url, configuration == nil {
-            wv.load(URLRequest(url: url))
+        if kind == .web, configuration == nil {
+            // Back and forward come back from the saved session, which also loads the page.
+            if let data = SessionFiles.read(id) {
+                wv.interactionState = data
+                savedSessionHash = data.hashValue
+                if wv.url == nil, let url { wv.load(URLRequest(url: url)) }
+            } else if let url {
+                wv.load(URLRequest(url: url))
+            }
         }
         return wv
     }
@@ -117,7 +172,18 @@ final class Tab: ObservableObject, Identifiable {
         model?.tabURLChanged(self, from: old)
     }
 
-    func unload() {
+    /// Writes the back and forward list to disk when it changed.
+    func saveSession() {
+        guard kind == .web, let wv = webView, wv.url != nil, let data = wv.interactionState as? Data else { return }
+        let h = data.hashValue
+        guard h != savedSessionHash else { return }
+        savedSessionHash = h
+        SessionFiles.write(data, for: id)
+    }
+
+    /// Lets go of the web view. The session is saved first unless `keepSession` is false.
+    func unload(keepSession: Bool = true) {
+        if keepSession { saveSession() } else { SessionFiles.delete(id); savedSessionHash = nil }
         model?.endDwell(self)
         captureWork?.cancel()
         contextWork?.cancel()
@@ -131,6 +197,8 @@ final class Tab: ObservableObject, Identifiable {
         coordinator = nil
         isLoading = false
         progress = 0
+        mediaPlaying = false
+        hasVideo = false
     }
 
     func load(_ u: URL) {
@@ -140,6 +208,7 @@ final class Tab: ObservableObject, Identifiable {
         if let webView {
             webView.load(URLRequest(url: u))
         } else {
+            SessionFiles.delete(id)
             _ = ensureWebView() // loads `url` when it creates the view
         }
     }
@@ -190,10 +259,15 @@ final class WebCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDown
             decisionHandler(.cancel)
             return
         }
-        if navigationAction.navigationType == .linkActivated,
-           navigationAction.modifierFlags.contains(.command) {
-            model?.newTab(url: url, select: navigationAction.modifierFlags.contains(.shift))
+        // The graph's navigation edges: page A led to page B, however the link opens.
+        if navigationAction.navigationType == .linkActivated, navigationAction.targetFrame?.isMainFrame != false {
+            GraphRecorder.linkFollowed(from: webView.url, to: url)
+        }
+        if navigationAction.navigationType == .linkActivated, navigationAction.targetFrame?.isMainFrame != false,
+           let tab, let model, let route = LinkRouting.route(for: url, flags: navigationAction.modifierFlags, from: tab,
+                                                             peekForPins: BrowserPrefs.shared.value.peekForPinnedLinks) {
             decisionHandler(.cancel)
+            model.routeLink(url, route, from: tab)
             return
         }
         decisionHandler(.allow)
@@ -256,7 +330,9 @@ final class WebCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDown
     }
 
     func webViewDidClose(_ webView: WKWebView) {
-        if let tab { model?.close(tab) }
+        guard let tab, let model else { return }
+        if model.peek?.tab === tab { model.closePeek(); return }
+        model.close(tab)
     }
 
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
@@ -311,23 +387,49 @@ final class WebCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDown
 
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String,
                   completionHandler: @escaping @MainActor (URL?) -> Void) {
-        let dir = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
-        var dest = dir.appendingPathComponent(suggestedFilename)
-        var n = 2
-        let base = dest.deletingPathExtension().lastPathComponent
-        let ext = dest.pathExtension
-        while FileManager.default.fileExists(atPath: dest.path) {
-            dest = dir.appendingPathComponent(ext.isEmpty ? "\(base) \(n)" : "\(base) \(n).\(ext)")
-            n += 1
-        }
-        completionHandler(dest)
+        completionHandler(Downloads.shared.destination(for: download, suggestedFilename: suggestedFilename, source: response.url))
     }
 
     func downloadDidFinish(_ download: WKDownload) {
-        model?.flash("Download finished")
+        Downloads.shared.finished(download)
+        model?.toast("Downloaded \(Downloads.shared.item(for: download)?.filename ?? "the file")")
     }
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
-        model?.flash("Download failed")
+        Downloads.shared.failed(download, error: error)
+        model?.toast("Download failed")
+    }
+}
+
+/// What a link click does, from its modifier keys and the tab it was clicked in.
+@MainActor
+enum LinkRouting {
+    enum Route: Equatable { case backgroundTab, foregroundTab, peek, split }
+
+    /// Arc's meanings: Cmd-click opens a background tab (with Shift, in front), Shift-click opens
+    /// Peek, Option-click opens split view. Links to another site from a pinned tab or Essential
+    /// open in Peek, so the pinned page stays where it was. Nil lets the page navigate as usual.
+    static func route(for url: URL, flags: NSEvent.ModifierFlags, from tab: Tab, peekForPins: Bool) -> Route? {
+        let web = ["http", "https", "file"].contains(url.scheme?.lowercased() ?? "")
+        if flags.contains(.command) { return flags.contains(.shift) ? .foregroundTab : .backgroundTab }
+        if flags.contains(.option) && web { return .split }
+        if flags.contains(.shift) && web { return .peek }
+        if peekForPins && web && tab.keepsPinnedURL, let from = tab.webView?.url ?? tab.url, URLKey.isIndexableWeb(from), !sameSite(from, url) {
+            return .peek
+        }
+        return nil
+    }
+
+    /// Same site means the same registrable-looking domain: the last two labels, or three for
+    /// country domains like co.uk.
+    static func sameSite(_ a: URL, _ b: URL) -> Bool {
+        func site(_ u: URL) -> String {
+            let parts = (u.host ?? "").lowercased().split(separator: ".").map(String.init)
+            guard parts.count > 2, let last = parts.last else { return parts.joined(separator: ".") }
+            let second = parts[parts.count - 2]
+            let country = last.count == 2 && ["co", "com", "org", "net", "ac", "gov", "edu"].contains(second)
+            return parts.suffix(country ? 3 : 2).joined(separator: ".")
+        }
+        return site(a) == site(b)
     }
 }

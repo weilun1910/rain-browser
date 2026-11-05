@@ -3,4 +3,5 @@ build/
 *.app
 .DS_Store
 .swiftpm/
+.claude/
 tmp/

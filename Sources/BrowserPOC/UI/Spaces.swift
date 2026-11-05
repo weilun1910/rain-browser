@@ -23,9 +23,10 @@ struct SpaceBar: View {
     @EnvironmentObject var model: BrowserModel
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 3) {
             ForEach(Array(model.spaces.enumerated()), id: \.element.id) { i, sp in
                 SpaceButton(space: sp, index: i)
+                    .transition(Motion.Transitions.tabRow)
             }
             SmallIconButton(symbol: "plus", help: "New space") { model.promptNewSpace() }
         }
@@ -41,17 +42,29 @@ struct SpaceButton: View {
     var current: Bool { model.currentSpaceID == space.id }
 
     var body: some View {
+        // Only the current space shows its colour. The others are grey until you hover them, like Zen.
         SpaceIcon(icon: space.icon)
-            .foregroundStyle(current ? Color(hex: space.color) : Color.secondary)
+            .foregroundStyle(current || hovering ? Theme.Palette.accent(space.color) : Color.secondary)
+            .saturation(current || hovering ? 1 : 0)
+            .opacity(current || hovering ? 1 : 0.7)
             .frame(width: 26, height: 24)
-            .background(RoundedRectangle(cornerRadius: 6).fill(current ? Color(hex: space.color).opacity(0.16) : (hovering ? Color.primary.opacity(0.06) : .clear)))
+            .background(Theme.Radius.shape(Theme.Radius.button)
+                .fill(current ? Theme.Palette.tint(space.color).opacity(0.16) : (hovering ? Theme.Palette.rowHover : .clear)))
+            .motion(Motion.hover, value: hovering, fadeOnly: true)
+            .motion(Motion.spaceSwitch, value: current, fadeOnly: true)
             .contentShape(Rectangle())
             .onTapGesture { model.switchSpace(to: space.id) }
             .onHover { hovering = $0 }
             .help(index < 9 ? "\(space.name)  (Ctrl-\(index + 1))" : space.name)
             .onDrop(of: [ItemDrag.type], isTargeted: nil) { providers in
-                ItemDrag.load(providers) { ids in
-                    for id in ids { if let t = model.tab(id) { model.move(t, toSpace: space.id) } }
+                ItemDrag.loadItems(providers) { items in
+                    for item in items {
+                        switch item {
+                        case .tab(let id): if let t = model.tab(id) { model.move(t, toSpace: space.id) }
+                        case .split(let id): if let s = model.split(id) { model.move(split: s, toSpace: space.id) }
+                        case .folder: break
+                        }
+                    }
                 }
             }
             .contextMenu {
@@ -73,6 +86,15 @@ struct SpaceButton: View {
                         model.updateSpace(space.id) { $0.newNotesFolder = nil }
                     }
                     Button("Choose folder...") { SpaceActions.pickNotesFolder(for: space, model: model) }
+                }
+                // Each profile keeps its own cookies and logins, like Arc's profiles.
+                Menu("Profile") {
+                    Button(space.profile == nil ? "Default (current)" : "Default") { model.updateSpace(space.id) { $0.profile = nil } }
+                    ForEach(model.profiles, id: \.self) { p in
+                        Button(space.profile == p ? "\(p) (current)" : p) { model.updateSpace(space.id) { $0.profile = p } }
+                    }
+                    Divider()
+                    Button("New profile...") { model.promptNewProfile(for: space) }
                 }
                 Divider()
                 Button("Move left") { model.moveSpace(space.id, by: -1) }.disabled(index == 0)
