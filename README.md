@@ -32,15 +32,21 @@ build/BrowserPOC.app/Contents/MacOS/BrowserPOC --data-dir ~/Desktop/test-profile
 Tests and checks from the command line:
 
 ```
-scripts/selftest.sh                                             # index, notes, sections, split, spaces and command bar checks
+scripts/selftest.sh                                             # index, notes, sections, split, spaces, command bar and look checks
 .build/debug/BrowserPOC --smoketest                             # drives the real browser headless, no window on screen
 build/BrowserPOC.app/Contents/MacOS/BrowserPOC --chrome-dry-run # what a Chrome import would do, fetches nothing
 .build/debug/BrowserPOC --extract-check <url>                   # what capture reads from one public page
+.build/debug/BrowserPOC --render-review <dir>                   # light and dark snapshots of every main view, offscreen
+scripts/make-icon.sh                                            # redraws Resources/AppIcon.icns from code
 ```
 
 Both tests use throwaway folders and exit non-zero if a check fails. The self test checks delete with a stand-in Trash folder inside its throwaway folder, so your real Trash is never touched. The dry run prints full URLs from your Chrome history, so keep its output to yourself.
 
 ## What's in it
+
+**Look and feel.** It follows Zen's layout. The page sits in a rounded card 8 points in from the window, and the sidebar runs straight into the window around it with no title bar. The traffic lights share the sidebar's top row with back, forward and reload. Backgrounds are neutral grey, and the only colour in the chrome is the space's colour, washed over the sidebar side of the window and fading toward the right. It follows the system's light or dark setting and dims when the window isn't in front. The UI text is SF Pro, with New York for the few headings where the app talks to you. Animations are short and don't bounce: tabs fade in, folders unfold, the sidebar slides sideways when you change space, the command bar eases in, splits slide open and Related cards arrive one after another. With Reduce Motion on, movement turns into short fades or nothing.
+
+**Startup and icon.** Every launch draws the mark in the middle of the window for about a second while the window restores behind it, then fades away. It never blocks a click and it's skipped with Reduce Motion on. The app doesn't have a name yet, so the mark is just a symbol: an open loop that comes back around to a dot, for things you've seen coming back. The mark and the app icon are drawn in code, so they're crisp at every size. The icon is placeholder art in the macOS 26 shape.
 
 **Spaces.** Each space has its own pinned items, folders, tabs and splits, a name, an icon or emoji and a colour that lightly tints the sidebar. Switch with the icons at the bottom of the sidebar, Ctrl-1 to Ctrl-9, or a two-finger sideways swipe on the sidebar. Right-click a space icon to rename it, change its icon or colour, move it, set where its new notes go, or delete it. Deleting asks first and closes that space's tabs. Notes on disk are never touched. Older saved state moves into a space called Home.
 
@@ -85,4 +91,6 @@ These files may also be edited by other apps while this one is open, so the app 
 - `Sources/BrowserPOC/Resurfacing`: the Related panel's cards and reasons.
 - `Sources/BrowserPOC/Sources`: Chrome import, URL safety rules, HTML text, the notes indexer and folder watcher.
 - `Sources/BrowserPOC/UI`: SwiftUI views, including the command bar, split view and spaces.
+- `Sources/BrowserPOC/UI/Theme`: the design system. Colours, spacing, radii, shadows, type and motion, plus the small components the views share and the window chrome.
+- `Sources/BrowserPOC/Startup`: the mark, the launch animation and the icon art.
 - `Sources/BrowserPOC/Tests`: `--selftest`, `--smoketest` and `--extract-check`.
