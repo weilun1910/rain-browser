@@ -332,7 +332,8 @@ enum MCPTests {
         }
         let fresh = titles((c.result("tools/call", ["name": "search", "arguments": ["query": "zebra crossings"]])["structuredContent"] as? JSON)?["results"])
         check(fresh == ["Zebra crossings"], "the server sees pages the app indexes while it runs", fresh.joined(separator: "; "))
-        check(MCPLog.read(root: fx.root).contains { $0.client == "selftest-modern" }, "the log takes the client name from _meta")
+        check(MCPLog.read(root: fx.root).contains { $0.client == "selftest-modern" && $0.protocolVersion == "2026-07-28" },
+              "the log takes the client name and version from _meta")
     }
 
     // MARK: The packaged launcher

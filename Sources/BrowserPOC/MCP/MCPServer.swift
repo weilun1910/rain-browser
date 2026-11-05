@@ -141,6 +141,7 @@ final class MCPServer {
         }
         toolbox.context.clientName = clientName
         toolbox.context.modern = modern
+        toolbox.context.protocolVersion = modernVersion ?? legacyVersion
 
         var result: JSON
         var ttl: Int?

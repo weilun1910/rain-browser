@@ -126,6 +126,8 @@ struct MCPLogEntry: Codable, Identifiable {
     let served: Int
     let titles: [String]
     let hidden: Int
+    /// The MCP version the client spoke, like 2026-07-28 or 2025-06-18.
+    var protocolVersion: String? = nil
 }
 
 enum MCPLog {

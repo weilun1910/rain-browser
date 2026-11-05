@@ -9,6 +9,7 @@ final class MCPContext {
     let ranking = RankingSnapshot()
     var clientName = "unknown client"
     var modern = false
+    var protocolVersion: String?
     private(set) var app = AppSettings()
     private(set) var mcp = MCPSettings()
     private var namesVersion: Int64 = .min
@@ -41,7 +42,8 @@ final class MCPContext {
     func log(_ kind: String, _ name: String, _ detail: String, served: [String], hidden: Int = 0) {
         guard mcp.keepLog else { return }
         MCPLog.append(MCPLogEntry(at: Date(), client: clientName, kind: kind, name: name, detail: String(detail.prefix(160)),
-                                  served: served.count, titles: Array(served.prefix(12)), hidden: hidden), root: root)
+                                  served: served.count, titles: Array(served.prefix(12)), hidden: hidden,
+                                  protocolVersion: protocolVersion), root: root)
     }
 
     func close() {
