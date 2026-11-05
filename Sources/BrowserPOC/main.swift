@@ -63,6 +63,13 @@ if let i = args.firstIndex(of: "--mcp-fixture"), i + 1 < args.count {
     exit(MCPFixture.run(URL(fileURLWithPath: (args[i + 1] as NSString).expandingTildeInPath, isDirectory: true)))
 }
 
+// The demo profile: --seed-demo <empty folder> builds it from Demo/, --demo-eval <profile> scores
+// Related against Demo/expected.json on a copy, and --demo-snapshots <out> --profile <profile>
+// renders it offscreen. None of them touch the real profile.
+if args.contains("--seed-demo") { exit(MainActor.assumeIsolated { DemoSeeder.commandLine(args) }) }
+if args.contains("--demo-eval") { exit(DemoEval.commandLine(args)) }
+if args.contains("--demo-snapshots") { exit(MainActor.assumeIsolated { DemoSnapshots.commandLine(args) }) }
+
 // Engine: resurfacing quality and read-only source checks.
 if args.contains("--eval") {
     var workdir: URL?
@@ -98,7 +105,9 @@ if args.contains("--shelf-demo") { MainActor.assumeIsolated { BrowserModel.useEp
 let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--workdir", "--extract-check", "--data-dir",
                           "--render-art", "--render-review", "--profile", "--query", "--motion-tour", "--reduce-motion",
                           "--eval", "--models-dir", "--verbose", "--notion-dry-run", "--granola-dry-run", "--download-models", "--scale",
-                          "--mcp", "--mcp-fixture", "--graph-bench", "--shelf-demo"]
+                          "--mcp", "--mcp-fixture", "--graph-bench", "--shelf-demo",
+                          "--seed-demo", "--demo-content", "--models-from", "--offline", "--no-topics", "--keep-dates",
+                          "--demo-eval", "--demo-snapshots"]
 if let unknown = args.dropFirst().first(where: { $0.hasPrefix("--") && !known.contains($0) }) {
     print("Unknown flag \(unknown). Flags: --selftest, --smoketest, --chrome-dry-run, each with optional --workdir <dir> for the tests, --data-dir <dir> to run the app on a separate profile, --mcp to serve the index to AI clients, and --mcp-fixture <dir> to write a test profile.")
     exit(2)
