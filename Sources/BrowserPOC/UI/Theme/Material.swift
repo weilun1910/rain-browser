@@ -36,6 +36,81 @@ extension Theme {
     }
 }
 
+extension Theme.Palette {
+    /// A neutral wash laid over the system blur for things that float over a page, so the page's
+    /// colours show through softly without tinting the controls.
+    static let floatingWash = Color(nsColor: dynamic(NSColor(white: 1, alpha: 0.62), NSColor(white: 0.12, alpha: 0.62)))
+    static let floatingWashHover = Color(nsColor: dynamic(NSColor(white: 1, alpha: 0.80), NSColor(white: 0.16, alpha: 0.72)))
+    /// The colour a fade over the bottom of a page runs into: the card's own colour, so the fade
+    /// reads as the page dimming rather than a grey band.
+    static let fadeEnd = Color(nsColor: dynamic(cardLight, cardDark))
+}
+
+extension Theme.Radius {
+    /// Compact floating cards, like the Related shelf's pills.
+    static let chip: CGFloat = 9
+    /// Popovers that hang off a control.
+    static let popover: CGFloat = 12
+}
+
+/// A surface that floats over page content: system blur, a neutral wash, a hairline and a soft
+/// shadow. For the Related shelf's pills, toasts and anything else that sits on a page.
+struct FloatingSurface: ViewModifier {
+    var radius: CGFloat = Theme.Radius.chip
+    var hovering = false
+    func body(content: Content) -> some View {
+        let shape = Theme.Radius.shape(radius)
+        return content
+            .background(
+                ZStack {
+                    shape.fill(.ultraThinMaterial)
+                    shape.fill(hovering ? Theme.Palette.floatingWashHover : Theme.Palette.floatingWash)
+                }
+                .themeShadow(.floating)
+            )
+            .overlay(shape.strokeBorder(Theme.Palette.hairline, lineWidth: 0.5))
+            .motion(Motion.hover, value: hovering, fadeOnly: true)
+    }
+}
+
+/// A popover: opaque, so its text reads cleanly over anything, with a deeper shadow.
+struct PopoverSurface: ViewModifier {
+    var radius: CGFloat = Theme.Radius.popover
+    func body(content: Content) -> some View {
+        let shape = Theme.Radius.shape(radius)
+        return content
+            .background(shape.fill(Theme.Palette.sheet).themeShadow(.popover))
+            .overlay(shape.strokeBorder(Theme.Palette.hairline, lineWidth: 0.5))
+    }
+}
+
+/// The fade behind something floating along the bottom of a page: from clear to the card's colour.
+struct ContentFade: View {
+    var edge: VerticalEdge = .bottom
+    var height: CGFloat = 76
+    var strength: Double = 0.88
+    var body: some View {
+        LinearGradient(stops: [
+            .init(color: Theme.Palette.fadeEnd.opacity(0), location: 0),
+            .init(color: Theme.Palette.fadeEnd.opacity(strength * 0.6), location: 0.55),
+            .init(color: Theme.Palette.fadeEnd.opacity(strength), location: 1),
+        ], startPoint: edge == .bottom ? .top : .bottom, endPoint: edge == .bottom ? .bottom : .top)
+        .frame(height: height)
+        .allowsHitTesting(false)
+    }
+}
+
+extension View {
+    /// Blur, neutral wash, hairline and soft shadow, for things floating over a page.
+    func floatingSurface(radius: CGFloat = Theme.Radius.chip, hovering: Bool = false) -> some View {
+        modifier(FloatingSurface(radius: radius, hovering: hovering))
+    }
+    /// An opaque popover with a deeper shadow.
+    func popoverSurface(radius: CGFloat = Theme.Radius.popover) -> some View {
+        modifier(PopoverSurface(radius: radius))
+    }
+}
+
 /// The grain, tiled over whatever it sits on. Blended as overlay, so it adds texture without
 /// shifting the colour underneath.
 struct GrainOverlay: View {

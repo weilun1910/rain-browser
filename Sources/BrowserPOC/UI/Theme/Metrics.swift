@@ -57,7 +57,7 @@ extension Theme {
 
     /// Shadows. Two layers each: a tight contact shadow for the edge and a soft one for lift.
     enum Shadow {
-        case card, row, panelCard, sheet, mark
+        case card, row, panelCard, sheet, floating, popover, mark
 
         struct Layer { let opacity: Double; let radius: CGFloat; let y: CGFloat }
 
@@ -68,6 +68,8 @@ extension Theme {
             case .row: return [Layer(opacity: 0.09 * k, radius: 0.5, y: 0.5), Layer(opacity: 0.06 * k, radius: 2.5, y: 1)]
             case .panelCard: return [Layer(opacity: 0.035 * k, radius: 0.5, y: 0.5), Layer(opacity: 0.04 * k, radius: 6, y: 2)]
             case .sheet: return [Layer(opacity: 0.10 * k, radius: 1, y: 0.5), Layer(opacity: 0.22 * min(k, 1.6), radius: 40, y: 18)]
+            case .floating: return [Layer(opacity: 0.10 * k, radius: 1, y: 0.5), Layer(opacity: 0.16 * min(k, 1.6), radius: 14, y: 5)]
+            case .popover: return [Layer(opacity: 0.12 * k, radius: 1, y: 0.5), Layer(opacity: 0.20 * min(k, 1.6), radius: 24, y: 10)]
             case .mark: return [Layer(opacity: 0.0, radius: 0, y: 0)]
             }
         }
