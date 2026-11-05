@@ -29,8 +29,18 @@ expect() {
 }
 served_to() { grep -c "\"client\":\"$1" "$PROFILE/mcp-log.jsonl" 2>/dev/null || echo 0; }
 
+# BROWSERPOC_MODELS_DIR, if set, points the server at downloaded models (the reranker and
+# EmbeddingGemma). Without it the server uses Apple's built-in embedding and no reranker.
+MODELS_ENV=""
+CODEX_ENV=()
+if [ -n "${BROWSERPOC_MODELS_DIR:-}" ]; then
+  MODELS_ENV=", \"env\": {\"BROWSERPOC_MODELS_DIR\": \"$BROWSERPOC_MODELS_DIR\"}"
+  CODEX_ENV=(-c "mcp_servers.browser.env={BROWSERPOC_MODELS_DIR=\"$BROWSERPOC_MODELS_DIR\"}")
+  echo "Using models in $BROWSERPOC_MODELS_DIR"
+fi
+
 cat > "$OUT/claude-mcp.json" <<EOF
-{"mcpServers": {"browser": {"command": "$BIN", "args": ["--mcp", "--data-dir", "$PROFILE"]}}}
+{"mcpServers": {"browser": {"command": "$BIN", "args": ["--mcp", "--data-dir", "$PROFILE"]$MODELS_ENV}}}
 EOF
 
 if [[ " $WHICH " == *" claude "* ]]; then
@@ -72,7 +82,8 @@ if [[ " $WHICH " == *" codex "* ]]; then
   (cd "$OUT" && codex exec --skip-git-repo-check --ephemeral --ignore-user-config --json \
      -c "mcp_servers.browser.command=\"$BIN\"" \
      -c "mcp_servers.browser.args=[\"--mcp\", \"--data-dir\", \"$PROFILE\"]" \
-     -c 'mcp_servers.browser.startup_timeout_sec=60' \
+     -c 'mcp_servers.browser.startup_timeout_sec=60' -c 'mcp_servers.browser.tool_timeout_sec=120' \
+     ${CODEX_ENV[@]+"${CODEX_ENV[@]}"} \
      "$PROMPT") > "$OUT/codex.jsonl" 2> "$OUT/codex.err"
   expect "codex calls the tools without asking" "$OUT/codex.jsonl" '"server":"browser"' '"status":"completed"'
   expect "codex answers from the fixture" "$OUT/codex.jsonl" "Sourdough plan"
