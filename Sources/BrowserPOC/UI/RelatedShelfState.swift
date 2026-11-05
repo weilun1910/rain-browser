@@ -46,7 +46,7 @@ final class RelatedPrefs: ObservableObject {
     /// Reads the file again. Tests call this after pointing Paths at a throwaway folder.
     func reload() {
         watch = nil
-        if let data = try? Data(contentsOf: Self.file), let v = try? JSONDecoder.iso.decode(RelatedPrefsValue.self, from: data) {
+        if let v = SavedFile.read(RelatedPrefsValue.self, from: Self.file, label: "Related preferences") {
             value = v
         } else {
             // First launch with the shelf: it becomes the default.
@@ -76,7 +76,7 @@ final class RelatedPrefs: ObservableObject {
 
     private func save() {
         Paths.ensure(Paths.root)
-        if let data = try? JSONEncoder.pretty.encode(value) { try? data.write(to: Self.file, options: .atomic) }
+        if let data = try? JSONEncoder.pretty.encode(value) { SavedFile.write(data, to: Self.file) }
     }
 
     var mode: RelatedMode { value.mode }

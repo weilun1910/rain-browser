@@ -188,8 +188,7 @@ final class Settings: ObservableObject, @unchecked Sendable {
     }
 
     private init() {
-        if let data = try? Data(contentsOf: Paths.settingsFile),
-           let s = try? JSONDecoder.iso.decode(AppSettings.self, from: data) {
+        if let s = SavedFile.read(AppSettings.self, from: Paths.settingsFile, label: "settings") {
             stored = s
         }
         published = stored
@@ -197,8 +196,7 @@ final class Settings: ObservableObject, @unchecked Sendable {
 
     func reloadFromDisk() {
         var s = AppSettings()
-        if let data = try? Data(contentsOf: Paths.settingsFile),
-           let decoded = try? JSONDecoder.iso.decode(AppSettings.self, from: data) {
+        if let decoded = SavedFile.read(AppSettings.self, from: Paths.settingsFile, label: "settings") {
             s = decoded
         }
         lock.lock(); stored = s; lock.unlock()
@@ -221,7 +219,7 @@ final class Settings: ObservableObject, @unchecked Sendable {
     private func save(_ s: AppSettings) {
         Paths.ensure(Paths.root)
         if let data = try? JSONEncoder.pretty.encode(s) {
-            try? data.write(to: Paths.settingsFile, options: .atomic)
+            SavedFile.write(data, to: Paths.settingsFile)
         }
     }
 }

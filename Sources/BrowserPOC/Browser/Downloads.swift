@@ -30,7 +30,7 @@ final class Downloads: ObservableObject {
 
     func load() {
         loadedFrom = Self.file.path
-        if let data = try? Data(contentsOf: Self.file), let v = try? JSONDecoder.iso.decode([Item].self, from: data) {
+        if let v = SavedFile.read(LossyArray<Item>.self, from: Self.file, label: "downloads list").map({ $0.items }) {
             // Anything still marked running died with the last session.
             items = v.map { var i = $0; if i.state == .running { i.state = .failed }; return i }
         } else {
@@ -41,7 +41,7 @@ final class Downloads: ObservableObject {
     private func save() {
         if loadedFrom != Self.file.path { load() }
         Paths.ensure(Paths.root)
-        if let data = try? JSONEncoder.pretty.encode(Array(items.suffix(50))) { try? data.write(to: Self.file, options: .atomic) }
+        if let data = try? JSONEncoder.pretty.encode(Array(items.suffix(50))) { SavedFile.write(data, to: Self.file) }
     }
 
     var running: [Item] { items.filter { $0.state == .running } }

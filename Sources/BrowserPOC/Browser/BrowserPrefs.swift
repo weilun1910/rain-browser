@@ -46,7 +46,7 @@ final class BrowserPrefs: ObservableObject {
 
     /// Reads the file again. Tests call this after pointing Paths at a throwaway folder.
     func reload() {
-        if let data = try? Data(contentsOf: Self.file), let v = try? JSONDecoder.iso.decode(BrowserPrefsValue.self, from: data) {
+        if let v = SavedFile.read(BrowserPrefsValue.self, from: Self.file, label: "browser preferences") {
             value = v
         } else {
             value = BrowserPrefsValue()
@@ -59,6 +59,6 @@ final class BrowserPrefs: ObservableObject {
         guard v != value else { return }
         value = v
         Paths.ensure(Paths.root)
-        if let data = try? JSONEncoder.pretty.encode(v) { try? data.write(to: Self.file, options: .atomic) }
+        if let data = try? JSONEncoder.pretty.encode(v) { SavedFile.write(data, to: Self.file) }
     }
 }

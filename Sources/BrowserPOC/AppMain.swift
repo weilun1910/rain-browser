@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var keyMonitor: Any?
     private var flagsMonitor: Any?
     private var recentlyClosedMenu: NSMenu?
+    private var dataNoticeWork: DispatchWorkItem?
 
     override init() {
         super.init()
@@ -76,6 +77,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if Startup.shared.startedAt != nil { MotionSuppression.hold(.launch, for: StartupTimeline.duration * 0.8) }
         w.makeKeyAndOrderFront(nil)
         NSApp.activate()
+        // A file Rain had to set aside, or a backup it couldn't make, gets a sheet once the
+        // launch animation is done. Later ones show as they happen.
+        DataNotices.onNotice = { DispatchQueue.main.async { MainActor.assumeIsolated { AppDelegate.shared?.scheduleDataNotices() } } }
+        scheduleDataNotices()
 
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
             MainActor.assumeIsolated { (self?.handleKey(e) ?? false) ? nil : e }
@@ -119,6 +124,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidBecomeActive(_ notification: Notification) {
         model?.notes.reload()
         model?.checkNotesOnDisk()
+    }
+
+    // MARK: Data notices
+
+    func scheduleDataNotices() {
+        guard dataNoticeWork == nil, !DataNotices.peek().isEmpty else { return }
+        let delay = Startup.shared.startedAt != nil ? StartupTimeline.duration : 0
+        let w = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                self?.dataNoticeWork = nil
+                self?.showDataNotices()
+            }
+        }
+        dataNoticeWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.3, execute: w)
+    }
+
+    private func showDataNotices() {
+        let notices = DataNotices.take()
+        guard !notices.isEmpty, let window else { return }
+        let keptFiles = notices.contains {
+            switch $0 {
+            case .setAside, .partlyRead: return true
+            case .untouched, .backupFailed: return false
+            }
+        }
+        let a = NSAlert()
+        a.alertStyle = .warning
+        a.messageText = keptFiles || notices.contains(where: { if case .untouched = $0 { return true } else { return false } })
+            ? "Rain couldn't read some of what it saved" : "Rain couldn't back up your data"
+        a.informativeText = notices.map(\.sentence).joined(separator: "\n\n")
+        a.addButton(withTitle: "OK")
+        if keptFiles { a.addButton(withTitle: "Show in Finder") }
+        a.beginSheetModal(for: window) { response in
+            if keptFiles && response == .alertSecondButtonReturn {
+                NSWorkspace.shared.activateFileViewerSelecting([SavedFile.recoveredDir])
+            }
+        }
     }
 
     // MARK: Settings window

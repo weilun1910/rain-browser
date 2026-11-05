@@ -143,7 +143,7 @@ final class GraphSettingsStore: ObservableObject {
     static var file: URL { Paths.root.appendingPathComponent("graph.json") }
 
     private init() {
-        if let data = try? Data(contentsOf: Self.file), let s = try? JSONDecoder().decode(GraphSettings.self, from: data) {
+        if let s = SavedFile.read(GraphSettings.self, from: Self.file, label: "graph settings") {
             value = s
         } else {
             value = GraphSettings()
@@ -155,7 +155,7 @@ final class GraphSettingsStore: ObservableObject {
         let snapshot = value
         let w = DispatchWorkItem {
             Paths.ensure(Paths.root)
-            if let data = try? JSONEncoder.pretty.encode(snapshot) { try? data.write(to: Self.file, options: .atomic) }
+            if let data = try? JSONEncoder.pretty.encode(snapshot) { SavedFile.write(data, to: Self.file) }
         }
         saveWork = w
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: w)

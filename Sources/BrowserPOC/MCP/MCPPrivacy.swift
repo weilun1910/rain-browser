@@ -32,7 +32,7 @@ struct MCPSettings: Codable, Equatable {
     static func file(_ root: URL) -> URL { root.appendingPathComponent("mcp.json") }
 
     static func load(root: URL) -> MCPSettings {
-        guard let data = try? Data(contentsOf: file(root)), let s = try? JSONDecoder().decode(MCPSettings.self, from: data) else {
+        guard let s = SavedFile.read(MCPSettings.self, from: file(root), label: "AI client privacy settings") else {
             return MCPSettings()
         }
         return s
@@ -40,7 +40,7 @@ struct MCPSettings: Codable, Equatable {
 
     func save(root: URL) {
         Paths.ensure(root)
-        if let data = try? JSONEncoder.pretty.encode(self) { try? data.write(to: Self.file(root), options: .atomic) }
+        if let data = try? JSONEncoder.pretty.encode(self) { SavedFile.write(data, to: Self.file(root)) }
     }
 
     func isHidden(_ source: String) -> Bool { hiddenSources.contains(source) }

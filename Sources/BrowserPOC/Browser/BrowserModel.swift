@@ -67,6 +67,77 @@ struct SavedState: Codable {
     var selectedDocument: String?
 }
 
+// Reading state.json never fails over one bad value. A field that's missing or the wrong shape
+// falls back to its default, and a tab, space, folder or split that can't be read at all is left
+// out. Either way SavedFile keeps a copy of the original file before the app saves over it.
+// New fields must be optional or have a default here, so files from older builds keep loading.
+// Decoders live in extensions so the memberwise initializers stay.
+
+extension SavedState {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        version = c.lenient(Int.self, .version, decoder)
+        spaces = c.lenientArray(Space.self, .spaces, decoder)
+        currentSpace = c.lenient(UUID.self, .currentSpace, decoder)
+        tabs = c.lenientArray(TabRecord.self, .tabs, decoder) ?? []
+        folders = c.lenientArray(Folder.self, .folders, decoder) ?? []
+        splits = c.lenientArray(SplitRecord.self, .splits, decoder)
+        selectedSplit = c.lenient(UUID.self, .selectedSplit, decoder)
+        selectedTab = c.lenient(UUID.self, .selectedTab, decoder)
+        selectedDocument = c.lenient(String.self, .selectedDocument, decoder)
+    }
+}
+
+extension Space {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = Space(name: "Space")
+        id = c.lenient(UUID.self, .id, decoder) ?? UUID()
+        name = c.lenient(String.self, .name, decoder) ?? d.name
+        icon = c.lenient(String.self, .icon, decoder) ?? d.icon
+        color = c.lenient(String.self, .color, decoder) ?? d.color
+        newNotesFolder = c.lenient(String.self, .newNotesFolder, decoder)
+        selectedTab = c.lenient(UUID.self, .selectedTab, decoder)
+        selectedSplit = c.lenient(UUID.self, .selectedSplit, decoder)
+        profile = c.lenient(String.self, .profile, decoder)
+    }
+}
+
+extension Folder {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.lenient(UUID.self, .id, decoder) ?? UUID()
+        spaceID = c.lenient(UUID.self, .spaceID, decoder)
+        name = c.lenient(String.self, .name, decoder) ?? "Folder"
+        isExpanded = c.lenient(Bool.self, .isExpanded, decoder) ?? true
+        createdAt = c.lenient(Date.self, .createdAt, decoder) ?? Date()
+        order = c.lenient(Double.self, .order, decoder)
+    }
+}
+
+extension TabRecord {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // Without an ID, nothing else in the file (folders, splits, the selection) can point at
+        // the tab, but its page is still worth keeping.
+        id = c.lenient(UUID.self, .id, decoder) ?? UUID()
+        // A kind this build doesn't know, say from a newer one, opens as a page.
+        kind = c.lenient(TabKind.self, .kind, decoder) ?? .web
+        url = c.lenient(String.self, .url, decoder)
+        title = c.lenient(String.self, .title, decoder) ?? ""
+        isPinned = c.lenient(Bool.self, .isPinned, decoder) ?? false
+        folderID = c.lenient(UUID.self, .folderID, decoder)
+        createdAt = c.lenient(Date.self, .createdAt, decoder) ?? Date()
+        spaceID = c.lenient(UUID.self, .spaceID, decoder)
+        isEssential = c.lenient(Bool.self, .isEssential, decoder)
+        pinnedURL = c.lenient(String.self, .pinnedURL, decoder)
+        customTitle = c.lenient(String.self, .customTitle, decoder)
+        order = c.lenient(Double.self, .order, decoder)
+        lastActiveAt = c.lenient(Date.self, .lastActiveAt, decoder)
+        isMuted = c.lenient(Bool.self, .isMuted, decoder)
+    }
+}
+
 enum Selection: Hashable {
     case tab(UUID)
     case split(UUID)
@@ -275,8 +346,9 @@ final class BrowserModel: ObservableObject {
     // MARK: - Persistence
 
     private func load() {
-        guard let data = try? Data(contentsOf: Paths.stateFile),
-              let s = try? JSONDecoder.iso.decode(SavedState.self, from: data) else {
+        // A file that can't be read moves into Recovered/ first, so the fresh Home below never
+        // gets saved over it.
+        guard let s = SavedFile.read(SavedState.self, from: Paths.stateFile, label: "spaces and tabs") else {
             let home = Space(name: "Home")
             spaces = [home]
             currentSpaceID = home.id
@@ -366,7 +438,7 @@ final class BrowserModel: ObservableObject {
         }
         Paths.ensure(Paths.root)
         if let data = try? JSONEncoder.pretty.encode(s) {
-            try? data.write(to: Paths.stateFile, options: .atomic)
+            SavedFile.write(data, to: Paths.stateFile)
         }
         for t in tabs where t.isLoaded { t.saveSession() }
     }

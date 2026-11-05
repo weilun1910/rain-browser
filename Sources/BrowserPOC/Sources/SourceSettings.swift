@@ -31,7 +31,7 @@ final class SourceSettings: ObservableObject, @unchecked Sendable {
 
     func reload() {
         var c = SourceConfig()
-        if let d = try? Data(contentsOf: Self.file), let decoded = try? JSONDecoder.iso.decode(SourceConfig.self, from: d) { c = decoded }
+        if let decoded = SavedFile.read(SourceConfig.self, from: Self.file, label: "source settings") { c = decoded }
         lock.lock(); stored = c; lock.unlock()
         publish(c)
     }
@@ -42,7 +42,7 @@ final class SourceSettings: ObservableObject, @unchecked Sendable {
         let snap = stored
         lock.unlock()
         Paths.ensure(Paths.root)
-        if let d = try? JSONEncoder.pretty.encode(snap) { try? d.write(to: Self.file, options: .atomic) }
+        if let d = try? JSONEncoder.pretty.encode(snap) { SavedFile.write(d, to: Self.file) }
         publish(snap)
     }
 

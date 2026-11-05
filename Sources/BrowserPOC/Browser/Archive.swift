@@ -39,8 +39,8 @@ final class ClosedStore: ObservableObject {
     init() { load() }
 
     func load() {
-        if let data = try? Data(contentsOf: Self.file), let v = try? JSONDecoder.iso.decode([ClosedItem].self, from: data) {
-            items = v
+        if let v = SavedFile.read(LossyArray<ClosedItem>.self, from: Self.file, label: "recently closed tabs and archive") {
+            items = v.items
         } else {
             items = []
         }
@@ -48,7 +48,7 @@ final class ClosedStore: ObservableObject {
 
     private func save() {
         Paths.ensure(Paths.root)
-        if let data = try? JSONEncoder.pretty.encode(items) { try? data.write(to: Self.file, options: .atomic) }
+        if let data = try? JSONEncoder.pretty.encode(items) { SavedFile.write(data, to: Self.file) }
     }
 
     /// Recently closed, newest first.
