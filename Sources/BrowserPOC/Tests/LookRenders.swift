@@ -161,6 +161,63 @@ enum LookRenders {
 
     static var page2HTML: String { page2 }
 
+    /// `--render-review <dir> --profile <data dir>`: renders an existing profile instead of the
+    /// fixtures. The profile's state, settings and index are copied to a throwaway folder first,
+    /// so the profile itself is never changed. Notes are read where the profile points.
+    static func runProfile(out: URL, profile: URL, query: String) -> Int32 {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("BrowserPOC-renders-\(UUID().uuidString)")
+        Paths.ensure(dir)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        for f in ["state.json", "settings.json", "index.sqlite", "index.sqlite-wal", "index.sqlite-shm"] {
+            try? FileManager.default.copyItem(at: profile.appendingPathComponent(f), to: dir.appendingPathComponent(f))
+        }
+        Paths.overrideRoot = dir
+        Settings.shared.reloadFromDisk()
+        Paths.ensure(out)
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.prohibited)
+        print("Rendering \(profile.lastPathComponent) into \(out.path)")
+        do { IndexStore.shared = try IndexStore(url: dir.appendingPathComponent("index.sqlite")) } catch {
+            print("Couldn't open the index: \(error)")
+            return 1
+        }
+        BrowserModel.useEphemeralStore = true
+        SpaceTintBackground.forceActive = true
+        Motion.forceReduce = true
+        let model = BrowserModel()
+        model.notes.reload()
+        let window = SmokeTest.offscreenWindow(MainView.host(model), size: NSSize(width: 1440, height: 900))
+        WindowChrome.configure(window)
+
+        func settle() {
+            _ = SmokeTest.wait(12) { !model.spaceTabs.contains { $0.isLoading } }
+            _ = SmokeTest.wait(10) { !model.resurfacer.isWorking && model.resurfacer.hasContext }
+            _ = SmokeTest.wait(1.5) { false }
+        }
+        let start = model.currentSpaceID
+        let order = [start] + model.spaces.map { $0.id }.filter { $0 != start }
+        for (i, id) in order.enumerated() {
+            model.switchSpace(to: id)
+            settle()
+            let name = model.currentSpace?.name.lowercased().replacingOccurrences(of: " ", with: "-") ?? "space"
+            both(window, out, "p\(i + 1)-space-\(name)")
+        }
+        model.switchSpace(to: start)
+        settle()
+        model.bar.open(.newTab, text: query)
+        _ = SmokeTest.wait(1) { false }
+        both(window, out, "p\(order.count + 1)-command-bar")
+        model.bar.close()
+        Settings.shared.update { $0.rightPanelOpen = false }
+        _ = SmokeTest.wait(1) { false }
+        both(window, out, "p\(order.count + 2)-panel-hidden")
+        Settings.shared.update { $0.rightPanelOpen = true }
+        print("Done.")
+        return 0
+    }
+
+    static func both(_ w: NSWindow, _ out: URL, _ name: String) { both(w, name, out) }
+
     /// Renders the window in light and dark.
     static func both(_ w: NSWindow, _ name: String, _ out: URL) {
         for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {

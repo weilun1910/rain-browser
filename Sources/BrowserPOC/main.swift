@@ -34,9 +34,15 @@ if let i = args.firstIndex(of: "--render-art"), i + 1 < args.count {
     exit(MainActor.assumeIsolated { ArtRenderer.run(dir) })
 }
 
-// --render-review <dir>: light and dark snapshots of every main view, offscreen.
+// --render-review <dir>: light and dark snapshots of every main view, offscreen. With
+// --profile <data dir> it renders a copy of that profile instead of the test fixtures.
 if let i = args.firstIndex(of: "--render-review"), i + 1 < args.count {
     let dir = URL(fileURLWithPath: (args[i + 1] as NSString).expandingTildeInPath, isDirectory: true)
+    if let p = args.firstIndex(of: "--profile"), p + 1 < args.count {
+        let profile = URL(fileURLWithPath: (args[p + 1] as NSString).expandingTildeInPath, isDirectory: true)
+        let q = args.firstIndex(of: "--query").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil } ?? "cold start"
+        exit(MainActor.assumeIsolated { LookRenders.runProfile(out: dir, profile: profile, query: q) })
+    }
     exit(MainActor.assumeIsolated { LookRenders.run(out: dir) })
 }
 
@@ -50,7 +56,7 @@ if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
 }
 
 let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--workdir", "--extract-check", "--data-dir",
-                          "--render-art", "--render-review"]
+                          "--render-art", "--render-review", "--profile", "--query"]
 if let unknown = args.dropFirst().first(where: { $0.hasPrefix("--") && !known.contains($0) }) {
     print("Unknown flag \(unknown). Flags: --selftest, --smoketest, --chrome-dry-run, each with optional --workdir <dir> for the tests, and --data-dir <dir> to run the app on a separate profile.")
     exit(2)
