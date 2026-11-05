@@ -47,6 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         appLog.notice("Sentence embedding: \(Embedder.shared.isAvailable ? "available" : "not available", privacy: .public)")
 
         model = BrowserModel()
+        RelatedShelf.launch()
         buildMenu()
 
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1380, height: 880),
@@ -187,7 +188,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         view.addItem(.separator())
         view.addItem(item("Toggle Sidebar", #selector(toggleSidebarAction), "s", target: self))
         view.addItem(item("Sidebar on the Other Side", #selector(sidebarSideAction), target: self))
-        view.addItem(item("Show or Hide Related Panel", #selector(togglePanelAction), "r", [.command, .shift], target: self))
+        view.addItem(item("Show or Hide Related", #selector(togglePanelAction), "r", [.command, .shift], target: self))
+        view.addItem(item("Related as Shelf or Sidebar", #selector(relatedModeAction), "r", [.command, .control], target: self))
         view.addItem(item("Toggle Note Preview", #selector(togglePreviewAction), "p", [.command, .shift], target: self))
         view.addItem(.separator())
         let layout = NSMenu(title: "Split Layout")
@@ -276,7 +278,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc func reloadAction() { model.reload() }
     @objc func backAction() { model.goBack() }
     @objc func forwardAction() { model.goForward() }
-    @objc func togglePanelAction() { Settings.shared.update { $0.rightPanelOpen.toggle() } }
+    @objc func togglePanelAction() { RelatedPrefs.shared.toggleVisible() }
+    @objc func relatedModeAction() { RelatedPrefs.shared.toggleMode() }
     @objc func togglePreviewAction() { model.document?.showPreview.toggle() }
     @objc func zoomResetAction() { model.zoom(nil) }
     @objc func zoomInAction() { model.zoom(0.1) }

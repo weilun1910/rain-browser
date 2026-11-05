@@ -40,9 +40,7 @@ struct LeftSidebar: View {
                 NavButton(symbol: "chevron.right", help: "Forward") {}.disabled(true)
                 NavButton(symbol: "arrow.clockwise", help: "Reload") {}.disabled(true)
             }
-            NavButton(symbol: "sidebar.right", help: "Related panel") {
-                Settings.shared.update { $0.rightPanelOpen.toggle() }
-            }
+            RelatedToggleButton()
         }
         .frame(height: 30)
         .padding(.top, 4)
