@@ -221,9 +221,12 @@ struct FirstRunPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.x3) {
             VStack(alignment: .leading, spacing: Theme.Space.m) {
-                BrandMark(weight: 0.08, color: .primary, opacity: 0.85)
-                    .frame(width: 30, height: 30)
-                    .padding(.bottom, Theme.Space.s)
+                HStack(spacing: Theme.Space.m) {
+                    BrandMark(weight: 0.08, color: .primary, opacity: 0.85)
+                        .frame(width: 24, height: 24)
+                    Wordmark(size: 17)
+                }
+                .padding(.bottom, Theme.Space.s)
                 Text("Start with what you've already seen")
                     .font(Theme.Font.display(26))
                     .displayTracking()

@@ -15,9 +15,9 @@ enum MarkGeometry {
     static let radius: Double = 0.40
     static let curlRadius: Double = 0.84
     /// Where the faded tail becomes fully drawn, as a share of the sweep.
-    static let tailFade: Double = 0.24
+    static let tailFade: Double = 0.16
     /// Default stroke weight as a share of the box, and the dot's size relative to the stroke.
-    static let weight: CGFloat = 0.058
+    static let weight: CGFloat = 0.064
     static let dotScale: CGFloat = 2.15
     /// Nudges the whole loop so it looks centred: the open gap at the bottom makes it feel low.
     static let opticalOffset = CGPoint(x: -0.01, y: 0.02)
@@ -59,6 +59,81 @@ struct MarkLoop: Shape {
     func path(in rect: CGRect) -> Path { MarkGeometry.path(in: rect) }
 }
 
+/// The loop as a filled ribbon instead of an even stroke: thin at the tail, swelling to full
+/// weight, with a round head. Drawn up to `progress`, so the startup can draw it like a brush
+/// stroke. An even-width arc drawing on reads as a spinner; a tapering one reads as a gesture.
+struct MarkRibbon: Shape {
+    var progress: Double = 1
+    let lineWidth: CGFloat
+    /// Width at the very start of the tail, as a share of the full weight, and how far along
+    /// the loop it takes to reach full weight.
+    static let taperStart: CGFloat = 0.28
+    static let taperLength: Double = 0.34
+
+    static func width(at t: Double, _ lw: CGFloat) -> CGFloat {
+        let u = min(1, max(0, t / taperLength))
+        let eased = u * u * (3 - 2 * u)
+        return lw * (taperStart + (1 - taperStart) * CGFloat(eased))
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let p = min(1, max(0, progress))
+        guard p > 0.002 else { return Path() }
+        let n = max(4, Int(220 * p))
+        func at(_ t: Double) -> CGPoint {
+            let u = MarkGeometry.point(t)
+            return CGPoint(x: rect.minX + u.x * rect.width, y: rect.minY + u.y * rect.height)
+        }
+        var pts: [CGPoint] = [], halves: [CGFloat] = []
+        for i in 0...n {
+            let t = p * Double(i) / Double(n)
+            pts.append(at(t))
+            halves.append(Self.width(at: t, lineWidth) / 2)
+        }
+        var left: [CGPoint] = [], right: [CGPoint] = [], normals: [CGFloat] = []
+        for i in 0...n {
+            let a = pts[max(0, i - 1)], b = pts[min(n, i + 1)]
+            let dx = b.x - a.x, dy = b.y - a.y
+            let len = max(0.0001, hypot(dx, dy))
+            let nx = -dy / len, ny = dx / len
+            normals.append(atan2(ny, nx))
+            left.append(CGPoint(x: pts[i].x + nx * halves[i], y: pts[i].y + ny * halves[i]))
+            right.append(CGPoint(x: pts[i].x - nx * halves[i], y: pts[i].y - ny * halves[i]))
+        }
+        var path = Path()
+        path.move(to: left[0])
+        for q in left.dropFirst() { path.addLine(to: q) }
+        // Round head: around the front, from the left edge to the right edge.
+        let steps = 10
+        for k in 1..<steps {
+            let ang = normals[n] - .pi * CGFloat(k) / CGFloat(steps)
+            path.addLine(to: CGPoint(x: pts[n].x + cos(ang) * halves[n], y: pts[n].y + sin(ang) * halves[n]))
+        }
+        for q in right.reversed() { path.addLine(to: q) }
+        // Round tail: around the back, from the right edge to the left edge.
+        for k in 1..<steps {
+            let ang = normals[0] + .pi - .pi * CGFloat(k) / CGFloat(steps)
+            path.addLine(to: CGPoint(x: pts[0].x + cos(ang) * halves[0], y: pts[0].y + sin(ang) * halves[0]))
+        }
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// The app's name, Rain, set in New York with a little air between the letters.
+/// A wordmark for the launch, the About panel and the first run. Not an identifier.
+struct Wordmark: View {
+    static let name = "Rain"
+    var size: CGFloat = 18
+    var body: some View {
+        Text(Self.name)
+            .font(.system(size: size, weight: .regular, design: .serif))
+            .tracking(size * 0.06)
+            .foregroundStyle(.primary.opacity(0.85))
+            .accessibilityLabel(Self.name)
+    }
+}
+
 /// The mark. `draw` runs the stroke from 0 to 1 and `dot` brings the dot in, so the startup
 /// can animate it. Both default to 1 for the static mark.
 struct BrandMark: View {
@@ -91,17 +166,18 @@ struct BrandMark: View {
                startAngle: MarkGeometry.gradientStart, endAngle: MarkGeometry.gradientStart + .degrees(360))
             let end = MarkGeometry.end(in: box)
             let d = lw * MarkGeometry.dotScale
+            let landing = min(1, max(0, dot))
             ZStack {
-                MarkLoop()
-                    .trim(from: 0, to: max(0.0001, min(1, draw)))
-                    .stroke(tail, style: StrokeStyle(lineWidth: lw, lineCap: .round, lineJoin: .round))
+                MarkRibbon(progress: draw, lineWidth: lw)
+                    .fill(tail)
                     .frame(width: s, height: s)
                     .position(x: box.midX, y: box.midY)
+                // The dot lands last, like a drop: it arrives a little large and settles to size.
                 Circle()
                     .fill(color)
                     .frame(width: d, height: d)
-                    .scaleEffect(0.4 + 0.6 * min(1, max(0, dot)))
-                    .opacity(min(1, max(0, dot)))
+                    .scaleEffect(1 + 0.4 * (1 - landing))
+                    .opacity(min(1, landing * 2.2))
                     .position(end)
             }
             // Flatten before any opacity is applied, so the dot and the stroke's end don't double up.
