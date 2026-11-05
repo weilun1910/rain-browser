@@ -1,0 +1,242 @@
+{
+  "version": 1,
+  "anchor": "2026-11-04T16:40:00-05:00",
+  "about": "The demo profile's layout at the demo moment. Every item points at content by id: notes, docs and meetings by their front matter id, web pages by their id in history.json. Item ids are stable so the seeder can derive UUIDs from them.",
+  "currentSpace": "school",
+  "focus": {
+    "space": "school",
+    "split": "split-school-writing",
+    "pane": "right",
+    "item": "item-school-draft-s2"
+  },
+  "essentials": [
+    {"id": "item-ess-notion-home", "kind": "doc", "ref": "notion-home"},
+    {"id": "item-ess-weekly-plan", "kind": "note", "ref": "note-weekly-plan"},
+    {"id": "item-ess-pm-tracker", "kind": "doc", "ref": "gsheet-pm-tracker"},
+    {"id": "item-ess-hacker-news", "kind": "web", "ref": "web-hacker-news"}
+  ],
+  "spaces": [
+    {
+      "id": "school",
+      "name": "School",
+      "icon": "graduationcap",
+      "color": "#4C8DF6",
+      "notesFolder": "School",
+      "pinned": [
+        {"id": "item-school-paper-draft", "kind": "doc", "ref": "gdoc-paper-draft"},
+        {"id": "item-school-syllabus", "kind": "doc", "ref": "gdoc-seminar-syllabus"}
+      ],
+      "folders": [
+        {
+          "id": "folder-school-sources",
+          "name": "Paper sources",
+          "expanded": true,
+          "items": [
+            {"id": "item-school-gurley", "kind": "web", "ref": "web-gurley-all-markets"},
+            {"id": "item-school-aggregation", "kind": "web", "ref": "web-stratechery-aggregation-theory"},
+            {"id": "item-school-nfx-manual", "kind": "web", "ref": "web-nfx-network-effects-manual"},
+            {"id": "item-school-two-sided", "kind": "web", "ref": "web-wiki-two-sided-market"},
+            {"id": "item-school-nber-uber", "kind": "web", "ref": "web-nber-uber-flexible-work"},
+            {"id": "item-school-rochet-tirole", "kind": "note", "ref": "note-reading-rochet-tirole"},
+            {"id": "item-school-cold-start-book", "kind": "note", "ref": "note-book-cold-start"}
+          ]
+        },
+        {
+          "id": "folder-school-drafts",
+          "name": "Drafts",
+          "expanded": true,
+          "items": [
+            {"id": "item-school-outline-v2", "kind": "note", "ref": "note-paper-outline-v2"},
+            {"id": "item-school-multihoming", "kind": "note", "ref": "note-multihoming-evidence"},
+            {"id": "item-school-lightning-talk", "kind": "doc", "ref": "gslides-paper-lightning-talk"}
+          ]
+        },
+        {
+          "id": "folder-school-cpsc365",
+          "name": "CPSC 365",
+          "expanded": false,
+          "items": [
+            {"id": "item-school-pset5", "kind": "note", "ref": "note-cpsc365-pset5"},
+            {"id": "item-school-max-flow", "kind": "web", "ref": "web-wiki-max-flow-min-cut"}
+          ]
+        }
+      ],
+      "tabs": [
+        {"id": "item-school-facebook-history", "kind": "web", "ref": "web-wiki-history-of-facebook"},
+        {"id": "item-school-lenny-marketplace", "kind": "web", "ref": "web-lenny-kickstart-marketplace"},
+        {"id": "item-school-critical-mass", "kind": "web", "ref": "web-wiki-critical-mass"}
+      ],
+      "splits": [
+        {
+          "id": "split-school-writing",
+          "left": {"id": "item-school-nfx-tactics", "kind": "web", "ref": "web-nfx-chicken-or-egg-tactics"},
+          "right": {"id": "item-school-draft-s2", "kind": "note", "ref": "note-paper-draft-s2"},
+          "ratio": 0.5,
+          "focus": "right"
+        }
+      ],
+      "selected": {"split": "split-school-writing"}
+    },
+    {
+      "id": "swapshelf",
+      "name": "Swapshelf",
+      "icon": "hammer",
+      "color": "#E0A030",
+      "notesFolder": "Swapshelf",
+      "pinned": [
+        {"id": "item-swap-roadmap", "kind": "doc", "ref": "notion-swapshelf-roadmap"},
+        {"id": "item-swap-waitlist", "kind": "doc", "ref": "gsheet-swapshelf-waitlist"}
+      ],
+      "folders": [
+        {
+          "id": "folder-swap-pilot",
+          "name": "Pilot",
+          "expanded": true,
+          "items": [
+            {"id": "item-swap-pilot-plan", "kind": "doc", "ref": "gdoc-swapshelf-pilot-plan"},
+            {"id": "item-swap-pilot-metrics", "kind": "note", "ref": "note-swapshelf-pilot-metrics"},
+            {"id": "item-swap-spec", "kind": "doc", "ref": "notion-swapshelf-spec"},
+            {"id": "item-swap-pickup", "kind": "note", "ref": "note-pickup-points"}
+          ]
+        },
+        {
+          "id": "folder-swap-research",
+          "name": "Research",
+          "expanded": true,
+          "items": [
+            {"id": "item-swap-synthesis", "kind": "note", "ref": "note-ui-synthesis"},
+            {"id": "item-swap-aisha", "kind": "note", "ref": "note-ui-aisha"},
+            {"id": "item-swap-daniel", "kind": "note", "ref": "note-ui-daniel"},
+            {"id": "item-swap-guide", "kind": "doc", "ref": "gdoc-swapshelf-interview-guide"}
+          ]
+        },
+        {
+          "id": "folder-swap-build",
+          "name": "Build",
+          "expanded": false,
+          "items": [
+            {"id": "item-swap-schema", "kind": "note", "ref": "note-supabase-schema"},
+            {"id": "item-swap-rls", "kind": "web", "ref": "web-supabase-rls"},
+            {"id": "item-swap-list-docs", "kind": "web", "ref": "web-apple-swiftui-list"},
+            {"id": "item-swap-launch-note", "kind": "note", "ref": "note-swiftui-launch"},
+            {"id": "item-swap-testflight", "kind": "web", "ref": "web-apple-testflight"}
+          ]
+        }
+      ],
+      "tabs": [
+        {"id": "item-swap-review-guidelines", "kind": "web", "ref": "web-apple-review-guidelines"},
+        {"id": "item-swap-app-store-copy", "kind": "doc", "ref": "gdoc-swapshelf-app-store-copy"}
+      ],
+      "splits": [],
+      "selected": {"item": "item-swap-pilot-plan"}
+    },
+    {
+      "id": "job-hunt",
+      "name": "Job hunt",
+      "icon": "briefcase",
+      "color": "#2FA8A0",
+      "notesFolder": "Job hunt",
+      "pinned": [
+        {"id": "item-job-prep-hub", "kind": "doc", "ref": "notion-pm-prep-hub"}
+      ],
+      "folders": [
+        {
+          "id": "folder-job-errandly",
+          "name": "Errandly",
+          "expanded": true,
+          "items": [
+            {"id": "item-job-errandly-research", "kind": "doc", "ref": "notion-errandly-research"},
+            {"id": "item-job-nadia", "kind": "note", "ref": "note-coffee-nadia"}
+          ]
+        },
+        {
+          "id": "folder-job-mapleframe",
+          "name": "Mapleframe",
+          "expanded": true,
+          "items": [
+            {"id": "item-job-mapleframe-prep", "kind": "note", "ref": "note-mapleframe-prep"},
+            {"id": "item-job-omar", "kind": "note", "ref": "note-coffee-omar"},
+            {"id": "item-job-cover-letter", "kind": "doc", "ref": "gdoc-cover-letter-mapleframe"}
+          ]
+        },
+        {
+          "id": "folder-job-quillstone",
+          "name": "Quillstone",
+          "expanded": false,
+          "items": [
+            {"id": "item-job-quillstone-notes", "kind": "note", "ref": "note-quillstone-notes"},
+            {"id": "item-job-local-first", "kind": "web", "ref": "web-inkandswitch-local-first"},
+            {"id": "item-job-quillstone-screen", "kind": "meeting", "ref": "granola-2026-10-27-quillstone-screen"}
+          ]
+        },
+        {
+          "id": "folder-job-practice",
+          "name": "Practice",
+          "expanded": false,
+          "items": [
+            {"id": "item-job-estimation", "kind": "note", "ref": "note-estimation-textbooks"},
+            {"id": "item-job-product-sense", "kind": "note", "ref": "note-product-sense-lost-found"},
+            {"id": "item-job-mock", "kind": "meeting", "ref": "granola-2026-10-22-mock-interview"}
+          ]
+        }
+      ],
+      "tabs": [
+        {"id": "item-job-resume", "kind": "doc", "ref": "gdoc-resume"},
+        {"id": "item-job-answers", "kind": "doc", "ref": "gdoc-application-answers"}
+      ],
+      "splits": [
+        {
+          "id": "split-job-stories",
+          "left": {"id": "item-job-star", "kind": "web", "ref": "web-wiki-star-method"},
+          "right": {"id": "item-job-stories", "kind": "note", "ref": "note-behavioral-stories"},
+          "ratio": 0.45,
+          "focus": "right"
+        }
+      ],
+      "selected": {"split": "split-job-stories"}
+    },
+    {
+      "id": "personal",
+      "name": "Personal",
+      "icon": "airplane",
+      "color": "#5DA55A",
+      "notesFolder": "Personal",
+      "pinned": [
+        {"id": "item-personal-itinerary", "kind": "doc", "ref": "gdoc-japan-itinerary"},
+        {"id": "item-personal-budget", "kind": "doc", "ref": "gsheet-japan-budget"}
+      ],
+      "folders": [
+        {
+          "id": "folder-personal-japan",
+          "name": "Japan",
+          "expanded": true,
+          "items": [
+            {"id": "item-personal-overview", "kind": "note", "ref": "note-japan-overview"},
+            {"id": "item-personal-tokyo-food", "kind": "note", "ref": "note-tokyo-food"},
+            {"id": "item-personal-kyoto", "kind": "note", "ref": "note-kyoto-shortlist"},
+            {"id": "item-personal-jr-pass", "kind": "note", "ref": "note-jr-pass-math"},
+            {"id": "item-personal-packing", "kind": "note", "ref": "note-packing"},
+            {"id": "item-personal-phrases", "kind": "note", "ref": "note-japanese-phrases"},
+            {"id": "item-personal-jr-official", "kind": "web", "ref": "web-jrpass-official"}
+          ]
+        },
+        {
+          "id": "folder-personal-running",
+          "name": "Running",
+          "expanded": false,
+          "items": [
+            {"id": "item-personal-running", "kind": "note", "ref": "note-running"},
+            {"id": "item-personal-half", "kind": "web", "ref": "web-wiki-half-marathon"}
+          ]
+        }
+      ],
+      "tabs": [
+        {"id": "item-personal-flights", "kind": "note", "ref": "note-japan-flights"},
+        {"id": "item-personal-haneda", "kind": "web", "ref": "web-wiki-haneda"},
+        {"id": "item-personal-ana", "kind": "web", "ref": "web-wiki-ana"}
+      ],
+      "splits": [],
+      "selected": {"item": "item-personal-flights"}
+    }
+  ]
+}
