@@ -21,7 +21,26 @@ struct Suggestion: Identifiable, Equatable {
              searches = "Searches", history = "History", actions = " "
     }
 
-    let id = UUID()
+    /// Stable across rebuilds, so a row that's still there after a keystroke keeps its place
+    /// instead of being thrown away and redrawn. Rows whose text follows the query (Search Google,
+    /// New note, Open) keep one identity and just update their text.
+    var id: String {
+        let k: String
+        switch kind {
+        case .openURL: k = "open"
+        case .tab(let u): k = "tab:\(u.uuidString)"
+        case .note(let u): k = "note:\(u.absoluteString)"
+        case .pastSearch(let q): k = "past:\(q)"
+        case .history(let u): k = "history:\(u.absoluteString)"
+        case .google: k = "google"
+        case .newNote: k = "newnote"
+        case .action(let a): k = "action:\(a)"
+        case .folder(let u): k = "folder:\(u.uuidString)"
+        case .space(let u): k = "space:\(u.uuidString)"
+        case .closed(let u): k = "closed:\(u.uuidString)"
+        }
+        return group.rawValue + "|" + k
+    }
     let kind: Kind
     let group: Group
     let title: String
@@ -402,30 +421,81 @@ final class CommandBar: ObservableObject {
     }
 }
 
+/// The bar and its backdrop. Always in the tree, so the backdrop and the panel can each come and
+/// go on their own: the backdrop fades, and the panel rises in from the middle for Cmd-T or grows
+/// out of the sidebar's address field for Cmd-L. Closing is quicker than opening, like Zen.
 struct CommandBarView: View {
     @ObservedObject var bar: CommandBar
     /// The sidebar's width on each side, left clear so the sidebar still takes clicks.
     var leadingClear: CGFloat = 0
     var trailingClear: CGFloat = 0
+    @ObservedObject private var anchor = CommandBarAnchor.shared
 
     var body: some View {
         GeometryReader { g in
+            let width = min(g.size.width / 1.5, 680).clamped(lower: 460)
+            // Zen puts the top a little above the middle so results grow downward.
+            let top = max(60, g.size.height / 2 - 220)
+            let origin = g.frame(in: .global).origin
+            let target = CGRect(x: origin.x + (g.size.width - width) / 2, y: origin.y + top, width: width, height: CommandPanel.fieldHeight)
             ZStack(alignment: .top) {
-                HStack(spacing: 0) {
-                    Color.clear.frame(width: leadingClear).allowsHitTesting(false)
-                    Color.black.opacity(0.12)
-                        .contentShape(Rectangle())
-                        .onTapGesture { bar.close() }
-                    Color.clear.frame(width: trailingClear).allowsHitTesting(false)
+                if bar.isOpen {
+                    HStack(spacing: 0) {
+                        Color.clear.frame(width: leadingClear).allowsHitTesting(false)
+                        Theme.Palette.scrim
+                            .contentShape(Rectangle())
+                            .onTapGesture { bar.close() }
+                        Color.clear.frame(width: trailingClear).allowsHitTesting(false)
+                    }
+                    .ignoresSafeArea()
+                    .transition(.asymmetric(insertion: .opacity.animation(Motion.scrim), removal: .opacity.animation(Motion.barOut)))
                 }
-                .ignoresSafeArea()
-                CommandPanel(bar: bar)
-                    .frame(width: min(g.size.width / 1.5, 680).clamped(lower: 460))
-                    // Zen puts the top a little above the middle so results grow downward.
-                    .padding(.top, max(60, g.size.height / 2 - 220))
-                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+                if bar.isOpen {
+                    CommandPanel(bar: bar)
+                        .frame(width: width)
+                        .padding(.top, top)
+                        .transition(panelTransition(from: anchor.addressFrame, to: target))
+                }
             }
         }
+        .allowsHitTesting(bar.isOpen)
+    }
+
+    /// Cmd-L grows the panel out of the address field and shrinks it back. Cmd-T rises from just
+    /// below its resting place. With Reduce Motion both only fade.
+    func panelTransition(from: CGRect, to: CGRect) -> AnyTransition {
+        if Motion.reduceMotion { return .opacity.animation(Motion.reducedFade) }
+        if case .navigate = bar.mode, from.width > 10 {
+            let grow = AnyTransition.modifier(active: GrowFrom(from: from, to: to, progress: 0),
+                                              identity: GrowFrom(from: from, to: to, progress: 1))
+            return .asymmetric(insertion: grow.animation(Motion.barGrow), removal: grow.animation(Motion.barShrink))
+        }
+        return Motion.Transitions.commandBar
+    }
+}
+
+/// Moves and scales a view from one rect to where it rests, by `progress` from 0 to 1, so the
+/// command bar can grow out of the address field. Uniform scale, so the text never squashes.
+struct GrowFrom: ViewModifier, Animatable {
+    let from: CGRect
+    let to: CGRect
+    var progress: CGFloat
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        let p = min(1, max(0, progress))
+        let s = (from.width / max(1, to.width))
+        let scale = s + (1 - s) * p
+        let dx = (from.minX - to.minX) * (1 - p)
+        let dy = (from.minY - to.minY) * (1 - p)
+        return content
+            .scaleEffect(scale, anchor: .topLeading)
+            .offset(x: dx, y: dy)
+            .opacity(Double(min(1, 0.15 + p * 1.4)))
     }
 }
 
@@ -436,60 +506,84 @@ extension CGFloat {
 /// The floating panel: the field, the rows and a hint line.
 struct CommandPanel: View {
     @ObservedObject var bar: CommandBar
+    @Namespace private var selection
+    @Environment(\.spaceAccent) private var accent
+
+    static let fieldHeight: CGFloat = 58
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.Space.l) {
+                // The search glyph and the Actions label trade places with a crossfade.
+                ZStack(alignment: .leading) {
+                    if bar.actionsOnly {
+                        Text("Actions")
+                            .font(Theme.Font.rowEmphasis)
+                            .foregroundStyle(accent)
+                            .fixedSize()
+                            .transition(.opacity)
+                    } else {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .transition(.opacity)
+                    }
+                }
+                .frame(minWidth: 18, alignment: .leading)
+                .motion(Motion.hover, value: bar.actionsOnly, fadeOnly: true)
                 if bar.actionsOnly {
-                    Text("Actions")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.primary.opacity(0.2)))
-                } else {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    Rectangle().fill(Theme.Palette.hairline).frame(width: 1, height: 18).transition(.opacity)
                 }
                 CommandField(bar: bar)
-                    .frame(height: 26)
+                    .frame(height: 28)
             }
-            .padding(.horizontal, 16)
-            .frame(height: 52)
+            .padding(.horizontal, Theme.Space.xxl - 2)
+            .frame(height: Self.fieldHeight)
             if !bar.results.isEmpty {
-                Divider().opacity(0.6)
+                Rectangle().fill(Theme.Palette.hairline).frame(height: 1)
                 ScrollViewReader { proxy in
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 1) {
+                        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                             ForEach(Array(bar.results.enumerated()), id: \.element.id) { i, s in
                                 if i == 0 || bar.results[i - 1].group != s.group, !s.group.rawValue.trimmingCharacters(in: .whitespaces).isEmpty {
                                     Text(s.group.rawValue)
-                                        .font(.system(size: 11, weight: .semibold))
-                                        .foregroundStyle(.tertiary)
-                                        .padding(.horizontal, 16)
-                                        .padding(.top, i == 0 ? 6 : 10)
-                                        .padding(.bottom, 2)
+                                        .font(Theme.Font.label)
+                                        .foregroundStyle(.secondary)
+                                        .padding(.horizontal, Theme.Space.xxl - 2)
+                                        .padding(.top, i == 0 ? Theme.Space.s : Theme.Space.l)
+                                        .padding(.bottom, Theme.Space.xxs)
+                                        .transition(.opacity)
                                 }
-                                SuggestionRow(s: s, selected: i == bar.selected)
+                                SuggestionRow(s: s, selected: i == bar.selected, selection: selection)
                                     .id(s.id)
                                     .onTapGesture { bar.pick(s, flags: NSEvent.modifierFlags) }
                                     .onHover { if $0 { bar.selected = i } }
+                                    .transition(.opacity)
                             }
                         }
-                        .padding(.vertical, 6)
+                        .padding(.vertical, Theme.Space.m)
+                        // Switching between search and the actions list crossfades the rows.
+                        .id(bar.actionsOnly)
+                        .transition(.opacity)
                     }
-                    .frame(maxHeight: 400)
+                    .frame(maxHeight: 420)
                     .fixedSize(horizontal: false, vertical: true)
                     .onChange(of: bar.selected) { _, i in
-                        if bar.results.indices.contains(i) { proxy.scrollTo(bar.results[i].id) }
+                        guard bar.results.indices.contains(i) else { return }
+                        Motion.run(Motion.selection) { proxy.scrollTo(bar.results[i].id) }
                     }
                 }
-                Divider().opacity(0.4)
+                .transition(.opacity)
+                Rectangle().fill(Theme.Palette.hairline).frame(height: 1)
                 CommandHint(actionsOnly: bar.actionsOnly)
             }
         }
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.regularMaterial))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.primary.opacity(0.1)))
-        .shadow(color: .black.opacity(0.28), radius: 40, y: 18)
+        // The highlight glides between rows, and the panel's height follows the results.
+        .motion(Motion.selection, value: bar.selected)
+        .motion(Motion.barResize, value: bar.results.map { $0.id })
+        .motion(Motion.hover, value: bar.actionsOnly, fadeOnly: true)
+        .floatingSheet()
+        .themeShadow(.commandBar)
     }
 }
 
@@ -497,66 +591,96 @@ struct CommandPanel: View {
 struct CommandHint: View {
     let actionsOnly: Bool
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: Theme.Space.l) {
             if actionsOnly {
-                hint("↵", "run")
-                hint("⌫", "back to search")
+                hint("\u{21B5}", "run")
+                hint("\u{232B}", "back to search")
             } else {
-                hint("↵", "open")
-                hint("⌥↵", "split view")
-                hint("⇧↵", "Peek")
-                hint("⌘↵", "background tab")
-                hint("⇥", "actions")
+                hint("\u{21B5}", "open")
+                hint("\u{2325}\u{21B5}", "split view")
+                hint("\u{21E7}\u{21B5}", "Peek")
+                hint("\u{2318}\u{21B5}", "background tab")
+                hint("\u{21E5}", "actions")
             }
             Spacer(minLength: 0)
         }
-        .font(.system(size: 11))
-        .foregroundStyle(.tertiary)
-        .padding(.horizontal, 16)
-        .frame(height: 26)
+        .font(Theme.Font.caption)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, Theme.Space.xxl - 2)
+        .frame(height: 32)
+        .transition(.opacity)
     }
 
     func hint(_ key: String, _ what: String) -> some View {
-        HStack(spacing: 4) {
-            Text(key).foregroundStyle(.secondary)
+        HStack(spacing: Theme.Space.s) {
+            Keycap(key)
             Text(what)
         }
+    }
+}
+
+/// A key or shortcut in a thin outlined cap, for hints and action shortcuts.
+struct Keycap: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+    var body: some View {
+        Text(text)
+            .font(.system(size: 10.5, weight: .medium).monospacedDigit())
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 5)
+            .frame(minWidth: 18, minHeight: 17)
+            .overlay(Theme.Radius.shape(Theme.Radius.xs).strokeBorder(Theme.Palette.hairline, lineWidth: 1))
     }
 }
 
 struct SuggestionRow: View {
     let s: Suggestion
     let selected: Bool
+    var selection: Namespace.ID
+    @Environment(\.spaceAccent) private var accent
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Theme.Space.l) {
             Group {
                 if let u = s.url, Favicons.key(u) != nil {
-                    FaviconView(url: u, size: 15)
+                    FaviconView(url: u, size: 16)
                 } else {
                     Image(systemName: s.icon)
-                        .font(.system(size: 12))
-                        .foregroundStyle(selected ? Color.white : Color.secondary)
+                        .font(.system(size: 13))
+                        .foregroundStyle(selected ? .primary : .secondary)
                 }
             }
-            .frame(width: 18)
+            .frame(width: 20)
             VStack(alignment: .leading, spacing: 1) {
-                Text(s.title).font(.system(size: 13)).lineLimit(1)
-                    .foregroundStyle(selected ? Color.white : Color.primary)
+                Text(s.title).font(Theme.Font.row).lineLimit(1)
+                    .foregroundStyle(.primary)
                 if !s.subtitle.isEmpty {
-                    Text(s.subtitle).font(.system(size: 11)).lineLimit(1)
-                        .foregroundStyle(selected ? Color.white.opacity(0.8) : Color.secondary)
+                    Text(s.subtitle).font(Theme.Font.caption).lineLimit(1)
+                        .foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: 0)
             if let k = s.shortcut {
-                Text(k).font(.system(size: 11)).foregroundStyle(selected ? Color.white.opacity(0.8) : Color.secondary)
+                Keycap(k)
+            } else {
+                Image(systemName: "return")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .opacity(selected ? 1 : 0)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 8).fill(selected ? Color.accentColor : .clear))
-        .padding(.horizontal, 6)
+        .padding(.horizontal, Theme.Space.m + 2)
+        .frame(minHeight: 36)
+        .padding(.vertical, 2)
+        // One highlight that glides from row to row, tinted with the space's colour, text untouched.
+        .background {
+            if selected {
+                Theme.Radius.shape(Theme.Radius.row)
+                    .fill(accent.opacity(0.16))
+                    .matchedGeometryEffect(id: "selection", in: selection)
+            }
+        }
+        .padding(.horizontal, Theme.Space.m)
         .contentShape(Rectangle())
     }
 }
@@ -630,7 +754,7 @@ struct CommandField: NSViewRepresentable {
         f.isBordered = false
         f.drawsBackground = false
         f.focusRingType = .none
-        f.font = .systemFont(ofSize: 18)
+        f.font = Theme.Font.fieldNS
         f.placeholderString = "Search, enter an address, or press Tab for actions"
         f.delegate = context.coordinator
         f.stringValue = bar.query
@@ -639,6 +763,8 @@ struct CommandField: NSViewRepresentable {
         DispatchQueue.main.async {
             f.window?.makeFirstResponder(f)
             f.currentEditor()?.selectAll(nil)
+            // A slightly softer caret than the default, in the system accent.
+            (f.currentEditor() as? NSTextView)?.insertionPointColor = NSColor.controlAccentColor.withAlphaComponent(0.8)
         }
         return f
     }

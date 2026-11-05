@@ -35,10 +35,19 @@ enum Motion {
     static let spaceSwitch = Animation.spring(duration: 0.28, bounce: 0)
     /// Side panels showing and hiding. A touch of settle, too small to read as bounce.
     static let panel = Animation.spring(duration: 0.3, bounce: 0.06)
-    /// The command bar arriving and leaving.
-    static let barIn = Animation.spring(duration: 0.22, bounce: 0)
+    /// The command bar rising in for Cmd-T: a short spring with the faintest settle.
+    static let barIn = Animation.spring(duration: 0.26, bounce: 0.04)
+    /// Leaving is quicker than arriving, like Zen's 0.12 s exits.
     static let barOut = Animation.easeIn(duration: 0.12)
+    /// Cmd-L: the bar growing out of the sidebar's address field, and shrinking back into it.
+    static let barGrow = Animation.spring(duration: 0.32, bounce: 0)
+    static let barShrink = Animation.timingCurve(0.4, 0, 0.2, 1, duration: 0.2)
+    /// The backdrop behind the bar.
     static let scrim = Animation.easeOut(duration: 0.18)
+    /// The selected row's highlight gliding to the next row, and the list following it.
+    static let selection = Animation.spring(duration: 0.18, bounce: 0)
+    /// The bar's height following its results as you type.
+    static let barResize = Animation.spring(duration: 0.22, bounce: 0)
     /// Split panes settling into their widths.
     static let split = Animation.spring(duration: 0.28, bounce: 0)
     /// The load progress line.
@@ -87,12 +96,13 @@ enum Motion {
             return .asymmetric(insertion: .opacity.combined(with: .offset(y: 6)).animation(Motion.card(index: index)),
                                removal: .identity)
         }
-        /// The command bar.
+        /// The command bar for Cmd-T: it rises 10 pt from just below where it rests and grows from
+        /// 97 percent, and leaves with a small shrink and a fade.
         static var commandBar: AnyTransition {
-            if Motion.reduceMotion { return .opacity }
+            if Motion.reduceMotion { return .opacity.animation(Motion.reducedFade) }
             return .asymmetric(
-                insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .top)).combined(with: .offset(y: -6)).animation(Motion.barIn),
-                removal: .opacity.combined(with: .scale(scale: 0.99, anchor: .top)).animation(Motion.barOut))
+                insertion: .opacity.combined(with: .scale(scale: 0.97, anchor: .center)).combined(with: .offset(y: 10)).animation(Motion.barIn),
+                removal: .opacity.combined(with: .scale(scale: 0.985, anchor: .center)).animation(Motion.barOut))
         }
         /// The sidebar list when you move between spaces. `step` is +1 moving right, -1 moving left.
         /// Like Zen, the new space's list slides in a whole page from the side you're moving

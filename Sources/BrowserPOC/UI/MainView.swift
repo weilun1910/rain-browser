@@ -149,10 +149,8 @@ struct CommandBarOverlay: View {
     var leadingClear: CGFloat = 0
     var trailingClear: CGFloat = 0
     var body: some View {
-        ZStack {
-            if bar.isOpen { CommandBarView(bar: bar, leadingClear: leadingClear, trailingClear: trailingClear) }
-        }
-        .animation(.easeOut(duration: 0.14), value: bar.isOpen)
+        // Always present: the backdrop and the panel come and go inside it on their own timings.
+        CommandBarView(bar: bar, leadingClear: leadingClear, trailingClear: trailingClear)
     }
 }
 

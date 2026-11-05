@@ -57,7 +57,7 @@ extension Theme {
 
     /// Shadows. Two layers each: a tight contact shadow for the edge and a soft one for lift.
     enum Shadow {
-        case card, row, panelCard, sheet, floating, popover, mark
+        case card, row, panelCard, sheet, floating, popover, commandBar, mark
 
         struct Layer { let opacity: Double; let radius: CGFloat; let y: CGFloat }
 
@@ -70,6 +70,9 @@ extension Theme {
             case .sheet: return [Layer(opacity: 0.10 * k, radius: 1, y: 0.5), Layer(opacity: 0.22 * min(k, 1.6), radius: 40, y: 18)]
             case .floating: return [Layer(opacity: 0.10 * k, radius: 1, y: 0.5), Layer(opacity: 0.16 * min(k, 1.6), radius: 14, y: 5)]
             case .popover: return [Layer(opacity: 0.12 * k, radius: 1, y: 0.5), Layer(opacity: 0.20 * min(k, 1.6), radius: 24, y: 10)]
+            // The command bar: a deep, soft third layer like Zen's floating urlbar, which reads as floating
+            // well above the page rather than sitting on it.
+            case .commandBar: return [Layer(opacity: 0.0, radius: 0, y: 0), Layer(opacity: 0.0, radius: 0, y: 0), Layer(opacity: 0.20 * min(k, 1.5), radius: 70, y: 34)]
             case .mark: return [Layer(opacity: 0.0, radius: 0, y: 0)]
             }
         }
@@ -79,11 +82,16 @@ extension Theme {
 struct ThemeShadow: ViewModifier {
     let kind: Theme.Shadow
     @Environment(\.colorScheme) private var scheme
-    func body(content: Content) -> some View {
+    @ViewBuilder func body(content: Content) -> some View {
         let l = kind.layers(dark: scheme == .dark)
-        return content
-            .shadow(color: .black.opacity(l[0].opacity), radius: l[0].radius, y: l[0].y)
-            .shadow(color: .black.opacity(l.count > 1 ? l[1].opacity : 0), radius: l.count > 1 ? l[1].radius : 0, y: l.count > 1 ? l[1].y : 0)
+        if l.count > 2 {
+            // Only the deep layer of a three-layer shadow; the first two belong to the surface's own shadow.
+            content.shadow(color: .black.opacity(l[2].opacity), radius: l[2].radius, y: l[2].y)
+        } else {
+            content
+                .shadow(color: .black.opacity(l[0].opacity), radius: l[0].radius, y: l[0].y)
+                .shadow(color: .black.opacity(l.count > 1 ? l[1].opacity : 0), radius: l.count > 1 ? l[1].radius : 0, y: l.count > 1 ? l[1].y : 0)
+        }
     }
 }
 

@@ -63,6 +63,9 @@ if args.contains("--download-models") {
 }
 if args.contains("--granola-dry-run") { exit(GranolaSource.dryRun()) }
 
+// --reduce-motion: behave as if Reduce Motion were on, for checking it without changing System Settings.
+if args.contains("--reduce-motion") { Motion.forceReduce = true }
+
 // --data-dir <dir> runs the app on its own support folder and its own WebKit store, so test
 // and demo runs never read or write the real profile.
 if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
@@ -73,7 +76,7 @@ if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
 }
 
 let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--workdir", "--extract-check", "--data-dir",
-                          "--render-art", "--render-review", "--profile", "--query", "--motion-tour",
+                          "--render-art", "--render-review", "--profile", "--query", "--motion-tour", "--reduce-motion",
                           "--eval", "--models-dir", "--verbose", "--notion-dry-run", "--granola-dry-run", "--download-models", "--scale"]
 if let unknown = args.dropFirst().first(where: { $0.hasPrefix("--") && !known.contains($0) }) {
     print("Unknown flag \(unknown). Flags: --selftest, --smoketest, --chrome-dry-run, each with optional --workdir <dir> for the tests, and --data-dir <dir> to run the app on a separate profile.")

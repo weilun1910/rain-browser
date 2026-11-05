@@ -7,16 +7,17 @@ import SwiftUI
 /// the steps. The app quits at the end.
 @MainActor
 enum MotionTour {
-    static func start(_ model: BrowserModel) {
-        guard Paths.overrideRoot != nil else {
-            print("--motion-tour only runs with --data-dir, so it never touches your real profile.")
-            return
-        }
-        let log = Paths.root.appendingPathComponent("motion-tour.log")
-        try? "".write(to: log, atomically: true, encoding: .utf8)
+    /// Schedules labelled steps, each `gap` seconds after the last, logging their wall-clock times.
+    final class Steps {
+        let log: URL
         var t = 0.0
+        init() {
+            log = Paths.root.appendingPathComponent("motion-tour.log")
+            try? "".write(to: log, atomically: true, encoding: .utf8)
+        }
         func step(_ gap: Double, _ label: String, _ f: @escaping @MainActor () -> Void) {
             t += gap
+            let log = self.log
             DispatchQueue.main.asyncAfter(deadline: .now() + t) {
                 MainActor.assumeIsolated {
                     let line = String(format: "%.3f %@\n", Date().timeIntervalSince1970, label)
@@ -25,6 +26,41 @@ enum MotionTour {
                 }
             }
         }
+    }
+
+    /// `--motion-tour bar`: only the command bar. Opening, typing, moving through rows, the actions
+    /// list, Cmd-L and closing.
+    static func startBar(_ model: BrowserModel) {
+        guard Paths.overrideRoot != nil else { return }
+        let s = Steps()
+        let bar = model.bar
+        s.step(2.6, "open") { bar.open(.newTab) }
+        for (i, ch) in "cold st".enumerated() {
+            s.step(i == 0 ? 0.6 : 0.11, "type") { bar.lastEditWasInsertion = true; bar.query.append(ch) }
+        }
+        for (i, d) in [1, 1, 1, -1].enumerated() {
+            s.step(i == 0 ? 0.8 : 0.4, d > 0 ? "down" : "up") { bar.move(d) }
+        }
+        s.step(0.8, "clear") { bar.query = "" }
+        s.step(0.6, "actions") { bar.setActionsOnly(true) }
+        for (i, ch) in "spl".enumerated() {
+            s.step(i == 0 ? 0.6 : 0.12, "type") { bar.query.append(ch) }
+        }
+        s.step(0.9, "back to search") { bar.query = ""; bar.setActionsOnly(false) }
+        s.step(0.9, "close") { bar.close() }
+        s.step(1.0, "cmd-l open") { model.focusAddress() }
+        s.step(1.4, "cmd-l close") { bar.close() }
+        s.step(1.0, "quit") { NSApp.terminate(nil) }
+    }
+
+    static func start(_ model: BrowserModel) {
+        guard Paths.overrideRoot != nil else {
+            print("--motion-tour only runs with --data-dir, so it never touches your real profile.")
+            return
+        }
+        if CommandLine.arguments.contains("bar") { startBar(model); return }
+        let steps = Steps()
+        func step(_ gap: Double, _ label: String, _ f: @escaping @MainActor () -> Void) { steps.step(gap, label, f) }
         let firstFolder = { model.spaceFolders.first }
         let webInFolder = { firstFolder().flatMap { model.tabs(in: $0).first { $0.kind == .web } } }
         let noteInSpace = { model.spaceTabs.first { $0.kind == .note && $0.folderID != nil } }
