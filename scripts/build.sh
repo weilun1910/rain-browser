@@ -17,6 +17,13 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/BrowserPOC" "$APP/Contents/MacOS/BrowserPOC"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
+# The icon is drawn in code; scripts/make-icon.sh renders it into Resources/AppIcon.icns.
+if [ -f "$ROOT/Resources/AppIcon.icns" ]; then
+  cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+else
+  echo "Resources/AppIcon.icns is missing. Run scripts/make-icon.sh." >&2
+  exit 1
+fi
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 # Ad hoc by default. Ad hoc signatures change on every build, so macOS may ask again for
