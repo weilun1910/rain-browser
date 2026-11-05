@@ -104,10 +104,44 @@ struct PaneFramesKey: PreferenceKey {
     static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) { value.merge(nextValue()) { $1 } }
 }
 
+extension SplitNode {
+    /// A stable identity for the views that draw this node: the item for a pane, and its items
+    /// for a branch.
+    var key: String {
+        switch self {
+        case .leaf(let id): return id.uuidString
+        case .branch(let axis, _, _): return axis.rawValue + ":" + leaves.map(\.uuidString).joined(separator: ",")
+        }
+    }
+}
+
 /// A split drawn from its tree: rows and columns of panes with dividers you can drag.
 struct SplitPanes: View {
     let split: SplitRecord
-    var body: some View { SplitNodeView.make(split: split, node: split.root, path: []) }
+    var body: some View {
+        SplitNodeView.make(split: split, node: split.root, path: [])
+            // Swaps, closes, new panes and layout changes all move the panes to their new frames on
+            // the split spring. Panes are keyed by item, so each glides from where it was.
+            .motion(Motion.split, value: split.root)
+    }
+}
+
+private struct PaneSpaceKey: EnvironmentKey { static let defaultValue: Namespace.ID? = nil }
+
+extension EnvironmentValues {
+    /// The content area's namespace for panes, so a page going into a split, or coming out of one,
+    /// moves from its old frame to its new one instead of jumping.
+    var paneSpace: Namespace.ID? {
+        get { self[PaneSpaceKey.self] }
+        set { self[PaneSpaceKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Matches a pane to its page's other panes in the content area, by item.
+    @ViewBuilder func matchedPane(_ id: UUID?, in space: Namespace.ID?) -> some View {
+        if let id, let space { matchedGeometryEffect(id: id, in: space) } else { self }
+    }
 }
 
 enum SplitNodeView {
@@ -136,7 +170,9 @@ struct SplitBranch: View {
             let total = axis == .row ? g.size.width : g.size.height
             let avail = max(1, total - Self.gap * CGFloat(kids.count - 1))
             let layout = Group {
-                ForEach(Array(kids.enumerated()), id: \.offset) { i, kid in
+                // Keyed by what each child holds, so a pane keeps its own view when the split
+                // changes around it: panes glide to new places and their web views stay put.
+                ForEach(Array(kids.enumerated()), id: \.element.key) { i, kid in
                     SplitNodeView.make(split: split, node: kid, path: path + [i])
                         .frame(width: axis == .row ? avail * sizes[i] : nil, height: axis == .column ? avail * sizes[i] : nil)
                     if i < kids.count - 1 { divider(i, avail: avail) }
@@ -187,6 +223,7 @@ struct PaneLeaf: View {
     let id: UUID
     @EnvironmentObject var model: BrowserModel
     @State private var hovering = false
+    @Environment(\.paneSpace) private var paneSpace
 
     var body: some View {
         let tab = model.tab(id)
@@ -200,9 +237,23 @@ struct PaneLeaf: View {
                 }
             }
             .onHover { h in Motion.run(Motion.hover, fadeOnly: true) { hovering = h } }
-            // A pane joining a split eases in instead of popping.
-            .appearEffect(scale: 0.985, y: 0, animation: Motion.split)
+            // The page that joins a split eases in. The one already on screen moves from where it
+            // was, matched by item, instead of fading in again.
+            .modifier(PaneArrival(joining: split.focused == id))
+            .matchedPane(id, in: paneSpace)
             .background(GeometryReader { g in Color.clear.preference(key: PaneFramesKey.self, value: [id: g.frame(in: .named("content"))]) })
+    }
+}
+
+/// A pane joining a split eases in from 0.985 and fades. Others arrive as they are.
+private struct PaneArrival: ViewModifier {
+    let joining: Bool
+    @State private var joined: Bool?
+    func body(content: Content) -> some View {
+        Group {
+            if joined ?? joining { content.appearEffect(scale: 0.985, y: 0, animation: Motion.split) } else { content }
+        }
+        .onAppear { if joined == nil { joined = joining } }
     }
 }
 
@@ -323,8 +374,9 @@ struct SplitRow: View {
     let split: SplitRecord
     @EnvironmentObject var model: BrowserModel
     @State private var hovering = false
+    @Environment(\.pageSelection) private var pageSelection
 
-    var selected: Bool { model.currentSplit?.id == split.id }
+    var selected: Bool { model.currentSplit?.id == split.id || pageSelection == .split(split.id) }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -342,7 +394,7 @@ struct SplitRow: View {
         .contentShape(Rectangle())
         .simultaneousGesture(TapGesture().modifiers(.option).onEnded { model.separate(split) })
         .onHover { hovering = $0 }
-        .onDrag { ItemDrag.provider(split: split.id) }
+        .onDrag { SidebarDrag.shared.begin([split.id]); return ItemDrag.provider(split: split.id) }
         .contextMenu { SplitMenu(split: split) }
         .help(split.items.compactMap { model.tab($0)?.displayTitle }.joined(separator: " | "))
     }

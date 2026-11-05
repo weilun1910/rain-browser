@@ -320,6 +320,12 @@ struct SpaceTintBackground: View {
     var sidebarWidth: CGFloat = Theme.Space.sidebarWidth
     /// The sidebar is on the right, so the colour starts from the trailing edge.
     var fromTrailing = false
+    /// While the space strip moves, the next space's colour, laid over at `blend` (0 to 1).
+    var blendHex: String? = nil
+    var blend: Double = 0
+    /// Whether a change of `hex` crossfades by itself. The space strip turns it off while it
+    /// drives the colour, since it fades the next colour in frame by frame.
+    var animatesColour = true
     /// Renders and tests set this so an offscreen window looks active.
     nonisolated(unsafe) static var forceActive = false
     @Environment(\.colorScheme) private var scheme
@@ -329,24 +335,31 @@ struct SpaceTintBackground: View {
         GeometryReader { g in
             let active = Self.forceActive || activeState == .key || activeState == .active
             let edge = min(0.95, max(0.05, sidebarWidth / max(g.size.width, 1)))
-            let tint = Theme.Palette.sidebarColor(hex, active: active)
             ZStack {
                 Theme.Palette.frame
-                // Full strength under the sidebar, holding past its edge, then easing toward neutral.
-                LinearGradient(stops: [
-                    .init(color: tint, location: 0),
-                    .init(color: tint.opacity(0.92), location: edge),
-                    .init(color: tint.opacity(0.55), location: min(1, edge + 0.25)),
-                    .init(color: tint.opacity(Theme.Palette.tintTrailingShare), location: 1),
-                ], startPoint: fromTrailing ? .trailing : .leading, endPoint: fromTrailing ? .leading : .trailing)
-                .id((hex ?? "") + (active ? "" : "-inactive"))
-                .transition(.opacity)
+                wash(hex, active: active, edge: edge)
+                    .id((hex ?? "") + (active ? "" : "-inactive"))
+                    .transition(.opacity)
+                if let blendHex, blend > 0 {
+                    wash(blendHex, active: active, edge: edge).opacity(min(1, blend))
+                }
                 GrainOverlay()
             }
-            .motion(Motion.spaceSwitch, value: hex, fadeOnly: true)
+            .animation(animatesColour ? Motion.animation(Motion.spaceSwitch, fadeOnly: true) : nil, value: hex)
             .motion(Motion.hover, value: active, fadeOnly: true)
         }
         .ignoresSafeArea()
+    }
+
+    /// Full strength under the sidebar, holding past its edge, then easing toward neutral.
+    private func wash(_ hex: String?, active: Bool, edge: CGFloat) -> some View {
+        let tint = Theme.Palette.sidebarColor(hex, active: active)
+        return LinearGradient(stops: [
+            .init(color: tint, location: 0),
+            .init(color: tint.opacity(0.92), location: edge),
+            .init(color: tint.opacity(0.55), location: min(1, edge + 0.25)),
+            .init(color: tint.opacity(Theme.Palette.tintTrailingShare), location: 1),
+        ], startPoint: fromTrailing ? .trailing : .leading, endPoint: fromTrailing ? .leading : .trailing)
     }
 }
 

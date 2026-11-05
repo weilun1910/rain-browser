@@ -47,6 +47,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         appLog.notice("Sentence embedding: \(Embedder.shared.isAvailable ? "available" : "not available", privacy: .public)")
 
         model = BrowserModel()
+        // In the app, Peek waits for its own animations before it closes, expands or splits.
+        PeekMotion.live = true
+        TodaySweep.live = true
         CurrentContextWriter.shared.start(model: model)
         GraphRecorder.shared.attach(model)
         RelatedShelf.launch(model)
@@ -69,6 +72,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         WindowChrome.installQuietTrafficLights(w)
         if CommandLine.arguments.contains("--motion-tour") { MotionTour.start(model) }
         Startup.shared.begin()
+        // Restoring rows and the first Related cards land still under the launch cover.
+        if Startup.shared.startedAt != nil { MotionSuppression.hold(.launch, for: StartupTimeline.duration * 0.8) }
         w.makeKeyAndOrderFront(nil)
         NSApp.activate()
 
@@ -301,6 +306,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc func findAction() { model.openFind() }
     @objc func findNextAction() { model.findNext() }
     @objc func findPreviousAction() { model.findNext(backwards: true) }
+    // Nothing animates while the window is being resized: panes and the shelf follow the edge.
+    func windowWillStartLiveResize(_ notification: Notification) { MotionSuppression.set(.liveResize, true) }
+    func windowDidEndLiveResize(_ notification: Notification) { MotionSuppression.set(.liveResize, false) }
+
     @objc func toggleSidebarAction() { BrowserPrefs.shared.update { $0.sidebarHidden.toggle() } }
     @objc func sidebarSideAction() { BrowserPrefs.shared.update { $0.sidebarOnRight.toggle() } }
     @objc func layoutSideAction() { model.setLayout(.sideBySide) }

@@ -6,44 +6,26 @@ struct LeftSidebar: View {
     @ObservedObject var settings = Settings.shared
 
     @State private var addressHover = false
-    @State private var spaceSteps = StepTracker()
 
     var body: some View {
-        // Which way the list slides when the space changes.
-        let step = spaceSteps.step(for: model.spaces.firstIndex { $0.id == model.currentSpaceID })
+        let strip = SpaceStrip.of(model)
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             topBar
             addressField
             EssentialsGrid()
-            ZStack(alignment: .leading) {
-                SpaceHeader()
-                    .id(model.currentSpaceID)
-                    .transition(Motion.Transitions.spaceSlide(step))
+            // One page per space, side by side. A swipe drags them under the fingers, and clicks
+            // and shortcuts slide them. Essentials, the address and the bottom bar stay still,
+            // the way Arc keeps its Favorites still. Pages run to the sidebar's edges.
+            SpacePager(strip: strip) { id in
+                SpacePage(spaceID: id)
+                    .padding(.horizontal, Theme.Space.sidebarInset)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .clipped()
-            ScrollView {
-                // The list is keyed by space, so moving between spaces slides the new list in.
-                ZStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: Theme.Space.sectionGap) {
-                        pinnedSection
-                        foldersSection
-                        tabsSection
-                    }
-                    .padding(.bottom, Theme.Space.l)
-                    // A folder opening or closing moves everything below it on the same spring.
-                    .motion(Motion.expand, value: model.spaceFolders.map { $0.isExpanded })
-                    .id(model.currentSpaceID)
-                    .transition(Motion.Transitions.spaceSlide(step))
-                }
-            }
-            .scrollIndicators(.never)
+            .padding(.horizontal, -Theme.Space.sidebarInset)
             MediaBar()
             bottomBar
         }
-        .motion(Motion.spaceSwitch, value: model.currentSpaceID)
         .padding(.horizontal, Theme.Space.sidebarInset)
-        .background(SpaceSwipeCatcher { step in model.switchSpace(by: step) })
+        .background(SpaceSwipeTracker(model: model))
     }
 
     // MARK: Top
@@ -93,80 +75,6 @@ struct LeftSidebar: View {
         .help(model.addressText)
     }
 
-    // MARK: Sections
-
-    private var pinnedSection: some View {
-        let rows = model.refs(in: .pinned)
-        // Like Zen, pins sit under the space's name with no label, and a hairline closes them off.
-        return SectionBox(title: rows.isEmpty ? "Pinned" : "", onDropItems: { items in model.place(items.compactMap(\.sidebarRef), in: .pinned, at: Int.max) }) {
-            if rows.isEmpty {
-                Text("Drag tabs here to pin them")
-                    .font(Theme.Font.secondary).foregroundStyle(.secondary)
-                    .padding(.leading, Theme.Space.rowInset).frame(height: 24)
-            }
-            ForEach(rows, id: \.self) { SidebarRow(ref: $0).transition(Motion.Transitions.tabRow) }
-            if !rows.isEmpty { SectionDivider() }
-        }
-        .motion(Motion.insert, value: rows)
-    }
-
-    private var foldersSection: some View {
-        SectionBox(title: "Folders", trailing: AnyView(SmallIconButton(symbol: "plus", help: "New folder") { model.promptNewFolder() })) {
-            ForEach(model.spaceFolders) { f in
-                FolderRow(folder: f)
-                FolderReveal(isOpen: f.isExpanded) {
-                    VStack(spacing: Theme.Space.rowGap) {
-                        let rows = model.refs(in: .folder(f.id))
-                        ForEach(rows, id: \.self) { SidebarRow(ref: $0).transition(Motion.Transitions.tabRow) }
-                        if rows.isEmpty {
-                            Text("Empty")
-                                .font(Theme.Font.secondary).foregroundStyle(.secondary)
-                                .padding(.leading, Theme.Space.rowInset).frame(height: 24)
-                        }
-                    }
-                    .padding(.top, Theme.Space.rowGap)
-                    // Child icons line up under the folder's name.
-                    .padding(.leading, Theme.Space.folderIndent)
-                }
-                if !f.isExpanded {
-                    // A closed folder still shows what's on screen, like Arc and Zen.
-                    let shown = model.shownInClosedFolder(f)
-                    if !shown.isEmpty {
-                        VStack(spacing: Theme.Space.rowGap) { ForEach(shown, id: \.self) { SidebarRow(ref: $0) } }
-                            .padding(.leading, Theme.Space.folderIndent)
-                            .transition(.opacity)
-                    }
-                }
-            }
-        }
-        .motion(Motion.insert, value: model.spaceFolders.map { model.refs(in: .folder($0.id)) })
-    }
-
-    private var tabsSection: some View {
-        let rows = model.refs(in: .today)
-        let trailing = HStack(spacing: 2) {
-            if !rows.isEmpty {
-                Button("Clear") { _ = model.clearToday() }
-                    .buttonStyle(QuietActionStyle())
-                    .help("Archive every tab here (Shift-Cmd-K)")
-                    .padding(.trailing, Theme.Space.xs)
-            }
-            SmallIconButton(symbol: "square.and.pencil", help: "New note") { model.newNote() }
-        }
-        return SectionBox(title: "Tabs", trailing: AnyView(trailing), onDropItems: { items in model.place(items.compactMap(\.sidebarRef), in: .today, at: 0) }) {
-            Button { model.newTabCommand() } label: {
-                HStack(spacing: Theme.Space.rowIconGap) {
-                    Image(systemName: "plus").font(.system(size: 12, weight: .medium)).frame(width: Theme.Space.rowIcon)
-                    Text("New tab")
-                    Spacer(minLength: 0)
-                }
-            }
-            .buttonStyle(SidebarActionRowStyle(selected: model.bar.isOpen && model.bar.mode == .newTab))
-            ForEach(rows, id: \.self) { SidebarRow(ref: $0).transition(Motion.Transitions.tabRow) }
-        }
-        .motion(Motion.insert, value: rows)
-    }
-
     private var bottomBar: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             if let msg = model.flashMessage {
@@ -190,6 +98,125 @@ struct LeftSidebar: View {
     }
 }
 
+/// One space's page in the sidebar's strip: its name, pins, folders and tabs. Only the current
+/// space's page takes clicks and drops. The others show while the strip moves.
+struct SpacePage: View {
+    let spaceID: UUID
+    @EnvironmentObject var model: BrowserModel
+    /// Rows are matched by item across sections, so pinning, unpinning or moving a tab into a
+    /// folder glides the row to its new place instead of cutting, and a closed folder's visible
+    /// tab keeps its place while the rest of the folder slides away.
+    @Namespace private var rowSpace
+
+    var isCurrent: Bool { model.currentSpaceID == spaceID }
+
+    @ObservedObject private var drag = SidebarDrag.shared
+    @ObservedObject private var sweep = TodaySweep.shared
+
+    private func row(_ ref: SidebarRef) -> some View {
+        // A row you dropped lands in the gap it was dropped in, so it isn't matched to where it was.
+        let id: AnyHashable = drag.landing == ref ? AnyHashable("landing") : AnyHashable(ref)
+        return SidebarRow(ref: ref).matchedGeometryEffect(id: id, in: rowSpace)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            SpaceHeader(spaceID: spaceID)
+            ScrollView {
+                VStack(alignment: .leading, spacing: Theme.Space.sectionGap) {
+                    pinnedSection
+                    foldersSection
+                    tabsSection
+                }
+                .padding(.bottom, Theme.Space.l)
+                // A folder opening or closing moves everything below it on the same spring.
+                .motion(Motion.expand, value: model.folders(in: spaceID).map { $0.isExpanded })
+            }
+            .scrollIndicators(.never)
+        }
+        .environment(\.pageSelection, isCurrent ? nil : model.rememberedSelection(of: spaceID))
+        .allowsHitTesting(isCurrent)
+    }
+
+    // MARK: Sections
+
+    private var pinnedSection: some View {
+        let rows = model.refs(in: .pinned, space: spaceID)
+        // Like Zen, pins sit under the space's name with no label, and a hairline closes them off.
+        return SectionBox(title: rows.isEmpty ? "Pinned" : "", onDropItems: { items in model.place(items.compactMap(\.sidebarRef), in: .pinned, at: Int.max) }) {
+            if rows.isEmpty {
+                Text("Drag tabs here to pin them")
+                    .font(Theme.Font.secondary).foregroundStyle(.secondary)
+                    .padding(.leading, Theme.Space.rowInset).frame(height: 24)
+            }
+            ForEach(rows, id: \.self) { row($0).transition(Motion.Transitions.tabRow) }
+            if !rows.isEmpty { SectionDivider() }
+        }
+        .motion(Motion.insert, value: rows)
+    }
+
+    private var foldersSection: some View {
+        SectionBox(title: "Folders", trailing: AnyView(SmallIconButton(symbol: "plus", help: "New folder") { model.promptNewFolder() })) {
+            ForEach(model.folders(in: spaceID)) { f in
+                FolderRow(folder: f)
+                FolderReveal(isOpen: f.isExpanded) {
+                    VStack(spacing: Theme.Space.rowGap) {
+                        let rows = model.refs(in: .folder(f.id))
+                        ForEach(rows, id: \.self) { row($0).transition(Motion.Transitions.tabRow) }
+                        if rows.isEmpty {
+                            Text("Empty")
+                                .font(Theme.Font.secondary).foregroundStyle(.secondary)
+                                .padding(.leading, Theme.Space.rowInset).frame(height: 24)
+                        }
+                    }
+                    .padding(.top, Theme.Space.rowGap)
+                    // Child icons line up under the folder's name.
+                    .padding(.leading, Theme.Space.folderIndent)
+                }
+                if !f.isExpanded {
+                    // A closed folder still shows what's on screen, like Arc and Zen.
+                    let shown = model.shownInClosedFolder(f)
+                    if !shown.isEmpty {
+                        VStack(spacing: Theme.Space.rowGap) { ForEach(shown, id: \.self) { row($0) } }
+                            .padding(.leading, Theme.Space.folderIndent)
+                            .transition(.opacity)
+                    }
+                }
+            }
+        }
+        .motion(Motion.insert, value: model.folders(in: spaceID).map { model.refs(in: .folder($0.id)) })
+    }
+
+    private var tabsSection: some View {
+        let rows = model.refs(in: .today, space: spaceID)
+        let trailing = HStack(spacing: 2) {
+            if !rows.isEmpty {
+                Button("Clear") { TodaySweep.shared.run { _ = model.clearToday() } }
+                    .buttonStyle(QuietActionStyle())
+                    .help("Archive every tab here (Shift-Cmd-K)")
+                    .padding(.trailing, Theme.Space.xs)
+            }
+            SmallIconButton(symbol: "square.and.pencil", help: "New note") { model.newNote() }
+        }
+        return SectionBox(title: "Tabs", trailing: AnyView(trailing), onDropItems: { items in model.place(items.compactMap(\.sidebarRef), in: .today, at: 0) }) {
+            Button { model.newTabCommand() } label: {
+                HStack(spacing: Theme.Space.rowIconGap) {
+                    Image(systemName: "plus").font(.system(size: 12, weight: .medium)).frame(width: Theme.Space.rowIcon)
+                    Text("New tab")
+                    Spacer(minLength: 0)
+                }
+            }
+            .buttonStyle(SidebarActionRowStyle(selected: isCurrent && model.bar.isOpen && model.bar.mode == .newTab))
+            // Clear Today sweeps the rows out top to bottom, and Undo brings them back the same way.
+            ForEach(Array(rows.enumerated()), id: \.element) { i, r in
+                row(r).transition(Motion.Transitions.todayRow(index: i, sweeping: sweep.sweeping))
+            }
+        }
+        .motion(Motion.insert, value: rows)
+    }
+
+}
+
 extension DragItem {
     var sidebarRef: SidebarRef? {
         switch self {
@@ -202,11 +229,12 @@ extension DragItem {
 
 /// The space's name above its pins. Dropping a tab here with no Essentials yet starts the grid.
 struct SpaceHeader: View {
+    var spaceID: UUID?
     @EnvironmentObject var model: BrowserModel
     @State private var targeted = false
 
     var body: some View {
-        if let sp = model.currentSpace {
+        if let sp = spaceID.flatMap({ id in model.spaces.first { $0.id == id } }) ?? model.currentSpace {
             HStack(spacing: Theme.Space.s) {
                 SpaceIcon(icon: sp.icon, size: 11).foregroundStyle(Theme.Palette.accent(sp.color))
                 Text(targeted && model.essentials.isEmpty ? "Add to Essentials" : sp.name)
@@ -391,7 +419,8 @@ struct RowDropDelegate: DropDelegate {
     func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [ItemDrag.type]) }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        let y = info.location.y
+        // With a gap open above the row, the row itself starts below it.
+        let y = info.location.y - (indicator == .above ? SidebarDrag.gap : 0)
         let middle = canSplit && y > height * 0.25 && y < height * 0.75
         if middle {
             if clock.enteredMiddleAt == nil {
@@ -423,10 +452,12 @@ struct RowDropDelegate: DropDelegate {
         indicator = nil
         return ItemDrag.loadItems(info.itemProviders(for: [ItemDrag.type])) { items in
             let refs = items.compactMap(\.sidebarRef)
-            if split, refs.count == 1, case .tab(let id) = refs[0] {
-                model.dropForSplit(id, onto: ref.id)
-            } else {
-                model.place(refs, next: ref, after: after)
+            SidebarDrag.shared.land(refs.first) {
+                if split, refs.count == 1, case .tab(let id) = refs[0] {
+                    model.dropForSplit(id, onto: ref.id)
+                } else {
+                    model.place(refs, next: ref, after: after)
+                }
             }
         }
     }
@@ -438,7 +469,10 @@ struct SidebarRow: View {
     @EnvironmentObject var model: BrowserModel
     @State private var indicator: RowDropIndicator?
     @State private var clock = HoverClock()
-    @Environment(\.spaceAccent) private var spaceAccent
+    @ObservedObject private var drag = SidebarDrag.shared
+
+    /// Where this row shows a gap: the drop hovering it, or the tour's stand-in for one.
+    private var gap: RowDropIndicator? { drag.preview.map { $0.ref == ref ? $0.at : nil } ?? indicator }
 
     var body: some View {
         Group {
@@ -448,13 +482,12 @@ struct SidebarRow: View {
             }
         }
         .sidebarCursor(model.sidebarCursor == .row(ref))
-        .overlay(alignment: indicator == .above ? .top : .bottom) {
-            if indicator == .above || indicator == .below {
-                Capsule().fill(spaceAccent).frame(height: 2).padding(.horizontal, Theme.Space.s).allowsHitTesting(false)
-                    .transition(.opacity)
-            }
-        }
-        .motion(Motion.hover, value: indicator, fadeOnly: true)
+        .opacity(drag.dragging.contains(ref.id) ? SidebarDrag.dimmed : 1)
+        // While a row is dragged over this one, a gap opens where it would land and the rows
+        // below move down to make room, like Zen and Arc.
+        .padding(.top, gap == .above ? SidebarDrag.gap : 0)
+        .padding(.bottom, gap == .below ? SidebarDrag.gap : 0)
+        .motion(Motion.insert, value: gap)
         .onDrop(of: [ItemDrag.type], delegate: RowDropDelegate(ref: ref, height: Theme.Space.rowHeight, canSplit: { if case .tab = ref { return true }; return false }(),
                                                                model: model, indicator: $indicator, clock: clock))
     }
@@ -466,6 +499,7 @@ struct TabRow: View {
     @EnvironmentObject var model: BrowserModel
     @State private var hovering = false
     @Environment(\.spaceAccent) private var spaceAccent
+    @Environment(\.pageSelection) private var pageSelection
 
     var body: some View {
         HStack(spacing: Theme.Space.rowIconGap) {
@@ -525,7 +559,7 @@ struct TabRow: View {
         .padding(.leading, Theme.Space.rowInset)
         .padding(.trailing, Theme.Space.xs)
         .frame(height: Theme.Space.rowHeight)
-        .modifier(RowBackground(selected: model.isSelected(tab) || splitting, hovering: hovering, multi: model.multiSelection.contains(tab.id)))
+        .modifier(RowBackground(selected: model.isSelected(tab) || splitting || pageSelection == .tab(tab.id), hovering: hovering, multi: model.multiSelection.contains(tab.id)))
         .contentShape(Rectangle())
         .onTapGesture { click() }
         .simultaneousGesture(TapGesture(count: 2).onEnded {
@@ -534,7 +568,9 @@ struct TabRow: View {
         .onHover { hovering = $0 }
         .onDrag {
             let picked = model.multiSelection.contains(tab.id) && model.multiSelection.count > 1
-            return picked ? ItemDrag.provider(ids: model.multiSelectedTabs.map { $0.id }) : ItemDrag.provider(tab.id)
+            let ids = picked ? model.multiSelectedTabs.map { $0.id } : [tab.id]
+            SidebarDrag.shared.begin(ids)
+            return ItemDrag.provider(ids: ids)
         }
         .contextMenu { TabMenu(tab: tab) }
         .help(tab.isWeb ? "\(tab.displayTitle)\n\(tab.url.map { Snippet.prettyURL($0.absoluteString) } ?? "")" : tab.displayTitle)
@@ -715,11 +751,10 @@ struct MediaBar: View {
 
     var body: some View {
         let playing = Array(model.playingElsewhere.prefix(2))
-        if !playing.isEmpty {
-            VStack(spacing: 2) {
-                ForEach(playing) { MediaRow(tab: $0) }
-            }
+        VStack(spacing: 2) {
+            ForEach(playing) { MediaRow(tab: $0) }
         }
+        .motion(Motion.insert, value: playing.map(\.id))
     }
 }
 
@@ -754,6 +789,8 @@ struct DownloadsButton: View {
     @State private var showing = false
 
     var body: some View {
+        // The button arrives when the first download starts.
+        Group {
         if !downloads.items.isEmpty {
             Button { showing.toggle() } label: {
                 ZStack {
@@ -771,6 +808,9 @@ struct DownloadsButton: View {
             .popover(isPresented: $showing, arrowEdge: .top) {
                 DownloadsList(compact: true).frame(width: 320).padding(10)
             }
+            .transition(Motion.Transitions.tabRow)
         }
+        }
+        .motion(Motion.insert, value: downloads.items.isEmpty)
     }
 }

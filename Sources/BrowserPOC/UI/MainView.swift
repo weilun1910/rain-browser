@@ -18,9 +18,8 @@ struct MainView: View {
     @EnvironmentObject var model: BrowserModel
     @ObservedObject var settings = Settings.shared
     @ObservedObject var prefs = BrowserPrefs.shared
-    /// Compact mode: the sidebar is showing because the pointer reached the edge.
-    @State private var peeking = false
-    @State private var hideWork: DispatchWorkItem?
+    /// Compact mode: the sidebar showing because the pointer rested at the edge.
+    @ObservedObject private var reveal = CompactReveal.shared
 
     static let sidebarWidth: CGFloat = Theme.Space.sidebarWidth
     static let panelWidth: CGFloat = Theme.Space.panelWidth
@@ -43,7 +42,8 @@ struct MainView: View {
             if right { sidebarSlot } else { panel(leading: false) }
         }
         // The frame: neutral grey with the space's colour on the sidebar's side, fading across.
-        .background(SpaceTintBackground(hex: model.currentSpace?.color,
+        // It follows the sidebar's space strip, so a swipe carries the colour with it.
+        .background(StripTintBackground(strip: SpaceStrip.of(model),
                                         sidebarWidth: hidden ? 0 : Self.sidebarWidth, fromTrailing: right))
         .overlay(alignment: right ? .trailing : .leading) { compactSidebar }
         .overlay {
@@ -51,21 +51,24 @@ struct MainView: View {
                               leadingClear: hidden || right ? 0 : Self.sidebarWidth,
                               trailingClear: hidden || !right ? 0 : Self.sidebarWidth)
         }
-        .overlay { if let s = model.switcher { SwitcherOverlay(state: s) } }
+        // Ctrl-Tab shows its panel only if Ctrl is still held a moment later, like Cmd-Tab.
+        .overlay { if let s = model.switcher { SwitcherOverlay(state: s).modifier(DelayedAppear(delay: Motion.Timing.switcherDelay)) } }
         .overlay { StartupOverlayHost() }
-        .background(TrafficLights(hidden: hidden && !peeking))
+        .background(TrafficLights(hidden: hidden && !reveal.showing))
         .spaceTint(model.currentSpace?.color)
         .ignoresSafeArea()
         .frame(minWidth: 900, minHeight: 560)
-        .motion(Motion.panel, value: hidden)
+        // Cmd-S is quick: the page's width changes every frame while the sidebar moves.
+        .motion(Motion.sidebarToggle, value: hidden)
         .motion(Motion.panel, value: right)
+        .onChange(of: hidden) { _, now in if !now { reveal.reset() } }
         .motion(Motion.panel, value: settings.published.rightPanelOpen)
     }
 
     @ViewBuilder var sidebarSlot: some View {
         if !hidden {
             LeftSidebar().frame(width: Self.sidebarWidth)
-                .transition(Motion.Transitions.panel(edge: right ? .trailing : .leading))
+                .transition(Motion.Transitions.sidebar(edge: right ? .trailing : .leading))
         }
     }
 
@@ -77,14 +80,14 @@ struct MainView: View {
         }
     }
 
-    /// Compact mode: a thin edge that brings the sidebar back as an overlay. It hides one second
-    /// after the pointer leaves, like Zen.
+    /// Compact mode: a thin edge that brings the sidebar back as an overlay once the pointer rests
+    /// there for a moment, and lets it go a moment after the pointer leaves it.
     @ViewBuilder var compactSidebar: some View {
         if hidden {
             ZStack(alignment: right ? .trailing : .leading) {
                 Color.clear.frame(width: 6).contentShape(Rectangle())
-                    .onHover { if $0 { show() } }
-                if peeking {
+                    .onHover { $0 ? reveal.pointerAtEdge() : reveal.pointerLeftEdge() }
+                if reveal.showing {
                     // The sidebar floats over the page on the space's colour, like Zen's compact mode.
                     LeftSidebar()
                         .frame(width: Self.sidebarWidth)
@@ -99,24 +102,12 @@ struct MainView: View {
                         .overlay(Theme.Radius.shape(Theme.Radius.card).strokeBorder(Theme.Palette.hairline, lineWidth: 0.5))
                         .clipShape(Theme.Radius.shape(Theme.Radius.card))
                         .padding(Theme.Space.windowMargin)
-                        .onHover { inside in if inside { show() } else { scheduleHide() } }
-                        .transition(Motion.Transitions.panel(edge: right ? .trailing : .leading))
+                        .onHover { inside in inside ? reveal.pointerInside() : reveal.pointerLeft() }
+                        .transition(Motion.Transitions.sidebar(edge: right ? .trailing : .leading))
                 }
             }
             .frame(maxHeight: .infinity)
         }
-    }
-
-    func show() {
-        hideWork?.cancel()
-        if !peeking { Motion.run(Motion.panel) { peeking = true } }
-    }
-
-    func scheduleHide() {
-        hideWork?.cancel()
-        let w = DispatchWorkItem { Motion.run(Motion.remove) { peeking = false } }
-        hideWork = w
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: w)
     }
 }
 
@@ -161,6 +152,11 @@ struct ContentArea: View {
     @State private var dropTarget: DropTarget?
     @State private var frames: [UUID: CGRect] = [:]
     @Environment(\.spaceAccent) private var spaceAccent
+    @ObservedObject private var peekMotion = PeekMotion.shared
+    @Namespace private var paneSpace
+
+    /// A Peek is up and not on its way out.
+    var underPeek: Bool { model.peek != nil && peekMotion.phase != .closing }
 
     var body: some View {
         GeometryReader { g in
@@ -168,15 +164,22 @@ struct ContentArea: View {
                 Group {
                     if let sp = model.currentSplit, sp.items.allSatisfy({ model.tab($0) != nil }) {
                         SplitPanes(split: sp)
+                            .transition(.identity)
                     } else {
                         PaneView(tab: model.currentTab).paneCard()
+                            .matchedPane(model.currentTab?.id, in: paneSpace)
+                            .transition(.identity)
                     }
                 }
+                .environment(\.paneSpace, paneSpace)
+                // Going into a split and coming out of one moves the page between its frames.
+                .motion(Motion.split, value: model.currentSplit?.id)
                 .relatedShelf(frame: RelatedShelf.paneFrame(model, frames: frames, size: g.size))
-                // Under Peek the page settles back a touch and dims, like Zen's Glance.
-                .scaleEffect(model.peek == nil || Motion.reduceMotion ? 1 : 0.985)
-                .opacity(model.peek == nil ? 1 : 0.7)
-                .motion(Motion.peek, value: model.peek == nil)
+                // Under Peek the page settles back a touch and dims, like Zen's Glance. It comes back
+                // as soon as the Peek starts to close.
+                .scaleEffect(!underPeek || Motion.reduceMotion ? 1 : 0.985)
+                .opacity(underPeek ? 0.7 : 1)
+                .motion(peekMotion.phase == .closing ? Motion.peekOut : Motion.peek, value: underPeek)
                 if let t = dropTarget {
                     Theme.Radius.shape(Theme.Radius.card)
                         .fill(spaceAccent.opacity(0.12))
@@ -188,25 +191,30 @@ struct ContentArea: View {
                 }
                 if model.find.visible, model.currentWebTab != nil {
                     FindBar()
+                        .transition(Motion.Transitions.float)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                         .padding(.top, findTop)
                         .padding(.trailing, findTrailing(width: g.size.width))
+                        // In a split it follows the focused pane to its corner.
+                        .motion(Motion.split, value: model.currentTab?.id)
                 }
                 if let p = model.peek {
                     PeekOverlay(peek: p).id(p.tab.id)
                 }
                 if let t = model.toastState {
+                    // One toast at a time, updated in place: a new message crossfades into the
+                    // one showing instead of dropping it and rising again.
                     ToastView(toast: t)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                         .padding(.bottom, 18 + RelatedShelf.toastLift(model))
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .id(t.id)
+                        .transition(Motion.Transitions.toast)
                 }
                 if !settings.published.firstRunDone {
                     FirstRunPanel().clipShape(Theme.Radius.shape(Theme.Radius.card))
                 }
             }
-            .motion(Motion.toast, value: model.toastState)
+            // Where the last click landed, so a Peek opened by it can grow from there.
+            .background(ClickRecorder())
             .coordinateSpace(name: "content")
             .onPreferenceChange(PaneFramesKey.self) { frames = $0 }
             .onDrop(of: [ItemDrag.type], delegate: ContentDropDelegate(frames: model.currentSplit == nil ? [:] : frames,
@@ -252,12 +260,14 @@ struct TabContent: View {
 
 struct WebArea: View {
     @ObservedObject var tab: Tab
+    /// Whether this is Peek's copy of the page or a pane's.
+    var role: WebHostRole = .pane
     @EnvironmentObject var model: BrowserModel
 
     var body: some View {
         ZStack(alignment: .top) {
-            WebContainer(tab: tab)
-            TintedProgressLine(progress: tab.progress, visible: tab.isLoading && tab.progress < 1)
+            WebContainer(tab: tab, role: role)
+            LoadProgress(tab: tab)
             if let err = tab.loadError {
                 VStack(spacing: Theme.Space.m) {
                     Text("Couldn't open this page")
@@ -282,11 +292,59 @@ struct WebArea: View {
     }
 }
 
+/// Hosts one page's web view in a pane, Peek or Little Arc.
+///
+/// A web view can only be in one place. Hosts come and go as splits change, as Peek becomes a tab
+/// or a split, and as panes switch pages, and SwiftUI may still update a host that's on its way
+/// out, or make one that never reaches the screen. So no host simply grabs its web view. Each
+/// says which web view it wants, and of the hosts on screen that want it, the newest gets it. When
+/// a host leaves the screen, its web view goes to the next one in line. Before this, an old host
+/// could pull a web view back and take it away when it went, which left panes blank.
 final class WebHostView: NSView {
     private weak var current: WKWebView?
+    /// The web view this host was last asked to show.
+    private(set) weak var wanted: WKWebView?
+    private let serial: Int
+    private static var made = 0
+    private static let hosts = NSHashTable<WebHostView>.weakObjects()
+
+    override init(frame: NSRect) {
+        Self.made += 1
+        serial = Self.made
+        super.init(frame: frame)
+        Self.hosts.add(self)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func show(_ wv: WKWebView) {
-        // A split relayout can move this web view into another host, so check where it is too.
+        let before = wanted
+        wanted = wv
+        if let before, before !== wv { Self.place(before) }
+        Self.place(wv)
+    }
+
+    /// This host no longer wants its web view, so the next host in line can have it.
+    func letGo() {
+        guard let wv = wanted else { return }
+        wanted = nil
+        Self.place(wv)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        // Moving a web view while AppKit is still moving this host in or out of the window leaves
+        // WebKit thinking the page isn't on screen, and it stops drawing. So wait a turn.
+        guard let wv = wanted else { return }
+        DispatchQueue.main.async { Self.place(wv) }
+    }
+
+    /// Puts `wv` in the newest on-screen host that wants it. With none, it stays where it is.
+    private static func place(_ wv: WKWebView) {
+        let best = hosts.allObjects.filter { $0.wanted === wv && $0.window != nil }.max { $0.serial < $1.serial }
+        best?.adopt(wv)
+    }
+
+    private func adopt(_ wv: WKWebView) {
         guard current !== wv || wv.superview !== self else { return }
         if let c = current, c !== wv, c.superview === self { c.removeFromSuperview() }
         wv.frame = bounds
@@ -296,12 +354,21 @@ final class WebHostView: NSView {
     }
 }
 
+/// Where a page's web view is drawn. A tab's web view can only sit in one place, so Peek and the
+/// panes each take it only while the model says it's theirs. Otherwise a Peek on its way out,
+/// which SwiftUI still updates once or twice, would pull the web view back from the pane that
+/// now shows it, and take it away when it goes.
+enum WebHostRole { case pane, peek }
+
 struct WebContainer: NSViewRepresentable {
     let tab: Tab
+    var role: WebHostRole = .pane
 
     func makeNSView(context: Context) -> WebHostView { WebHostView() }
 
     func updateNSView(_ v: WebHostView, context: Context) {
+        let inPeek = tab.model?.peek?.tab === tab
+        guard (role == .peek) == inPeek else { v.letGo(); return }
         v.show(tab.ensureWebView())
     }
 }

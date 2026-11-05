@@ -523,9 +523,11 @@ final class IndexStore: @unchecked Sendable {
         }
     }
 
+    /// Called on the main thread every time something is selected, so it doesn't wait for the
+    /// index: the queue is serial, so anything that reads after it still sees the update.
     func touchOpened(key: String, at: Date = Date()) {
-        queue.sync {
-            _ = try? db.run("UPDATE docs SET last_opened = ? WHERE key = ?", [at.timeIntervalSince1970, key])
+        queue.async {
+            _ = try? self.db.run("UPDATE docs SET last_opened = ? WHERE key = ?", [at.timeIntervalSince1970, key])
         }
     }
 
