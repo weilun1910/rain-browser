@@ -15,50 +15,58 @@ struct RightPanelContent: View {
     @EnvironmentObject var model: BrowserModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            HStack(spacing: 0) {
                 Text("Related")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(Theme.Font.rowEmphasis)
                     .foregroundStyle(.secondary)
+                    .padding(.leading, Theme.Space.xs)
                 WindowDragArea()
                 NavButton(symbol: "sidebar.right", help: "Hide related panel") {
                     Settings.shared.update { $0.rightPanelOpen = false }
                 }
             }
-            .frame(height: 30)
-            .padding(.top, 4)
+            // Lines up with the sidebar's top row.
+            .frame(height: Theme.Space.titleBarHeight - Theme.Space.windowMargin)
+            .padding(.top, Theme.Space.windowMargin)
 
             if resurfacer.cards.isEmpty {
                 Text(emptyText)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.tertiary)
+                    .font(Theme.Font.secondary)
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 4)
+                    .padding(.horizontal, Theme.Space.xs)
+                    .padding(.top, Theme.Space.xs)
+                    .transition(.opacity)
                 Spacer()
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: Theme.Space.m) {
                         if !resurfacer.siteCards.isEmpty {
                             SectionLabel(CardSection.sites.title)
-                            ForEach(resurfacer.siteCards) { card in
+                            ForEach(Array(resurfacer.siteCards.enumerated()), id: \.element.id) { i, card in
                                 CardView(card: card, showScores: settings.published.showScores)
+                                    .transition(Motion.Transitions.card(index: i))
                             }
                         }
                         if !resurfacer.docCards.isEmpty {
                             SectionLabel(CardSection.docs.title)
-                                .padding(.top, resurfacer.siteCards.isEmpty ? 0 : 6)
-                            ForEach(resurfacer.docCards) { card in
+                                .padding(.top, resurfacer.siteCards.isEmpty ? 0 : Theme.Space.m)
+                            ForEach(Array(resurfacer.docCards.enumerated()), id: \.element.id) { i, card in
                                 CardView(card: card, showScores: settings.published.showScores)
+                                    .transition(Motion.Transitions.card(index: resurfacer.siteCards.count + i))
                             }
                         }
                     }
-                    .padding(.bottom, 12)
+                    .padding(.bottom, Theme.Space.l)
                 }
                 .scrollIndicators(.never)
             }
         }
-        .padding(.horizontal, 10)
-        .transaction { $0.animation = nil }
+        .padding(.horizontal, Theme.Space.windowMargin)
+        // New cards fade and rise one after another. Cards that stay don't move while you type.
+        .motion(Motion.insert, value: resurfacer.cards.map { $0.id })
     }
 
     var emptyText: String {
@@ -72,9 +80,9 @@ struct SectionLabel: View {
     init(_ text: String) { self.text = text }
     var body: some View {
         Text(text)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(.tertiary)
-            .padding(.leading, 2)
+            .font(Theme.Font.label)
+            .foregroundStyle(.secondary)
+            .padding(.leading, Theme.Space.xs)
     }
 }
 
@@ -83,6 +91,7 @@ struct CardView: View {
     let showScores: Bool
     @EnvironmentObject var model: BrowserModel
     @State private var hovering = false
+    @Environment(\.spaceAccent) private var accent
 
     var m: Match { card.match }
 
@@ -107,60 +116,66 @@ struct CardView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 16, height: 16)
-                VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            HStack(alignment: .top, spacing: Theme.Space.m) {
+                RowIcon(symbol: icon)
+                    .padding(.top, 1)
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     Text(m.doc.title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(Theme.Font.cardTitle)
                         .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(label)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
             if !m.passage.isEmpty {
                 Text(m.passage)
-                    .font(.system(size: 12))
+                    .font(Theme.Font.secondary)
                     .foregroundStyle(.secondary)
+                    .lineSpacing(2)
                     .lineLimit(2)
             }
-            Text(card.reason)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+            // The reason, set off by a thin rule in the space's colour.
+            HStack(alignment: .top, spacing: Theme.Space.m) {
+                Capsule().fill(accent.opacity(0.55)).frame(width: 2)
+                Text(card.reason)
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(1.5)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .fixedSize(horizontal: false, vertical: true)
             if showScores {
                 Text(String(format: "keyword %.2f | meaning %.2f | names %.2f | score %.2f%@",
                             m.keyword, m.semantic, m.entity, m.score, m.penalized ? " | dismissed before" : ""))
-                    .font(.system(size: 10).monospacedDigit())
-                    .foregroundStyle(.tertiary)
+                    .font(Theme.Font.mono(10))
+                    .foregroundStyle(.secondary)
             }
-            HStack(spacing: 12) {
+            HStack(spacing: Theme.Space.l) {
                 Button("Open") { model.open(card) }
                 Button(card.feedback ?? "Add to research") {
                     let msg = model.addToResearch(card)
                     model.resurfacer.setFeedback(msg, for: card)
                 }
                 .disabled(card.feedback != nil)
-                Spacer()
-                Button { model.resurfacer.dismiss(card) } label: {
-                    Image(systemName: "xmark").font(.system(size: 9, weight: .semibold))
+                Spacer(minLength: 0)
+                IconButton(symbol: "xmark", help: "Dismiss", width: 20, height: 20, symbolSize: 9) {
+                    model.resurfacer.dismiss(card)
                 }
-                .help("Dismiss")
+                .opacity(hovering ? 1 : 0.6)
             }
-            .buttonStyle(.plain)
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(hovering ? Color.accentColor : Color.secondary)
+            .buttonStyle(QuietActionStyle(accent: accent))
+            .frame(height: 20)
         }
-        .padding(11)
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.top, Theme.Space.l)
+        .padding(.bottom, Theme.Space.s)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(nsColor: .textBackgroundColor).opacity(hovering ? 0.95 : 0.75)))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.07)))
+        .panelCard(hovering: hovering)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture(count: 2) { model.open(card) }
