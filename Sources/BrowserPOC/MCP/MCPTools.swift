@@ -712,7 +712,7 @@ final class MCPToolbox {
             var hidden = 0
             var served: [String] = []
             func tabJSON(_ t: TabRecord) -> JSON? {
-                guard let url = t.url, !url.isEmpty else { return nil }
+                guard let url = t.url, !url.isEmpty, t.kind == .web || t.kind == .note || t.kind == .file else { return nil }
                 let isNote = t.kind != .web
                 guard ctx.privacy.allows(source: isNote ? MCPSources.notes : MCPSources.web, url: url) else { hidden += 1; return nil }
                 let hit = ctx.reader.resolve(url)

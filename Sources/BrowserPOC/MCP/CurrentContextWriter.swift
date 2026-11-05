@@ -72,7 +72,8 @@ final class CurrentContextWriter {
     }
 
     private func ref(_ t: Tab) -> CurrentContextFile.Ref? {
-        guard let u = t.url, !t.isBlank else { return nil }
+        // Pages and notes only. Other kinds (a graph item, say) have nothing to read.
+        guard let u = t.url, !t.isBlank, t.kind == .web || t.kind == .note || t.kind == .file else { return nil }
         let isNote = t.kind != .web
         let key = isNote ? URLKey.fileKey(u) : URLKey.key(for: u)
         var title = t.title
