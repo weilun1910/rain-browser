@@ -25,9 +25,11 @@ struct KItem {
     /// The latest of opened, visited and edited.
     var lastActive: Double { max(lastOpened, lastSeen, mtime) }
 
-    /// note, doc or page. Docs are Google Docs, Notion and sites Felix writes on.
+    /// note, doc, meeting or page. Docs are Google Docs, Notion and sites Felix writes on.
     func kind(writingSites: [String]) -> String {
         if isNote { return "note" }
+        if source == MCPSources.granola { return "meeting" }
+        if source == MCPSources.gdocs || source == MCPSources.notion { return "doc" }
         if let u = URL(string: url), WritingKey.isWritingSite(u, list: writingSites) { return "doc" }
         if !["web", "chrome"].contains(source) { return source }
         return "page"
@@ -147,13 +149,59 @@ final class KnowledgeReader {
         return merged.map { ($0.key, $0.value.0, $0.value.1) }.sorted { $0.source < $1.source }
     }
 
-    /// Google Docs and Notion pages, which Settings lets Felix hide on their own.
-    func docCount() -> Int {
-        guard let db else { return 0 }
-        return Int((try? db.scalarInt("""
-            SELECT count(*) FROM docs WHERE source NOT IN ('note','markdown')
-            AND (url LIKE 'https://docs.google.com/%' OR url LIKE '%notion.so/%' OR url LIKE '%notion.site/%')
-            """)) ?? 0)
+    /// Items each AI-client switch covers. Google Docs and Notion count their synced items and the
+    /// same kind of page read in the browser.
+    func switchCounts() -> [String: Int] {
+        var out: [String: Int] = [:]
+        for row in counts() { out[row.source, default: 0] += row.total }
+        guard let db else { return out }
+        let docs = (try? db.query("""
+            SELECT sum(url LIKE 'https://docs.google.com/%'), sum(url LIKE '%notion.so/%' OR url LIKE '%notion.site/%')
+            FROM docs WHERE source IN ('web','chrome')
+            """) { (Int($0.int(0)), Int($0.int(1))) })?.first ?? (0, 0)
+        out[MCPSources.gdocs, default: 0] += docs.0
+        out[MCPSources.notion, default: 0] += docs.1
+        out[MCPSources.searches] = searchCount()
+        return out
+    }
+
+    /// Items written to the index after a moment, for results newer than the ranking copy.
+    func ids(indexedAfter t: Double) -> Set<Int64> {
+        guard let db else { return [] }
+        return Set((try? db.query("SELECT id FROM docs WHERE indexed_at > ?", [t]) { $0.int(0) }) ?? [])
+    }
+
+    /// Other items that name the same people, organisations or places, with the shared names.
+    func sharedNames(itemID: Int64, limit: Int = 12) -> [(id: Int64, names: [String])] {
+        guard let db else { return [] }
+        let rows = (try? db.query("""
+            SELECT e2.doc_id, e2.display FROM entities e1 JOIN entities e2 ON e1.name = e2.name
+            WHERE e1.doc_id = ? AND e2.doc_id != ? LIMIT 400
+            """, [itemID, itemID]) { ($0.int(0), $0.text(1)) }) ?? []
+        return Self.grouped(rows, limit: limit)
+    }
+
+    /// Other items tagged with the same topics by the on-device model.
+    func sharedTopics(itemID: Int64, limit: Int = 12) -> [(id: Int64, names: [String])] {
+        guard let db, (try? db.scalarInt("SELECT count(*) FROM sqlite_master WHERE name = 'topics'")) == 1 else { return [] }
+        let rows = (try? db.query("""
+            SELECT t2.doc_id, t2.topic FROM topics t1 JOIN topics t2 ON lower(t1.topic) = lower(t2.topic)
+            WHERE t1.doc_id = ? AND t2.doc_id != ? AND t1.source = 'model' AND t2.source = 'model' LIMIT 400
+            """, [itemID, itemID]) { ($0.int(0), $0.text(1)) }) ?? []
+        return Self.grouped(rows, limit: limit)
+    }
+
+    private static func grouped(_ rows: [(Int64, String)], limit: Int) -> [(id: Int64, names: [String])] {
+        var by: [Int64: [String]] = [:]
+        for (d, n) in rows where !(by[d]?.contains(n) ?? false) { by[d, default: []].append(n) }
+        return by.sorted { $0.value.count > $1.value.count || ($0.value.count == $1.value.count && $0.key < $1.key) }
+            .prefix(limit).map { (id: $0.key, names: $0.value) }
+    }
+
+    /// Model topics for an item, read live. Empty when the tagger hasn't reached it.
+    func modelTopics(itemID: Int64) -> [String] {
+        guard let db, (try? db.scalarInt("SELECT count(*) FROM sqlite_master WHERE name = 'topics'")) == 1 else { return [] }
+        return (try? db.query("SELECT topic FROM topics WHERE doc_id = ? AND source = 'model'", [itemID]) { $0.text(0) }) ?? []
     }
 
     func lastIndexed() -> Double {
@@ -235,14 +283,20 @@ final class KnowledgeReader {
         }
     }
 
-    /// Passage vectors for a few items, for reranking by meaning.
-    func vectors(ids: [Int64]) -> [Int64: [[Float]]] {
+    /// Passage vectors from one embedding model for a few items, for reranking by meaning.
+    /// Older indexes have no vec_model column; their vectors are all Apple's sentence embedding.
+    func vectors(ids: [Int64], model: String) -> [Int64: [[Float]]] {
         guard let db, !ids.isEmpty else { return [:] }
+        let hasModel = ((try? db.query("PRAGMA table_info(passages)") { $0.text(1) }) ?? []).contains("vec_model")
         var out: [Int64: [[Float]]] = [:]
         for chunk in stride(from: 0, to: ids.count, by: 300) {
             let part = Array(ids[chunk..<min(ids.count, chunk + 300)])
             let ph = Array(repeating: "?", count: part.count).joined(separator: ",")
-            let rows = (try? db.query("SELECT doc_id, vec FROM passages WHERE vec IS NOT NULL AND doc_id IN (\(ph))", part) { ($0.int(0), $0.blob(1)) }) ?? []
+            let sql = hasModel
+                ? "SELECT doc_id, vec FROM passages WHERE vec IS NOT NULL AND coalesce(vec_model, 'nlsent') = ? AND doc_id IN (\(ph))"
+                : "SELECT doc_id, vec FROM passages WHERE vec IS NOT NULL AND doc_id IN (\(ph))"
+            let args: [Any?] = hasModel ? [model] + part : part
+            let rows = (try? db.query(sql, args) { ($0.int(0), $0.blob(1)) }) ?? []
             for (d, b) in rows { if let b { out[d, default: []].append(Embedder.decode(b)) } }
         }
         return out

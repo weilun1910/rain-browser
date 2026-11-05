@@ -181,13 +181,9 @@ struct AIClientsSettings: View {
         mcp = MCPSettings.load(root: Paths.root)
         log = MCPLog.read(root: Paths.root, limit: 60)
         let reader = KnowledgeReader(root: Paths.root)
-        var c: [String: Int] = [:]
-        for row in reader.counts() { c[row.source] = row.total }
-        c[MCPSources.docs] = reader.docCount()
-        c[MCPSources.searches] = reader.searchCount()
-        counts = c
+        counts = reader.switchCounts()
         let known = Set(MCPSources.builtIn.map { $0.id })
-        extraSources = reader.counts().map { $0.source }.filter { !known.contains($0) }
+        extraSources = counts.keys.filter { !known.contains($0) }.sorted()
         reader.close()
     }
 }

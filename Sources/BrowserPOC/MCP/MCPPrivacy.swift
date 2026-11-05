@@ -19,6 +19,11 @@ struct MCPSettings: Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = MCPSettings()
         hiddenSources = try c.decodeIfPresent([String].self, forKey: .hiddenSources) ?? d.hiddenSources
+        // Before the Engine's sources, one "docs" switch covered Google Docs and Notion.
+        if let i = hiddenSources.firstIndex(of: "docs") {
+            hiddenSources.remove(at: i)
+            for s in [MCPSources.gdocs, MCPSources.notion] where !hiddenSources.contains(s) { hiddenSources.append(s) }
+        }
         shareCurrentContext = try c.decodeIfPresent(Bool.self, forKey: .shareCurrentContext) ?? d.shareCurrentContext
         allowWrites = try c.decodeIfPresent(Bool.self, forKey: .allowWrites) ?? d.allowWrites
         keepLog = try c.decodeIfPresent(Bool.self, forKey: .keepLog) ?? d.keepLog
@@ -41,12 +46,15 @@ struct MCPSettings: Codable, Equatable {
     func isHidden(_ source: String) -> Bool { hiddenSources.contains(source) }
 }
 
-/// Source ids as AI clients and the Settings switches see them.
+/// Source ids as AI clients and the Settings switches see them. They're the index's own source
+/// names, plus "searches" for past searches.
 enum MCPSources {
     static let notes = "note"
     static let web = "web"
     static let chrome = "chrome"
-    static let docs = "docs"
+    static let gdocs = "gdocs"
+    static let notion = "notion"
+    static let granola = "granola"
     static let searches = "searches"
 
     /// The switches Settings always shows, in order. Sources the index adds later show after these.
@@ -54,7 +62,9 @@ enum MCPSources {
         (notes, "Notes", "Markdown notes in your notes folders"),
         (web, "Pages you read here", "Pages captured while you browse in this app"),
         (chrome, "Chrome history", "Pages imported from Chrome"),
-        (docs, "Google Docs and Notion", "Docs, Sheets, Slides and Notion pages, from either source above"),
+        (gdocs, "Google Docs", "Docs, Sheets and Slides, synced and opened in the browser"),
+        (notion, "Notion", "Pages from the Notion app, and Notion pages opened in the browser"),
+        (granola, "Granola meetings", "Meeting notes synced from Granola"),
         (searches, "Past searches", "What you typed into search, here and in Chrome"),
     ]
 
@@ -66,6 +76,34 @@ enum MCPSources {
     static func normalized(_ source: String) -> String { source == "markdown" ? notes : source }
 
     static func isDocURL(_ url: URL) -> Bool { WritingKey.isNotion(url) || WritingKey.googleDoc(url) != nil }
+
+    /// Which switch covers a document's URL, whichever source it came through: a Google Doc read
+    /// in the browser and the same doc from the Google Docs sync share one switch.
+    static func docSwitch(_ url: URL) -> String? {
+        if WritingKey.googleDoc(url) != nil { return gdocs }
+        if WritingKey.isNotion(url) { return notion }
+        return nil
+    }
+
+    /// The index sources an id filters on. Google Docs and Notion also match pages read in the browser.
+    static func indexSources(_ id: String) -> Set<String> {
+        switch id {
+        case notes: return ["note", "markdown"]
+        case gdocs: return [gdocs, web, chrome]
+        case notion: return [notion, web, chrome]
+        case "docs": return [gdocs, notion, web, chrome]
+        default: return [id]
+        }
+    }
+
+    /// Whether an item matches a requested source id.
+    static func matches(_ id: String, source rawSource: String, url: String) -> Bool {
+        let source = normalized(rawSource)
+        if source == id { return true }
+        guard [web, chrome].contains(source), let u = URL(string: url) else { return false }
+        if id == "docs" { return isDocURL(u) }
+        return docSwitch(u) == id
+    }
 }
 
 /// Decides what an AI client may see. Every item, tab and URL that goes out passes through here.
@@ -84,7 +122,7 @@ struct MCPPrivacy {
         if settings.isHidden(source) { return .hidden("source \(source) is hidden") }
         guard let u = URL(string: url) else { return source == MCPSources.notes ? .allowed : .hidden("not a URL") }
         if u.isFileURL { return .allowed }
-        if MCPSources.isDocURL(u) && settings.isHidden(MCPSources.docs) { return .hidden("Google Docs and Notion are hidden") }
+        if let sw = MCPSources.docSwitch(u), settings.isHidden(sw) { return .hidden("\(MCPSources.label(sw)) is hidden") }
         return urlDecision(u)
     }
 

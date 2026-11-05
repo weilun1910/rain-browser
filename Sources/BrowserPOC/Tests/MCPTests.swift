@@ -171,6 +171,21 @@ enum MCPTests {
         check(s3.contains("Bread pop-up plan") && !s3.contains("Sourdough plan"), "search filters by kind", s3.joined(separator: "; "))
         check(c.tool("search", [:]).1, "search without a query is a tool error, not a crash")
 
+        // The Engine's search and sources.
+        func source(_ id: String) -> JSON? { sources.first { $0["id"] as? String == id } }
+        check(source("granola")?["items"] as? Int == 1 && source("granola")?["label"] as? String == "Granola meetings"
+              && source("gdocs")?["items"] as? Int == 2 && source("notion")?["items"] as? Int == 2 && ov["search_by"] as? String == "engine",
+              "overview counts the Notion, Google Docs and Granola switches",
+              ["gdocs", "notion", "granola"].map { "\($0)=\(source($0)?["items"] ?? "?")" }.joined(separator: " "))
+        check(s1["ranked_by"] as? String == "engine" && (s1["results"] as? [JSON] ?? []).contains { !(($0["history"] as? String) ?? "").isEmpty },
+              "search runs the Engine's hybrid search and says when each item was seen")
+        let meet = c.tool("search", ["query": "Meera loaves", "sources": ["granola"]]).0["results"] as? [JSON] ?? []
+        check(titles(meet) == ["Call with Meera about the market pop-up"] && meet.first?["kind"] as? String == "meeting",
+              "search filters to Granola meetings", titles(meet).joined(separator: "; "))
+        let gd = titles(c.tool("search", ["query": "starter feeding schedule pop-up plan", "sources": ["gdocs"]]).0["results"])
+        check(Set(gd) == ["Starter feeding schedule", "Bread pop-up plan"], "the Google Docs filter covers synced docs and docs read in the browser",
+              gd.joined(separator: "; "))
+
         // get_item
         let (g1, g1Err, _) = c.tool("get_item", ["item": fx.googleDoc + "/edit"])
         check(!g1Err && (g1["text"] as? String ?? "").contains("Meera") && titles(g1["names"]).isEmpty
@@ -186,6 +201,9 @@ enum MCPTests {
         check(c.tool("get_item", ["item": fx.privatePage]).1 && c.tool("get_item", ["item": fx.excludedPage]).1,
               "get_item refuses hidden items")
         check(c.tool("get_item", ["item": "999999"]).1, "get_item with an unknown id is a tool error")
+        let (g4, _, _) = c.tool("get_item", ["item": "How to feed and maintain a sourdough starter"])
+        check(!(g4["topics"] as? [String] ?? []).isEmpty && ((g4["history"] as? String) ?? "").hasPrefix("You "),
+              "get_item adds the item's topics and when it was seen", "\(g4["topics"] ?? "") | \(g4["history"] ?? "")")
 
         // related
         let (r1, r1Err, _) = c.tool("related", ["item": "Sourdough plan"])
@@ -195,6 +213,10 @@ enum MCPTests {
         check(!(r1Sites + r1Docs).contains("Sourdough plan") && !(r1Sites + r1Docs).contains("Chase checking account"),
               "related leaves out the item itself and hidden items")
         check(((r1["sites"] as? [JSON])?.first?["reason"] as? String ?? "").count > 10, "related gives a reason line")
+        let ranking = r1["ranking"] as? JSON
+        check(ranking?["bar"] is NSNumber && ranking?["reranker"] as? Bool == Intelligence.shared.hasReranker
+              && ((r1["sites"] as? [JSON])?.first?["found_by"] as? [String] ?? []).count > 0,
+              "related reports the panel's bar, the reranker and which searches found each item", "\(ranking ?? [:])")
         let r2 = titles(c.tool("related", ["text": "Marathon training: tempo runs, long slow distance and a two week taper before race day."]).0["sites"])
         check(r2.contains("A 16 week marathon training plan for beginners"), "related works for free text", r2.joined(separator: "; "))
 
@@ -214,6 +236,15 @@ enum MCPTests {
         let back = c.tool("connections", ["item": "Bread bake log", "types": ["link"]]).0
         check((back["edges"] as? [JSON] ?? []).contains { $0["type"] as? String == "link" && $0["to"] as? Int == (back["center"] as? JSON)?["id"] as? Int },
               "connections finds notes that link here")
+        let met = c.tool("connections", ["item": "Call with Meera about the market pop-up", "types": ["topic"]]).0
+        let metNodes = Dictionary(((met["nodes"] as? [JSON]) ?? []).compactMap { n -> (Int, String)? in
+            guard let id = n["id"] as? Int, let t = n["title"] as? String else { return nil }
+            return (id, t)
+        }, uniquingKeysWith: { a, _ in a })
+        check(((met["edges"] as? [JSON]) ?? []).contains { ($0["why"] as? String ?? "").contains("Meera")
+                && ["Bread pop-up plan", "Pop-up stall checklist"].contains(metNodes[$0["to"] as? Int ?? -1] ?? "") },
+              "connections links a meeting to docs that name the same person",
+              ((met["edges"] as? [JSON]) ?? []).map { "\($0["why"] ?? "")" }.joined(separator: "; "))
         let deep = c.tool("connections", ["item": "MCP ideas", "depth": 2]).0
         check(((deep["nodes"] as? [JSON]) ?? []).contains { $0["depth"] as? Int == 2 } || !((deep["edges"] as? [JSON]) ?? []).isEmpty,
               "connections at depth 2")
@@ -372,10 +403,17 @@ enum MCPTests {
         check(c.tool("list_notes").1 && c.tool("read_note", ["note": fx.breadLog.path]).1, "hiding notes blocks list_notes and read_note")
         check(!titles(c.tool("current_context").0["open_tabs"]).contains("Sourdough plan"), "hiding notes takes note tabs out of the current context")
 
-        setSettings(fx) { $0.hiddenSources = [MCPSources.searches, MCPSources.docs] }
-        let docs = titles(c.tool("search", ["query": "pop-up plan loaves"]).0["results"])
-        check(!docs.contains("Bread pop-up plan"), "hiding Google Docs and Notion takes them out", docs.joined(separator: "; "))
+        setSettings(fx) { $0.hiddenSources = [MCPSources.searches, MCPSources.gdocs] }
+        let docs = titles(c.tool("search", ["query": "pop-up plan loaves starter feeding schedule"]).0["results"])
+        check(!docs.contains("Bread pop-up plan") && !docs.contains("Starter feeding schedule") && docs.contains("Pop-up stall checklist"),
+              "hiding Google Docs takes out synced docs and docs read in the browser, and leaves Notion", docs.joined(separator: "; "))
         check(!titles(c.tool("related", ["item": "Sourdough plan"]).0["docs"]).contains("Bread pop-up plan"), "hidden docs stay out of related")
+
+        setSettings(fx) { $0.hiddenSources = [MCPSources.searches, MCPSources.notion, MCPSources.granola] }
+        let rest = titles(c.tool("search", ["query": "Meera market pop-up"]).0["results"])
+        check(!rest.contains("Pop-up stall checklist") && !rest.contains("Call with Meera about the market pop-up") && rest.contains("Bread pop-up plan"),
+              "the Notion and Granola switches hide their items", rest.joined(separator: "; "))
+        check(c.tool("get_item", ["item": "Call with Meera about the market pop-up"]).1, "a hidden meeting can't be read")
 
         setSettings(fx) { $0.hiddenSources = []; $0.shareCurrentContext = false }
         check(c.tool("current_context").0["shared"] as? Bool == false, "turning off the current context hides it")
@@ -478,9 +516,16 @@ enum MCPTests {
         check(blocked.allSatisfy { p.check(source: "web", url: $0) != .allowed }, "sign-in links, tokens and excluded sites are hidden",
               blocked.filter { p.check(source: "web", url: $0) == .allowed }.joined(separator: ", "))
         check(p.check(source: "markdown", url: "file:///notes/a.md") == .allowed, "notes pass the URL check")
-        var hideDocs = MCPSettings(); hideDocs.hiddenSources = ["docs"]
-        check(MCPPrivacy(settings: hideDocs, app: AppSettings()).check(source: "chrome", url: "https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789") != .allowed,
-              "the docs switch covers Chrome history too")
+        var hideDocs = MCPSettings(); hideDocs.hiddenSources = [MCPSources.gdocs]
+        let hd = MCPPrivacy(settings: hideDocs, app: AppSettings())
+        check(hd.check(source: "chrome", url: "https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789") != .allowed
+              && hd.check(source: "gdocs", url: "https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789") != .allowed
+              && hd.check(source: "notion", url: "https://www.notion.so/0123456789abcdef0123456789abcdef") == .allowed,
+              "the Google Docs switch covers Chrome history and the sync, and not Notion")
+        check(p.check(source: "granola", url: "https://notes.granola.ai/d/mtg-0451") == .allowed, "Granola links pass the URL check")
+        let oldSettings = try? JSONDecoder().decode(MCPSettings.self, from: Data(#"{"hiddenSources":["searches","docs"]}"#.utf8))
+        check(oldSettings.map { Set($0.hiddenSources) == ["searches", "gdocs", "notion"] } ?? false,
+              "an older docs switch becomes the Google Docs and Notion switches")
 
         let appended = MCPNoteWriter.appending("- c", to: "# T\n\n## A\n\n- a\n\n## B\n\n- b\n", under: "A")
         check(appended == "# T\n\n## A\n\n- a\n- c\n\n## B\n\n- b\n", "appending under a heading lands at the end of its section", appended)

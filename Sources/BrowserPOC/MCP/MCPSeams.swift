@@ -1,12 +1,12 @@
 import Foundation
 import SQLite3
 
-// Seams for the Graph and Engine agents' work. Each protocol has a fallback built on today's
-// index, and one factory in `MCPSeams` picks the implementation. After the merge:
-// - Graph: `makeGraph` returns an adapter over `GraphStore(indexURL:readOnly: true)`, mapping
-//   `neighbours(itemID:depth:types:limit:)` and `edges(itemID:types:)` onto `MCPGraphSource`.
-// - Engine: `makeSearch` and `makeSemantic` call the Engine's search, `semanticNeighbours` and
-//   entities. The ranking snapshot keeps calling `IndexStore.retrieve`, whatever it becomes.
+// Seams for the Graph and Engine agents' work. One factory in `MCPSeams` picks each implementation.
+// - Engine (merged): search goes through `IndexStore.search`, related through the panel's
+//   `Pipeline`, similar edges through `semanticNeighbours`, and get_item adds `topics` and the
+//   visit history. All of it runs on the ranking copy, since `IndexStore.init` writes.
+// - Graph (next): `makeGraph` returns an adapter over `GraphStore(indexURL:readOnly: true)`, mapping
+//   `edges(itemID:types:)` onto `MCPGraphSource`. Until then edges come from the index.
 
 /// An edge between two items. Same shape as the Graph agent's `GraphEdgeInfo`.
 struct MCPEdge {
@@ -26,23 +26,79 @@ protocol MCPGraphSource {
     func edges(itemID: Int64, types: Set<String>?, limit: Int) -> [MCPEdge]
 }
 
+struct MCPSearchResult {
+    let item: KItem
+    let score: Double
+    let passage: String
+    /// When and in what context Felix saw it, like the card reasons.
+    var history: String? = nil
+    /// Indexed after the ranking copy was made, so found by the live keyword search.
+    var fresh = false
+}
+
 protocol MCPSearchSource {
-    func search(_ query: String, limit: Int, filter: (KItem) -> Bool) -> [(item: KItem, score: Double, passage: String)]
+    /// engine or index, for the answer.
+    var name: String { get }
+    /// `sources` narrows the search to index sources before ranking. `filter` runs the privacy rules
+    /// and the rest of the tool's filters on every hit.
+    func search(_ query: String, limit: Int, sources: Set<String>?, since: Date?, until: Date?,
+                filter: (KItem) -> Bool) -> [MCPSearchResult]
 }
 
 enum MCPSeams {
     static func makeGraph(_ ctx: MCPContext) -> MCPGraphSource { IndexGraphSource(ctx: ctx) }
-    static func makeSearch(_ ctx: MCPContext) -> MCPSearchSource { IndexSearchSource(reader: ctx.reader) }
+    static func makeSearch(_ ctx: MCPContext) -> MCPSearchSource { EngineSearchSource(ctx: ctx) }
 }
 
-// MARK: - Search on today's index
+// MARK: - Search
 
-/// FTS5 with bm25, a title bonus and a little recency, then a rerank by meaning with the
-/// passage vectors already in the index.
+/// The Engine's hybrid search (keywords, meaning, names, rank fusion, then the reranker when it's
+/// downloaded), on the ranking copy. Items indexed since the copy was made come from the live
+/// keyword search, so nothing the app just captured is missing.
+struct EngineSearchSource: MCPSearchSource {
+    let ctx: MCPContext
+    var name: String { "engine" }
+
+    func search(_ query: String, limit: Int, sources: Set<String>?, since: Date?, until: Date?,
+                filter: (KItem) -> Bool) -> [MCPSearchResult] {
+        let live = IndexSearchSource(reader: ctx.reader)
+        guard let store = ctx.ranking.storeFor(ctx.reader) else {
+            return live.search(query, limit: limit, sources: sources, since: since, until: until, filter: filter)
+        }
+        var f = SearchFilters()
+        if let sources { f.sources = Set(sources.flatMap(MCPSources.indexSources).compactMap(SourceType.init(rawValue:))) }
+        f.since = since
+        f.until = until
+        f.writingSites = ctx.app.writingSites
+        let hits = store.search(query, filters: f, limit: min(100, limit * 3 + 10))
+        // Details come from the live index, so an item deleted since the copy drops out.
+        let metas = ctx.reader.items(ids: hits.map { $0.doc.id })
+        var out: [MCPSearchResult] = []
+        for h in hits where out.count < limit {
+            guard let it = metas[h.doc.id], filter(it) else { continue }
+            out.append(MCPSearchResult(item: it, score: h.score, passage: h.passage, history: h.history))
+        }
+        let have = Set(out.map { $0.item.id })
+        let fresh = ctx.reader.ids(indexedAfter: ctx.ranking.builtAt.timeIntervalSince1970 - 1).subtracting(have)
+        if !fresh.isEmpty && out.count < limit {
+            for var r in live.search(query, limit: limit - out.count, sources: sources, since: since, until: until,
+                                     filter: { fresh.contains($0.id) && filter($0) }) {
+                r.fresh = true
+                out.append(r)
+            }
+        }
+        return out
+    }
+}
+
+/// FTS5 with bm25, a title bonus and a little recency, then a rerank by meaning with Apple's
+/// sentence vectors. Reads the live index. Used for fresh items and when there's no ranking copy.
 struct IndexSearchSource: MCPSearchSource {
     let reader: KnowledgeReader
+    var name: String { "index" }
 
-    func search(_ query: String, limit: Int, filter: (KItem) -> Bool) -> [(item: KItem, score: Double, passage: String)] {
+    func search(_ query: String, limit: Int, sources: Set<String>?, since: Date?, until: Date?,
+                filter: (KItem) -> Bool) -> [MCPSearchResult] {
         let hits = reader.ftsSearch(query).filter { filter($0.item) }
         guard !hits.isEmpty else { return [] }
         let now = Date().timeIntervalSince1970
@@ -61,7 +117,7 @@ struct IndexSearchSource: MCPSearchSource {
         // Rerank the head by meaning.
         let head = Array(scored.prefix(60))
         if let qv = Embedder.shared.vector(query) {
-            let vecs = reader.vectors(ids: head.map { $0.0.id })
+            let vecs = reader.vectors(ids: head.map { $0.0.id }, model: "nlsent")
             scored = head.map { (it, s, p) in
                 var best: Float = -1
                 for v in vecs[it.id] ?? [] where v.count == qv.count {
@@ -72,7 +128,7 @@ struct IndexSearchSource: MCPSearchSource {
             } + scored.dropFirst(60)
             scored.sort { $0.1 > $1.1 }
         }
-        return scored.prefix(limit).map { (item: $0.0, score: $0.1, passage: $0.2) }
+        return scored.prefix(limit).map { MCPSearchResult(item: $0.0, score: $0.1, passage: $0.2) }
     }
 }
 
@@ -81,7 +137,8 @@ struct IndexSearchSource: MCPSearchSource {
 /// Edges from what the index already knows:
 /// - link: Markdown links, bare URLs and [[wikilinks]] in a note, both directions.
 /// - research: links under a note's "## Related" heading, which is where Add to research puts them.
-/// - similar and topic: the Related panel's own ranking with the item as context.
+/// - similar: the Engine's `semanticNeighbours`, above the embedding model's own floor.
+/// - topic: the same people, organisations or places, or the same model-tagged topics.
 struct IndexGraphSource: MCPGraphSource {
     let ctx: MCPContext
     var name: String { "index" }
@@ -91,9 +148,13 @@ struct IndexGraphSource: MCPGraphSource {
         func wanted(_ t: String) -> Bool { types == nil || types!.contains(t) }
         var out: [MCPEdge] = []
         var seen = Set<String>()
+        let canon = CanonicalID.of(url: it.url)
         func add(_ e: MCPEdge) {
             let k = "\(min(e.from, e.to))-\(max(e.from, e.to))-\(e.type)"
-            if seen.insert(k).inserted { out.append(e) }
+            guard seen.insert(k).inserted else { return }
+            // A doc read in the browser and the same doc from its sync are one item, not neighbours.
+            if let canon, let other = ctx.reader.item(id: e.from == it.id ? e.to : e.from), CanonicalID.of(url: other.url) == canon { return }
+            out.append(e)
         }
         if wanted("link") || wanted("research") {
             for l in LinkScan.links(in: ctx.reader.body(id: it.id), noteURL: it.fileURL) {
@@ -123,18 +184,23 @@ struct IndexGraphSource: MCPGraphSource {
                 }
             }
         }
-        if wanted("similar") || wanted("topic") {
-            for m in ctx.ranking.related(to: it, ctx: ctx, minScore: 0.25, perSection: 6) {
-                if wanted("topic") && !m.sharedEntities.isEmpty {
-                    let names = m.sharedEntities.prefix(4).joined(separator: ", ")
-                    add(MCPEdge(from: it.id, to: m.doc.id, type: "topic", directed: false, weight: m.entity,
-                                detail: names, why: "Both mention \(names)"))
-                }
-                if wanted("similar") && (m.semantic >= 0.35 || m.keyword >= 0.35) {
-                    let terms = (m.topicTerms.isEmpty ? m.sharedTerms : m.topicTerms).prefix(4).joined(separator: ", ")
-                    add(MCPEdge(from: it.id, to: m.doc.id, type: "similar", directed: false, weight: m.score,
-                                detail: terms, why: terms.isEmpty ? "Close in meaning" : "Close in meaning, both cover \(terms)"))
-                }
+        if wanted("similar") {
+            for n in ctx.ranking.similar(itemID: it.id, k: 8, reader: ctx.reader) {
+                add(MCPEdge(from: it.id, to: n.id, type: "similar", directed: false, weight: n.similarity,
+                            detail: String(n.passage.prefix(160)),
+                            why: "Close in meaning (\(String(format: "%.2f", n.similarity)) with \(n.model))"))
+            }
+        }
+        if wanted("topic") {
+            for s in ctx.reader.sharedNames(itemID: it.id) {
+                let names = s.names.prefix(4).joined(separator: ", ")
+                add(MCPEdge(from: it.id, to: s.id, type: "topic", directed: false, weight: min(1, Double(s.names.count) / 2),
+                            detail: names, why: "Both mention \(names)"))
+            }
+            for s in ctx.reader.sharedTopics(itemID: it.id) {
+                let names = s.names.prefix(4).joined(separator: ", ")
+                add(MCPEdge(from: it.id, to: s.id, type: "topic", directed: false, weight: min(1, Double(s.names.count) / 3),
+                            detail: names, why: "Both are about \(names)"))
             }
         }
         return Array(out.prefix(limit))
@@ -222,15 +288,17 @@ enum LinkScan {
 
 // MARK: - The Related panel's ranking, read-only
 
-/// `IndexStore.retrieve` is the Related panel's ranking. `IndexStore` writes to its database when
-/// it opens and keeps its connection private, and the brief says not to edit it. So this copies the
+/// The Engine's calls (`search`, `Pipeline`, `semanticNeighbours`, `topics`, `visits`) live on
+/// `IndexStore`, and `IndexStore.init` writes to its database when it opens (a schema check, an
+/// `ALTER TABLE` and a migration `UPDATE`). The real index must only be read. So this copies the
 /// index with SQLite's online backup into a private temp folder, opens an `IndexStore` on the copy
-/// and calls the real `retrieve`. The copy is rebuilt when the index changes, at most every 30
-/// seconds, and removed when the server exits.
+/// and calls the Engine there. The copy keeps every row id, so ids match the live index. It's
+/// rebuilt when the index changes, at most every 30 seconds, and removed when the server exits.
 final class RankingSnapshot {
     private var store: IndexStore?
     private var builtVersion: Int64 = .min
-    private var builtAt = Date.distantPast
+    /// When the copy was made. Items indexed after this aren't in it.
+    private(set) var builtAt = Date.distantPast
     private let dir: URL
     var refreshInterval: TimeInterval = 30
 
@@ -269,22 +337,75 @@ final class RankingSnapshot {
         try? FileManager.default.removeItem(at: dir)
     }
 
+    struct Related {
+        var matches: [Match] = []
+        /// The bar the panel would use, and whether the reranker scored the cards.
+        var gate: Pipeline.Gate?
+        var visits: [Int64: [Visit]] = [:]
+    }
+
     /// The panel's matches for an item, both sections together, best first.
-    func related(to it: KItem, ctx: MCPContext, minScore: Double, perSection: Int) -> [Match] {
+    func related(to it: KItem, ctx: MCPContext, minScore: Double?, perSection: Int) -> Related {
         let input = ContextInput(key: it.key, title: it.title, text: ctx.reader.body(id: it.id),
                                  kind: it.isNote ? .note : .page)
         return related(input, ctx: ctx, minScore: minScore, perSection: perSection)
     }
 
-    func related(_ input: ContextInput, ctx: MCPContext, minScore: Double, perSection: Int) -> [Match] {
-        guard let store = storeFor(ctx.reader) else { return [] }
-        let s = ctx.app
-        var p = RankParams.fromSettings(s)
-        p.threshold = minScore
+    /// The Related panel's first pass: hybrid candidates, the reranker when it's downloaded, and the
+    /// panel's bar. It skips the Foundation Models steps (describing the work, judging borderline
+    /// cards), which take seconds and only refine what's already here.
+    func related(_ input: ContextInput, ctx: MCPContext, minScore: Double?, perSection: Int) -> Related {
+        guard let store = storeFor(ctx.reader) else { return Related() }
+        var p = RankParams.fromSettings(ctx.app)
         p.limit = perSection
         // The panel hides what was opened in the last ten minutes. An assistant wants those too.
         p.recentWindow = 0
-        let r = store.retrieve(ContextAnalysis.make(input), p)
-        return r.matches.sorted { $0.score > $1.score }
+        if let minScore {
+            // Pipeline.gate turns the slider value into the bar; this picks the slider value for a bar.
+            p.threshold = Intelligence.shared.hasReranker ? minScore + 0.25 : minScore + 0.1
+        }
+        let q = Pipeline.makeQuery(input, work: nil, store: store)
+        let r = Pipeline.rank(q, p, store: store)
+        var out = Related(matches: r.matches.sorted { $0.score > $1.score }, gate: r.gate)
+        for m in out.matches { out.visits[m.doc.id] = store.visits(docID: m.doc.id, limit: 10) }
+        return out
+    }
+
+    struct Similar {
+        let id: Int64
+        let similarity: Double
+        let passage: String
+        let model: String
+    }
+
+    /// The Engine's nearest items by meaning, kept only above the embedding model's own floor.
+    func similar(itemID: Int64, k: Int, reader: KnowledgeReader) -> [Similar] {
+        guard let store = storeFor(reader) else { return [] }
+        let order: [EmbedderID] = [.gemma, .contextual, .sentence]
+        guard let model = order.first(where: { store.vectorSets[$0]?[itemID]?.isEmpty == false }) else { return [] }
+        let floor = Double(IndexStore.denseFloor(model))
+        return store.semanticNeighbours(itemID: itemID, k: k).filter { $0.similarity >= floor }.map {
+            Similar(id: $0.doc.id, similarity: $0.similarity, passage: $0.passage, model: Self.modelName(model))
+        }
+    }
+
+    static func modelName(_ m: EmbedderID) -> String {
+        switch m {
+        case .gemma: return "EmbeddingGemma"
+        case .contextual: return "Apple's contextual embedding"
+        case .sentence: return "Apple's sentence embedding"
+        }
+    }
+
+    /// Topics from the content-tagging model, or the item's most distinctive words.
+    func topics(itemID: Int64, reader: KnowledgeReader) -> [String] {
+        storeFor(reader)?.topics(itemID: itemID) ?? []
+    }
+
+    /// "You read this on 12 Oct while writing ...", the same line the cards start with.
+    func history(itemID: Int64, reader: KnowledgeReader) -> String? {
+        guard let store = storeFor(reader), let meta = store.item(id: itemID) else { return nil }
+        let line = Reasons.history(meta, visits: store.visits(docID: itemID, limit: 10))
+        return line.isEmpty ? nil : Fmt.clean(line)
     }
 }

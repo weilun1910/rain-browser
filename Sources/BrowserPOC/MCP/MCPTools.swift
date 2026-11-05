@@ -257,6 +257,9 @@ final class MCPToolbox {
             if !l.isEmpty { lines.append(l) }
         }
         var p = lines.joined(separator: " ")
+        // Passages can arrive with their lines already joined, so headings and bullets sit mid-text.
+        p = p.replacingOccurrences(of: #"(^|\s)#{1,6}\s+"#, with: "$1", options: .regularExpression)
+        p = p.replacingOccurrences(of: #"(^|\s)[-*+]\s+(?=\[)"#, with: "$1", options: .regularExpression)
         p = p.replacingOccurrences(of: #"\[\[([^\]\|]+)\|([^\]]+)\]\]"#, with: "$2", options: .regularExpression)
         p = p.replacingOccurrences(of: #"\[\[([^\]]+)\]\]"#, with: "$1", options: .regularExpression)
         p = p.replacingOccurrences(of: #"\[([^\]]*)\]\([^)]*\)"#, with: "$1", options: .regularExpression)
@@ -296,19 +299,15 @@ final class MCPToolbox {
                 writes: false) { [unowned self] _ in
             let ctx = context
             let p = ctx.privacy
-            let counts = ctx.reader.counts()
+            let counts = ctx.reader.switchCounts()
             var sources: [JSON] = []
             var seen = Set<String>()
             for b in MCPSources.builtIn {
                 seen.insert(b.id)
-                var n = 0
-                if b.id == MCPSources.docs { n = ctx.reader.docCount() }
-                else if b.id == MCPSources.searches { n = ctx.reader.searchCount() }
-                else { n = counts.first { $0.source == b.id }?.total ?? 0 }
-                sources.append(["id": b.id, "label": b.label, "items": n, "visible": !ctx.mcp.isHidden(b.id)])
+                sources.append(["id": b.id, "label": b.label, "items": counts[b.id] ?? 0, "visible": !ctx.mcp.isHidden(b.id)])
             }
-            for c in counts where !seen.contains(c.source) {
-                sources.append(["id": c.source, "label": MCPSources.label(c.source), "items": c.total, "visible": !ctx.mcp.isHidden(c.source)])
+            for (id, n) in counts.sorted(by: { $0.key < $1.key }) where !seen.contains(id) {
+                sources.append(["id": id, "label": MCPSources.label(id), "items": n, "visible": !ctx.mcp.isHidden(id)])
             }
             let cc = ctx.reader.currentContext()
             let state = ctx.reader.savedState()
@@ -323,6 +322,8 @@ final class MCPToolbox {
                 "current_context_shared": ctx.mcp.shareCurrentContext,
                 "maintenance_tools": ctx.mcp.allowWrites,
                 "connections_from": graph.name,
+                "search_by": searcher.name,
+                "reranker_ready": Intelligence.shared.hasReranker,
             ]
             ctx.log("tool", "overview", "", served: [])
             return out
@@ -331,11 +332,12 @@ final class MCPToolbox {
 
     private func searchTool() -> MCPTool {
         MCPTool(name: "search", title: "Search the knowledge base",
-                description: "Full-text search across everything the user has read and written: their notes, pages read in the browser, Chrome history, Google Docs and Notion pages. Ranked by match strength, title hits and recency, then by meaning. Use it whenever the user asks about their own notes, projects, past reading or research. For a fuzzy topic or a whole paragraph, related often finds more.",
+                description: "Search across everything the user has read, written and met about: their notes, pages read in the browser, Chrome history, Google Docs, Notion pages and Granola meeting notes. The browser's own hybrid search: keywords, meaning and names, then an on-device reranker when it's downloaded. Each result says when and in what context the user saw it. Use it whenever the user asks about their own notes, projects, meetings, past reading or research. For a fuzzy topic or a whole paragraph, related often finds more.",
                 input: S.obj([
-                    "query": S.str("Words to look for"),
-                    "sources": S.arr(S.str("note, web, chrome, docs"), "Only these sources. docs means Google Docs and Notion pages."),
-                    "kind": S.str("Only notes, docs or pages", ["note", "doc", "page"]),
+                    "query": S.str("Words or a question to look for"),
+                    "sources": S.arr(S.str("note, web, chrome, gdocs, notion, granola"),
+                                     "Only these sources. gdocs and notion also match those docs read in the browser."),
+                    "kind": S.str("Only notes, docs, meetings or pages", ["note", "doc", "meeting", "page"]),
                     "project": S.str("Only notes in this top folder"),
                     "since": S.str("Only items active on or after this date (YYYY-MM-DD or ISO 8601)"),
                     "until": S.str("Only items active on or before this date"),
@@ -343,8 +345,10 @@ final class MCPToolbox {
                 ], required: ["query"]),
                 output: S.obj([
                     "query": S.str("The query"),
-                    "results": S.arr(S.withItem(["score": S.num("Relevance, higher is better"), "snippet": S.str("The matching passage")])),
+                    "results": S.arr(S.withItem(["score": S.num("Relevance, higher is better"), "snippet": S.str("The matching passage"),
+                                                 "history": S.str("When and in what context the user saw it")])),
                     "hidden": S.int("Matches left out because the user hid them from AI clients"),
+                    "ranked_by": S.str("engine for the browser's hybrid search, index for keyword search"),
                 ], required: ["query", "results"]),
                 writes: false) { [unowned self] a in
             guard let q = Self.str(a, "query") else { throw ToolError(message: "Pass a query.") }
@@ -356,13 +360,11 @@ final class MCPToolbox {
             let since = Self.str(a, "since").flatMap(J.parseDate)?.timeIntervalSince1970
             let until = Self.str(a, "until").flatMap(J.parseDate).map { $0.timeIntervalSince1970 + 86399 }
             var hidden = 0
-            let results = searcher.search(q, limit: limit) { it in
+            let results = searcher.search(q, limit: limit, sources: sources.map(Set.init),
+                                          since: since.map { Date(timeIntervalSince1970: $0) },
+                                          until: until.map { Date(timeIntervalSince1970: $0) }) { it in
                 if !ctx.visible(it) { hidden += 1; return false }
-                if let sources {
-                    let src = MCPSources.normalized(it.source)
-                    let isDoc = URL(string: it.url).map(MCPSources.isDocURL) ?? false
-                    if !(sources.contains(src) || (isDoc && sources.contains(MCPSources.docs))) { return false }
-                }
+                if let sources, !sources.contains(where: { MCPSources.matches($0, source: it.source, url: it.url) }) { return false }
                 if let kind, it.kind(writingSites: ctx.app.writingSites) != kind { return false }
                 if let project, !(it.project?.lowercased().contains(project) ?? false) { return false }
                 if let since, it.lastActive < since { return false }
@@ -374,10 +376,11 @@ final class MCPToolbox {
                 var j = ctx.itemJSON(r.item)
                 j["score"] = J.round3(r.score)
                 j["snippet"] = r.item.hasText ? Self.snippet(r.passage, words: words, title: r.item.title) : Snippet.prettyURL(r.item.url)
+                if let h = r.history, !h.isEmpty { j["history"] = Fmt.clean(h) }
                 return j
             }
             ctx.log("tool", "search", q, served: results.map { ctx.title($0.item) }, hidden: hidden)
-            return ["query": q, "results": rows, "hidden": hidden]
+            return ["query": q, "results": rows, "hidden": hidden, "ranked_by": searcher.name]
         }
     }
 
@@ -397,6 +400,8 @@ final class MCPToolbox {
                     "next_offset": ["type": ["integer", "null"], "description": "Pass as offset for the next page, null at the end"],
                     "total_chars": S.int("Length of the whole text"),
                     "names": S.arr(S.obj(["name": S.str(""), "kind": S.str(""), "count": S.int("")])),
+                    "topics": S.arr(S.str("A topic, from the on-device tagging model or the item's most distinctive words")),
+                    "history": S.str("When and in what context the user saw it"),
                     "links": S.arr(S.obj(["text": S.str(""), "url": S.str(""), "id": ["type": ["integer", "null"]]])),
                     "passages": S.arr(S.obj(["index": S.int(""), "text": S.str("")])),
                 ], required: ["item", "text", "offset", "total_chars"]),
@@ -414,8 +419,10 @@ final class MCPToolbox {
                 "next_offset": next.map { $0 as Any } ?? NSNull(),
                 "total_chars": body.count,
                 "names": ctx.reader.entities(id: it.id).prefix(20).map { ["name": $0.name, "kind": $0.kind, "count": $0.count] as JSON },
+                "topics": topics(it.id),
                 "links": links(in: body, noteURL: it.fileURL),
             ]
+            if let h = ctx.ranking.history(itemID: it.id, reader: ctx.reader) { out["history"] = h }
             if Self.bool(a, "include_passages", false) {
                 var budget = 20000
                 var ps: [JSON] = []
@@ -428,6 +435,12 @@ final class MCPToolbox {
             ctx.log("tool", "get_item", ctx.title(it), served: [ctx.title(it)])
             return out
         }
+    }
+
+    /// The tagging model's topics from the live index, or the Engine's fallback from the ranking copy.
+    func topics(_ id: Int64) -> [String] {
+        let live = context.reader.modelTopics(itemID: id)
+        return Array((live.isEmpty ? context.ranking.topics(itemID: id, reader: context.reader) : live).prefix(8))
     }
 
     /// Links in a body, resolved to items where they're indexed. Hidden targets are left out.
@@ -458,40 +471,42 @@ final class MCPToolbox {
 
     private func relatedTool() -> MCPTool {
         let match = S.withItem([
-            "score": S.num("The Related panel's score, 0 to 1"),
-            "signals": S.obj(["words": S.num(""), "meaning": S.num(""), "names": S.num("")]),
+            "score": S.num("The Related panel's score: the reranker's 0 to 1 when it's downloaded, otherwise words, meaning and names"),
+            "signals": S.obj(["words": S.num(""), "meaning": S.num(""), "names": S.num(""), "reranker": ["type": ["number", "null"]]]),
+            "found_by": S.arr(S.str("Which searches found it: keywords, queries, meaning, names")),
             "shared_terms": S.arr(S.str("")),
             "shared_names": S.arr(S.str("")),
             "passage": S.str("The passage that matched best"),
-            "reason": S.str("Why it's related, in a sentence"),
+            "reason": S.str("When the user saw it and what it covers, like the Related cards"),
         ])
         return MCPTool(name: "related", title: "Related items",
-                description: "What the user has seen before that relates to an item or to a piece of text, using the same ranking as the browser's Related panel (shared words, meaning and names). Results come in two groups: sites they read, and notes and docs they wrote. Use it to bring back earlier reading while helping with a draft, or to find everything near a topic.",
+                description: "What the user has seen before that relates to an item or to a piece of text, using the browser's Related panel ranking: keyword, meaning and name searches fused together, then an on-device reranker when it's downloaded, against the panel's own bar. Results come in two groups: sites they read, and notes, docs and meetings they wrote or took part in. Use it to bring back earlier reading while helping with a draft, or to find everything near a topic.",
                 input: S.obj([
                     "item": S.str("An item id, URL, note path or title. Give this or text."),
                     "text": S.str("Free text to find related items for, like a paragraph the user is writing"),
                     "limit": S.int("Most results per group, 5 by default", min: 1, max: 15),
-                    "min_score": S.num("Lowest score to include, 0.3 by default. The panel itself uses about 0.4."),
+                    "min_score": S.num("Lowest score to include. By default the panel's own bar, which ranking.bar reports."),
                 ]),
                 output: S.obj([
                     "for": S.anyObj,
                     "sites": S.arr(match),
                     "docs": S.arr(match),
+                    "ranking": S.obj(["bar": S.num("Lowest score shown"), "reranker": S.bool("The reranker scored these")]),
                     "hidden": S.int("Matches left out because the user hid them"),
                 ], required: ["sites", "docs"]),
                 writes: false) { [unowned self] a in
             let ctx = context
             let limit = Self.int(a, "limit", 5, min: 1, max: 15)
-            let minScore = Swift.max(0.05, Swift.min(0.95, Self.num(a, "min_score", 0.3)))
-            var matches: [Match]
+            let minScore = a["min_score"] == nil ? nil : Swift.max(0.05, Swift.min(0.95, Self.num(a, "min_score", 0.3)))
+            var related: RankingSnapshot.Related
             var forJSON: JSON
             if Self.str(a, "item") != nil {
                 let it = try item(a)
-                matches = ctx.ranking.related(to: it, ctx: ctx, minScore: minScore, perSection: limit + 3)
+                related = ctx.ranking.related(to: it, ctx: ctx, minScore: minScore, perSection: limit + 3)
                 forJSON = ctx.itemJSON(it)
             } else if let text = Self.str(a, "text") {
                 let key = "mcp:text:" + Self.version(Data(text.utf8))
-                matches = ctx.ranking.related(ContextInput(key: key, title: "", text: text, kind: .page), ctx: ctx,
+                related = ctx.ranking.related(ContextInput(key: key, title: "", text: text, kind: .page), ctx: ctx,
                                               minScore: minScore, perSection: limit + 3)
                 forJSON = ["text": String(text.prefix(200))]
             } else {
@@ -500,21 +515,25 @@ final class MCPToolbox {
             var hidden = 0
             var sites: [JSON] = [], docs: [JSON] = []
             var served: [String] = []
-            for m in matches {
+            for m in related.matches {
                 guard let it = ctx.reader.item(id: m.doc.id) else { continue }
                 if !ctx.visible(it) { hidden += 1; continue }
                 var j = ctx.itemJSON(it)
                 j["score"] = J.round3(m.score)
-                j["signals"] = ["words": J.round3(m.keyword), "meaning": J.round3(m.semantic), "names": J.round3(m.entity)]
+                j["signals"] = ["words": J.round3(m.keyword), "meaning": J.round3(m.semantic), "names": J.round3(m.entity),
+                                "reranker": m.rerank.map { J.round3($0) as Any } ?? NSNull()]
+                j["found_by"] = m.foundBy
                 j["shared_terms"] = Array(m.sharedTerms.prefix(8))
                 j["shared_names"] = Array(m.sharedEntities.prefix(8))
                 j["passage"] = it.isNote ? Self.snippet(m.passage, words: m.sharedTerms, title: it.title) : m.passage
-                j["reason"] = Reasons.template(m)
+                j["reason"] = Fmt.clean(Reasons.template(m, visits: related.visits[m.doc.id] ?? []))
                 if m.section == .docs { if docs.count < limit { docs.append(j); served.append(ctx.title(it)) } }
                 else if sites.count < limit { sites.append(j); served.append(ctx.title(it)) }
             }
+            var out: JSON = ["for": forJSON, "sites": sites, "docs": docs, "hidden": hidden]
+            if let g = related.gate { out["ranking"] = ["bar": J.round3(minScore ?? g.bar), "reranker": g.usesReranker] }
             ctx.log("tool", "related", (forJSON["title"] as? String) ?? (forJSON["text"] as? String) ?? "", served: served, hidden: hidden)
-            return ["for": forJSON, "sites": sites, "docs": docs, "hidden": hidden]
+            return out
         }
     }
 
@@ -644,7 +663,7 @@ final class MCPToolbox {
                 input: S.obj([
                     "days": S.int("How far back, 3 by default", min: 1, max: 90),
                     "limit": S.int("Most items, 30 by default", min: 1, max: 100),
-                    "kind": S.str("Only notes, docs or pages", ["note", "doc", "page"]),
+                    "kind": S.str("Only notes, docs, meetings or pages", ["note", "doc", "meeting", "page"]),
                 ]),
                 output: S.obj([
                     "since": S.str(""),

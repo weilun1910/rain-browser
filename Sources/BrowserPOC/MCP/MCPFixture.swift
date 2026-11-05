@@ -18,6 +18,8 @@ enum MCPFixture {
     }
 
     static func run(_ dir: URL) -> Int32 {
+        // Indexing looks for the on-device models under Paths.root, so keep that in the fixture.
+        Paths.overrideRoot = dir
         do {
             let b = try build(at: dir)
             print("Fixture profile in \(b.root.path)")
@@ -47,6 +49,10 @@ enum MCPFixture {
         let kingArthur = "https://www.kingarthurbaking.com/sourdough-starter-guide"
         let wkext = "https://developer.apple.com/documentation/webkit/wkwebextension"
         let nook = "https://github.com/nook-browser/Nook/blob/main/ExtensionManager.md"
+        let notionPageID = "4f1c2b9a7d3e4c5b8a6f0e1d2c3b4a59"
+        let notionPage = "https://www.notion.so/" + notionPageID
+        let feedingDoc = "https://docs.google.com/document/d/1FeedingScheduleDoc0123456789abcdefXYZ"
+        let meeting = "https://notes.granola.ai/d/mtg-0451"
         let privatePage = "https://example.com/magic-link/abc123?token=zzz"
         let excludedPage = "https://www.chase.com/personal/checking"
 
@@ -138,6 +144,25 @@ enum MCPFixture {
             page("https://www.calculator.net/pace-calculator.html", "Half marathon pace calculator", "", daysAgo: 15, visits: 5, source: .chrome)
             page("https://webkit.org/blog/safari-web-extensions-wkwebextension", "Safari web extensions and WKWebExtension in WebKit apps", "",
                  daysAgo: 9, visits: 3, source: .chrome)
+            // The Engine's sources: a Notion page, a synced Google Doc and a Granola meeting.
+            func source(_ key: String, _ src: SourceType, _ url: String, _ title: String, _ text: String, daysAgo: Double, visit: String) {
+                let a = TextAnalysis.analyze(title: title, description: "", text: text)
+                let at = t - daysAgo * day
+                store.upsertSourceDoc(DocUpsert(key: key, source: src, url: url, title: title, body: text,
+                                                firstSeen: at, lastSeen: at, visitCount: 1, mtime: at), analysis: a, visitKind: visit)
+            }
+            source("notion:" + notionPageID, .notion, notionPage, "Pop-up stall checklist", """
+                Pop-up stall checklist. Bring the bread boards, the card reader and price signs for the sourdough loaves \
+                and the rye. Meera confirmed our spot at the Saturday market.
+                """, daysAgo: 2, visit: "opened")
+            source(feedingDoc, .gdocs, feedingDoc + "/edit", "Starter feeding schedule", """
+                Starter feeding schedule. Feed the sourdough starter at 8am and 8pm with rye and bread flour at 1:1:1, \
+                and keep it at 26 degrees. Double the feed the day before a bake.
+                """, daysAgo: 3, visit: "edited")
+            source("granola:mtg-0451", .granola, meeting, "Call with Meera about the market pop-up", """
+                Meeting notes. Meera wants twenty sourdough loaves for the Saturday market pop-up. We agreed a price per loaf \
+                and a rye option. Action: send Meera the starter feeding schedule by Thursday.
+                """, daysAgo: 1, visit: "met")
             for u in [sourdough, breadLog, engineNotes, mcpIdeas] {
                 let text = String(decoding: try Data(contentsOf: u), as: UTF8.self)
                 let mtime = NotesScan.mtime(u) ?? t
