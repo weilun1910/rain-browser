@@ -1,15 +1,16 @@
 # Browser POC
 
-A rough Mac browser on WebKit, built to test one idea: pages and notes you've already seen should come back on their own when what you're working on makes them relevant. You don't file or pin anything. Everything stays on this Mac.
+This is a proof of concept I'm using to test an idea. It isn't the product. I haven't designed anything yet, so the whole UI is placeholder, and the real browser will look and work very differently.
 
-It's a proof of concept. It works, but it isn't polished.
+The idea I'm testing is a Mac browser on WebKit where pages and notes you've already seen come back on their own when what you're working on makes them relevant. You don't have to file or pin anything, and everything stays on your Mac.
 
 ## Build and run
 
 You need Xcode 26 (or its command line tools) on macOS 26 or later.
 
+From the repo folder:
+
 ```
-cd "app.nosync"
 scripts/build.sh        # builds build/BrowserPOC.app (release)
 scripts/run.sh          # builds, then opens it
 ```
