@@ -35,6 +35,12 @@ enum WindowChrome {
         v.attach(to: w)
     }
 
+    /// Hides the quiet dots along with the buttons, for compact mode.
+    static func setTrafficLightsHidden(_ w: NSWindow, _ hidden: Bool) {
+        guard let bar = w.standardWindowButton(.closeButton)?.superview else { return }
+        for v in bar.subviews where v is QuietTrafficLights { v.isHidden = hidden }
+    }
+
     /// A debug build run straight from `.build` has no bundle icon, so draw one for the Dock.
     static func setDockIconIfUnbundled() {
         guard Bundle.main.object(forInfoDictionaryKey: "CFBundleIconFile") == nil else { return }

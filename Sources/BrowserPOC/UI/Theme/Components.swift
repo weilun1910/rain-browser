@@ -271,6 +271,8 @@ struct RowIcon: View {
 struct SpaceTintBackground: View {
     let hex: String?
     var sidebarWidth: CGFloat = Theme.Space.sidebarWidth
+    /// The sidebar is on the right, so the colour starts from the trailing edge.
+    var fromTrailing = false
     /// Renders and tests set this so an offscreen window looks active.
     nonisolated(unsafe) static var forceActive = false
     @Environment(\.colorScheme) private var scheme
@@ -289,7 +291,7 @@ struct SpaceTintBackground: View {
                     .init(color: tint.opacity(0.92), location: edge),
                     .init(color: tint.opacity(0.55), location: min(1, edge + 0.25)),
                     .init(color: tint.opacity(Theme.Palette.tintTrailingShare), location: 1),
-                ], startPoint: .leading, endPoint: .trailing)
+                ], startPoint: fromTrailing ? .trailing : .leading, endPoint: fromTrailing ? .leading : .trailing)
                 .id((hex ?? "") + (active ? "" : "-inactive"))
                 .transition(.opacity)
                 GrainOverlay()

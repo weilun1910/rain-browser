@@ -25,6 +25,10 @@ enum Motion {
     static let expand = Animation.spring(duration: 0.26, bounce: 0)
     /// The folder glyph tipping open, on Zen's fast-settling curve, a touch quicker than the rows.
     static let folderGlyph = Animation.timingCurve(0.42, 0, 0, 1, duration: 0.28)
+    /// Peek: the page behind settles back and dims on Zen's Glance spring, without bounce.
+    static let peek = Animation.spring(duration: 0.32, bounce: 0)
+    /// A toast rising in at the bottom of the page and leaving.
+    static let toast = Animation.spring(duration: 0.26, bounce: 0)
     /// A site icon arriving in place of its monogram.
     static let favicon = Animation.easeOut(duration: 0.25)
     /// Moving between spaces: the list slides and the tint crossfades on the same spring.
