@@ -109,10 +109,7 @@ struct CardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top, spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 16, height: 16)
+                SourceIcon(url: m.doc.url, isPage: m.doc.source == .web || m.doc.source == .chrome, symbol: icon, size: 16)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(m.doc.title)
                         .font(.system(size: 13, weight: .semibold))
