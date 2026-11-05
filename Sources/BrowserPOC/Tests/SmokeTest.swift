@@ -201,12 +201,19 @@ enum SmokeTest {
               "the command bar suggests notes and history", model.bar.results.map { $0.title.prefix(24) }.joined(separator: " | "))
         snapshot(window.contentView!, snaps.appendingPathComponent("8-command-bar.png"))
         model.bar.close()
+        MCPTests.smoke(model: model, snaps: snaps)
 
         // 10. The Related shelf: over a page and a note, the page's inset, hover, light and dark, sidebar mode.
         ShelfSmoke.run(model: model, window: window, snaps: snaps)
 
         // 11. Arc and Zen: sessions, favicons, find, splits, Peek, media, archive, the bar, layouts.
         ArcZenSmoke.run(model: model, window: window, snaps: snaps)
+
+        // 10. The graph: global, hover, settings, local and in a split.
+        GraphSmoke.run(model: model, window: window, snaps: snaps, dir: dir)
+
+        // 13. The shelf's graph button with the real local graph, on the Graph fixture.
+        ShelfSmoke.graphPopover(model: model, window: window, snaps: snaps, dir: dir)
 
         model.prepareForQuit()
         print(SelfTest.failures == 0 ? "\nSmoke test passed." : "\n\(SelfTest.failures) check(s) failed.")

@@ -331,12 +331,12 @@ enum ShelfInsets {
 
 // MARK: - The graph slot
 
-/// The local graph opens from a button at the end of the shelf. The graph view registers itself
-/// here, for example `ShelfGraph.provider = { r in AnyView(LocalGraphSlot(resurfacer: r)) }`.
-/// With nothing registered the button doesn't show.
+/// The local graph opens from a button at the end of the shelf: the same view as the right panel's
+/// graph slot, always open. Tests can swap it, and with nothing set the button doesn't show.
 @MainActor
 enum ShelfGraph {
-    static var provider: ((Resurfacer) -> AnyView)?
+    static let localGraph: (Resurfacer) -> AnyView = { r in AnyView(LocalGraphSlot(resurfacer: r, alwaysOpen: true)) }
+    static var provider: ((Resurfacer) -> AnyView)? = localGraph
     static var isAvailable: Bool { provider != nil }
 }
 

@@ -87,6 +87,12 @@ enum ShelfSmoke {
               "WebKit shrinks the page's viewport by the shelf", "view \(Int(height)), innerHeight \(Int(inner))")
         check(bar > 0 && bar <= inner + 0.5, "the page's fixed cookie bar moves above the shelf", "bar bottom \(Int(bar))")
 
+        // MCP's current context still lists the Related cards in shelf mode.
+        CurrentContextWriter.shared.start(model: model)
+        let reported = CurrentContextWriter.shared.snapshot()?.related.map(\.key) ?? []
+        check(!reported.isEmpty && reported == model.resurfacer.cards.map(\.match.doc.key),
+              "AI clients' current context lists the shelf's cards", "\(reported.count) cards")
+
         // 3. Snapshots: offscreen rendering can't draw WebKit, so the page's own snapshot is drawn under the shelf.
         state.backdrop = pageImage(tab)
         check(state.backdrop != nil, "the page's snapshot is there to draw under the shelf")
@@ -113,16 +119,12 @@ enum ShelfSmoke {
             window.appearance = dark
         }
 
-        // 4. The model download and the graph slot, with a stand-in for the Graph branch's view.
+        // 4. The model download, and the graph button at the end of the row. The graph itself is
+        // checked after the Graph smoke test seeds its fixture, in `graphPopover`.
         state.progressOverride = 0.42
-        ShelfGraph.provider = { _ in AnyView(GraphStandIn()) }
         _ = wait(0.6) { false }
+        check(ShelfGraph.isAvailable, "the shelf has the local graph's button")
         shot("25-shelf-progress-and-graph.png")
-        state.toggleGraph()
-        _ = wait(0.6) { false }
-        check(state.open == .graph, "the graph button opens the graph slot")
-        shot("26-shelf-graph.png")
-        state.toggleGraph()
 
         // A narrow window: the row runs off the trailing edge, fades there and scrolls.
         let wide = window.contentView?.frame.size ?? NSSize(width: 1380, height: 860)
@@ -133,7 +135,6 @@ enum ShelfSmoke {
         window.setContentSize(wide)
         _ = wait(0.6) { false }
         state.progressOverride = nil
-        ShelfGraph.provider = nil
         state.backdrop = nil
 
         // 5. A note: the shelf floats over it, sinks while typing and comes back on a pause.
@@ -192,25 +193,43 @@ enum ShelfSmoke {
     }
 }
 
-/// Stands in for the Graph branch's local graph in the smoke test.
-struct GraphStandIn: View {
-    var body: some View {
-        Canvas { ctx, size in
-            let c = CGPoint(x: size.width / 2, y: size.height / 2)
-            let pts = (0..<7).map { i -> CGPoint in
-                let a = Double(i) / 7 * .pi * 2 + 0.4
-                let r = (i % 2 == 0 ? 0.36 : 0.28) * min(size.width, size.height)
-                return CGPoint(x: c.x + cos(a) * r * 1.3, y: c.y + sin(a) * r)
-            }
-            for p in pts {
-                var l = Path(); l.move(to: c); l.addLine(to: p)
-                ctx.stroke(l, with: .color(.secondary.opacity(0.35)), lineWidth: 0.75)
-            }
-            for p in pts { ctx.fill(Path(ellipseIn: CGRect(x: p.x - 3, y: p.y - 3, width: 6, height: 6)), with: .color(.secondary)) }
-            ctx.fill(Path(ellipseIn: CGRect(x: c.x - 5, y: c.y - 5, width: 10, height: 10)), with: .color(.accentColor))
+extension ShelfSmoke {
+    /// After the Graph smoke test has seeded its notes and edges: the shelf's graph button opens
+    /// the real local graph above the shelf, centred on the focused note.
+    static func graphPopover(model: BrowserModel, window: NSWindow, snaps: URL, dir: URL) {
+        let state = ShelfState.shared
+        let l = GraphController.local
+        /// A window snapshot with the local graph's Metal view swapped for a rendered still.
+        func shot(_ name: String) {
+            let u = snaps.appendingPathComponent(name)
+            if let v = l.view, v.window === window { v.withStill { SmokeTest.snapshot(window.contentView!, u) } }
+            else { SmokeTest.snapshot(window.contentView!, u) }
         }
-        .overlay(alignment: .topLeading) {
-            Text("Graph slot").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-        }
+        RelatedPrefs.shared.setMode(.shelf)
+        state.reset()
+        if let sp = model.currentSplit { model.separate(sp) }
+        window.appearance = NSAppearance(named: .darkAqua)
+        let plan = dir.appendingPathComponent("notes-root", isDirectory: true).appendingPathComponent("Browser plan.md")
+        model.openNote(plan)
+        _ = wait(5) { model.document?.state == .ready }
+        let gotCards = wait(20) { !model.resurfacer.cards.isEmpty }
+        _ = wait(30) { !model.resurfacer.isWorking }
+        _ = wait(1) { false }
+        check(gotCards && RelatedShelf.presence(model) == .shown && !Settings.shared.value.rightPanelOpen,
+              "the shelf shows over the graph fixture's note", model.resurfacer.cards.map { $0.match.doc.title.prefix(24) }.joined(separator: " | "))
+        state.toggleGraph()
+        _ = wait(0.7) { false } // the popover growing in
+        let opened = wait(10) { l.view?.window === window && l.centerKey == URLKey.fileKey(plan) && l.layout.nodes.count > 3 }
+        check(state.open == .graph && opened, "the shelf's graph button opens the real local graph around the note",
+              "\(l.layout.nodes.count) nodes around \(l.layout.center.map { l.layout.nodes[$0].title } ?? "nothing")")
+        if let v = l.view { l.settle(ticks: 300, size: v.bounds.size) }
+        shot("26-shelf-graph.png")
+        window.appearance = NSAppearance(named: .aqua)
+        _ = wait(0.6) { false }
+        if let v = l.view { l.settle(ticks: 60, size: v.bounds.size) }
+        shot("26b-shelf-graph-light.png")
+        window.appearance = NSAppearance(named: .darkAqua)
+        state.toggleGraph()
+        check(state.open == nil, "a second click closes the graph")
     }
 }

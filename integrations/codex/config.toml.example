@@ -1,0 +1,12 @@
+# Add this to ~/.codex/config.toml. The Codex CLI and the ChatGPT Mac app both read it.
+# The app's Settings, under AI clients, shows the same block with your app's real path.
+
+[mcp_servers.browser]
+command = "/Applications/BrowserPOC.app/Contents/MacOS/BrowserPOC"
+args = ["--mcp"]
+startup_timeout_sec = 30
+
+# Every read tool says readOnlyHint, so Codex runs them without asking, in codex exec too.
+# If you turn on note editing in the app, Codex asks before each write. To let it write
+# without asking, uncomment this line. Writes still follow the app's disk rules.
+# tools.append_to_note.approval_mode = "approve"

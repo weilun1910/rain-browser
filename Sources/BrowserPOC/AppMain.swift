@@ -47,6 +47,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         appLog.notice("Sentence embedding: \(Embedder.shared.isAvailable ? "available" : "not available", privacy: .public)")
 
         model = BrowserModel()
+        CurrentContextWriter.shared.start(model: model)
+        GraphRecorder.shared.attach(model)
         RelatedShelf.launch(model)
         buildMenu()
 
@@ -191,6 +193,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         view.addItem(item("Show or Hide Related", #selector(togglePanelAction), "r", [.command, .shift], target: self))
         view.addItem(item("Related as Shelf or Sidebar", #selector(relatedModeAction), "r", [.command, .control], target: self))
         view.addItem(item("Toggle Note Preview", #selector(togglePreviewAction), "p", [.command, .shift], target: self))
+        view.addItem(item("Graph", #selector(graphAction), "g", [.command, .option], target: self))
         view.addItem(.separator())
         let layout = NSMenu(title: "Split Layout")
         layout.addItem(item("Side by Side", #selector(layoutSideAction), target: self))
@@ -281,6 +284,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc func togglePanelAction() { RelatedPrefs.shared.toggleVisible() }
     @objc func relatedModeAction() { RelatedPrefs.shared.toggleMode() }
     @objc func togglePreviewAction() { model.document?.showPreview.toggle() }
+    @objc func graphAction() { showMain(); model.openGraph() }
     @objc func zoomResetAction() { model.zoom(nil) }
     @objc func zoomInAction() { model.zoom(0.1) }
     @objc func zoomOutAction() { model.zoom(-0.1) }

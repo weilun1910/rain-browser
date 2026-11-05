@@ -24,8 +24,26 @@ if let i = args.firstIndex(of: "--extract-check"), i + 1 < args.count {
     exit(MainActor.assumeIsolated { ExtractCheck.run(target) })
 }
 
+if args.contains("--graph-bench") {
+    exit(GraphBench.run())
+}
+
 if args.contains("--chrome-dry-run") {
     exit(ChromeHistory.dryRun())
+}
+
+// --mcp serves the knowledge index to AI clients over stdio. It reads the profile in --data-dir,
+// or the normal one, and never starts the app or creates the folder.
+if args.contains("--mcp") {
+    if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
+        Paths.overrideRoot = URL(fileURLWithPath: (args[i + 1] as NSString).expandingTildeInPath, isDirectory: true)
+    }
+    exit(MCPServer.runStdio(root: Paths.root))
+}
+
+// --mcp-fixture <dir> writes a throwaway profile with made-up content, for MCP tests.
+if let i = args.firstIndex(of: "--mcp-fixture"), i + 1 < args.count {
+    exit(MCPFixture.run(URL(fileURLWithPath: (args[i + 1] as NSString).expandingTildeInPath, isDirectory: true)))
 }
 
 // Engine: resurfacing quality and read-only source checks.
@@ -59,9 +77,9 @@ if args.contains("--shelf-demo") { MainActor.assumeIsolated { BrowserModel.useEp
 
 let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--workdir", "--extract-check", "--data-dir",
                           "--eval", "--models-dir", "--verbose", "--notion-dry-run", "--granola-dry-run", "--download-models", "--scale",
-                          "--shelf-demo"]
+                          "--mcp", "--mcp-fixture", "--graph-bench", "--shelf-demo"]
 if let unknown = args.dropFirst().first(where: { $0.hasPrefix("--") && !known.contains($0) }) {
-    print("Unknown flag \(unknown). Flags: --selftest, --smoketest, --chrome-dry-run, each with optional --workdir <dir> for the tests, and --data-dir <dir> to run the app on a separate profile.")
+    print("Unknown flag \(unknown). Flags: --selftest, --smoketest, --chrome-dry-run, each with optional --workdir <dir> for the tests, --data-dir <dir> to run the app on a separate profile, --mcp to serve the index to AI clients, and --mcp-fixture <dir> to write a test profile.")
     exit(2)
 }
 

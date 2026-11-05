@@ -544,8 +544,10 @@ struct ShelfPopover: View {
         case .graph:
             if let make = ShelfGraph.provider {
                 make(resurfacer)
-                    .padding(ShelfStyle.popoverPadding - 4)
-                    .frame(width: ShelfStyle.graphPopoverWidth, height: ShelfStyle.graphPopoverHeight)
+                    .padding(.horizontal, ShelfStyle.popoverPadding - 4)
+                    .padding(.top, ShelfStyle.popoverPadding - 6)
+                    .padding(.bottom, ShelfStyle.popoverPadding - 10)
+                    .frame(width: ShelfStyle.graphPopoverWidth)
             }
         }
     }

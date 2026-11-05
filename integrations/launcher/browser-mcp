@@ -1,0 +1,41 @@
+#!/bin/bash
+# Starts the Browser POC knowledge server (MCP over stdio) for Claude, Codex and ChatGPT.
+#
+# It looks for the app in this order:
+#   1. BROWSER_POC_APP, the .app or the binary inside it
+#   2. the copy of the app that last ran with this profile (it notes its own path)
+#   3. /Applications and ~/Applications
+#   4. Spotlight, by bundle id
+# BROWSER_POC_DATA_DIR points it at a separate profile, like the app's --data-dir.
+#
+# The source of truth is integrations/launcher/browser-mcp. integrations/sync-launcher.sh copies
+# it into each package, so every package installs on its own.
+set -u
+
+DATA_DIR="${BROWSER_POC_DATA_DIR:-}"
+SUPPORT="${DATA_DIR:-$HOME/Library/Application Support/BrowserPOC}"
+candidates=()
+if [ -n "${BROWSER_POC_APP:-}" ]; then candidates+=("${BROWSER_POC_APP/#\~/$HOME}"); fi
+if [ -f "$SUPPORT/current-context.json" ]; then
+  last=$(/usr/bin/plutil -extract binary raw -o - "$SUPPORT/current-context.json" 2>/dev/null) && candidates+=("$last")
+fi
+candidates+=("/Applications/BrowserPOC.app" "$HOME/Applications/BrowserPOC.app")
+while IFS= read -r found; do candidates+=("$found"); done < <(/usr/bin/mdfind "kMDItemCFBundleIdentifier == 'local.browserpoc'" 2>/dev/null)
+
+for c in "${candidates[@]}"; do
+  [ -z "$c" ] && continue
+  bin="$c"
+  case "$c" in
+    *.app|*.app/) bin="${c%/}/Contents/MacOS/BrowserPOC" ;;
+  esac
+  if [ -f "$bin" ] && [ -x "$bin" ]; then
+    if [ -n "$DATA_DIR" ]; then
+      exec "$bin" --mcp --data-dir "${DATA_DIR/#\~/$HOME}"
+    else
+      exec "$bin" --mcp
+    fi
+  fi
+done
+
+echo "Browser POC wasn't found. Set BROWSER_POC_APP to the app, for example /Applications/BrowserPOC.app." >&2
+exit 1

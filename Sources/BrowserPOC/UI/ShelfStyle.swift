@@ -38,8 +38,8 @@ enum ShelfStyle {
     static let popoverPadding: CGFloat = 14
     /// Between the pill and the popover above it.
     static let popoverGap: CGFloat = 8
+    /// The local graph's popover. Its height comes from the graph slot itself.
     static let graphPopoverWidth: CGFloat = 340
-    static let graphPopoverHeight: CGFloat = 260
 
     // MARK: Type (`Theme.Font`)
 

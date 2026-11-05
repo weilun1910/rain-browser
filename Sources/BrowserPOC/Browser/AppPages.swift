@@ -48,5 +48,6 @@ enum AppPages {
         register(AppPage(host: "history", title: "History", icon: "clock") { _ in AnyView(HistoryPage()) })
         register(AppPage(host: "archive", title: "Archive", icon: "archivebox") { _ in AnyView(ArchivePage()) })
         register(AppPage(host: "downloads", title: "Downloads", icon: "arrow.down.circle") { _ in AnyView(DownloadsPage()) })
+        register(GraphTab.appPage)
     }
 }
