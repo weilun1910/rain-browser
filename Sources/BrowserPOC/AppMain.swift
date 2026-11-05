@@ -234,6 +234,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         edit.addItem(item("Find...", #selector(findAction), "f", target: self))
         edit.addItem(item("Find Next", #selector(findNextAction), "g", target: self))
         edit.addItem(item("Find Previous", #selector(findPreviousAction), "g", [.command, .shift], target: self))
+        edit.addItem(.separator())
+        edit.addItem(item("Fill from Passwords...", #selector(fillPasswordAction), "\\", target: self))
         addSubmenu(main, "Edit", edit)
 
         let view = NSMenu(title: "View")
@@ -349,6 +351,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc func findAction() { model.openFind() }
     @objc func findNextAction() { model.findNext() }
     @objc func findPreviousAction() { model.findNext(backwards: true) }
+    @objc func fillPasswordAction() {
+        guard let wv = model.currentWebTab?.webView else { NSSound.beep(); return }
+        PasswordAutoFill.shared.fillFromMenu(wv) { [weak self] found in
+            if !found { self?.model.toast("No login or code fields on this page") }
+        }
+    }
     // Nothing animates while the window is being resized: panes and the shelf follow the edge.
     func windowWillStartLiveResize(_ notification: Notification) { MotionSuppression.set(.liveResize, true) }
     func windowDidEndLiveResize(_ notification: Notification) { MotionSuppression.set(.liveResize, false) }

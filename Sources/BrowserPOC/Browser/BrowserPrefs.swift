@@ -15,6 +15,8 @@ struct BrowserPrefsValue: Codable, Equatable {
     var sidebarHidden: Bool = false
     /// Tabs on the right, like Zen.
     var sidebarOnRight: Bool = false
+    /// Login and code fields offer the Passwords app.
+    var offerPasswords: Bool = true
     /// How often each command bar action was picked or passed over, from -5 to 5, like Zen's learner.
     var actionScores: [String: Int] = [:]
 
@@ -32,6 +34,7 @@ struct BrowserPrefsValue: Codable, Equatable {
         sidebarHidden = try c.decodeIfPresent(Bool.self, forKey: .sidebarHidden) ?? d.sidebarHidden
         sidebarOnRight = try c.decodeIfPresent(Bool.self, forKey: .sidebarOnRight) ?? d.sidebarOnRight
         actionScores = try c.decodeIfPresent([String: Int].self, forKey: .actionScores) ?? [:]
+        offerPasswords = (try? c.decodeIfPresent(Bool.self, forKey: .offerPasswords)) ?? d.offerPasswords
     }
 }
 

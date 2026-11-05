@@ -93,6 +93,8 @@ With `BROWSERPOC_GRAPH_SCRIPT=<seconds>` set, the graph drives itself through ho
 
 **Capture.** Pages that stay open about five seconds go into a local index with full-text search, sentence vectors and the names in them. Google Docs draw their text on a canvas, so for those the app asks Google for the doc's own text export, from inside your tab, once per load. The typing count only stores how many characters you typed in text areas and editable regions, never what you typed, and ignores search, address and password fields.
 
+**Passwords.** Logins and verification codes come from the Passwords app, so it's the same iCloud Keychain Safari uses. macOS doesn't offer its password AutoFill inside a web view, so Rain does what Orion does. When a login or code field gets focus, a small menu under it offers Fill from Passwords, without taking the cursor from the page. Choosing it opens a little form with real macOS fields. I click the key in a field, choose Passwords, unlock with Touch ID and pick the login, and Rain fills it into the page and closes the form. Codes from Messages and Mail show up under the code field the same way, and a code spreads over one-digit boxes when the page uses them. Edit, then Fill from Passwords (`Cmd-\`) does it for the page I'm on. A login only goes into the site the form was opened for, never into a frame from another site or a sandboxed one. When a site asks for the username first and the password on the next page, Rain keeps the login in memory for three minutes and offers it on the password step. Rain never writes a password anywhere. On macOS 27, filled fields get Safari's yellow AutoFill look. I pick the login from the whole list, because macOS doesn't let a browser tell it which site it's on. There's a switch for the menu under Browsing in Settings.
+
 **AI clients.** Claude Code, Claude Desktop, Codex and ChatGPT for Mac can read what the browser knows, so they understand what I'm working on and can help keep my notes in shape. The app's binary runs as an MCP server with `--mcp` (add `--data-dir` for another profile). It reads the index without changing it, works while the app is open, and stops when the client closes. The tools:
 - `search`, `get_item` and `read_note` find and read my notes, pages, Google Docs, Notion pages and Granola meetings. Search is the same hybrid search Related uses, with the reranker once it's downloaded, and each result says when and in what context I saw it. `get_item` adds the item's topics.
 - `related` runs the Related panel's own first pass, for an item or a paragraph of text, against the panel's bar. It leaves out the Foundation Models steps, which take seconds.
@@ -106,7 +108,7 @@ With "Let AI clients edit notes" on in Settings, three more tools can create a n
 
 ## Not in this version
 
-- No extensions, passkeys or password autofill.
+- No extensions or passkeys. Rain can't save new passwords to the Passwords app or suggest strong ones. Both need Apple's browser passkey entitlement, which would also let Apple's iCloud Passwords extension run in Rain.
 - Folders on disk can't be renamed from the app, and sidebar folders don't nest.
 - No live folders, Boosts, link routing between spaces, or sharing a space as a link.
 - Picture in picture when you leave a video may need a click in the page first, because WebKit wants a user gesture for it.

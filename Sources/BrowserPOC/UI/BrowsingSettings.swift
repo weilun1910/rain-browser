@@ -22,6 +22,11 @@ struct BrowsingSettings: View {
                 Toggle("Links from other apps open in a small window", isOn: bind(\.littleArc))
                 Toggle("Picture in picture when you leave a playing video", isOn: bind(\.autoPictureInPicture))
             }
+            Section("Passwords") {
+                Toggle("Offer logins and codes from the Passwords app", isOn: bind(\.offerPasswords))
+                Text("When a login or code field gets focus, Rain offers the Passwords app. You pick a login with Touch ID, or a code from Messages or Mail, and Rain fills it in. Rain doesn't keep passwords, and it can't save new ones to Passwords yet. Edit, then Fill from Passwords (Cmd-\\) does the same for the page you're on.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
             Section("Sidebar") {
                 Toggle("Hide the sidebar until the pointer reaches the edge (Cmd-S)", isOn: bind(\.sidebarHidden))
                 Toggle("Sidebar on the right", isOn: bind(\.sidebarOnRight))

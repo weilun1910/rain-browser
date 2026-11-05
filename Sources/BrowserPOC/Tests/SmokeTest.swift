@@ -209,6 +209,9 @@ enum SmokeTest {
         // 11. Arc and Zen: sessions, favicons, find, splits, Peek, media, archive, the bar, layouts.
         ArcZenSmoke.run(model: model, window: window, snaps: snaps)
 
+        // 12. Fill from Passwords: login and code fields, filling on the page's own site only.
+        PasswordSmoke.run(snaps: snaps)
+
         // 10. The graph: global, hover, settings, local and in a split.
         GraphSmoke.run(model: model, window: window, snaps: snaps, dir: dir)
 
