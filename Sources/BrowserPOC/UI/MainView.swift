@@ -51,7 +51,8 @@ struct MainView: View {
                               leadingClear: hidden || right ? 0 : Self.sidebarWidth,
                               trailingClear: hidden || !right ? 0 : Self.sidebarWidth)
         }
-        .overlay { if let s = model.switcher { SwitcherOverlay(state: s) } }
+        // Ctrl-Tab shows its panel only if Ctrl is still held a moment later, like Cmd-Tab.
+        .overlay { if let s = model.switcher { SwitcherOverlay(state: s).modifier(DelayedAppear(delay: Motion.Timing.switcherDelay)) } }
         .overlay { StartupOverlayHost() }
         .background(TrafficLights(hidden: hidden && !reveal.showing))
         .spaceTint(model.currentSpace?.color)
@@ -190,25 +191,28 @@ struct ContentArea: View {
                 }
                 if model.find.visible, model.currentWebTab != nil {
                     FindBar()
+                        .transition(Motion.Transitions.float)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                         .padding(.top, findTop)
                         .padding(.trailing, findTrailing(width: g.size.width))
+                        // In a split it follows the focused pane to its corner.
+                        .motion(Motion.split, value: model.currentTab?.id)
                 }
                 if let p = model.peek {
                     PeekOverlay(peek: p).id(p.tab.id)
                 }
                 if let t = model.toastState {
+                    // One toast at a time, updated in place: a new message crossfades into the
+                    // one showing instead of dropping it and rising again.
                     ToastView(toast: t)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                         .padding(.bottom, 18 + RelatedShelf.toastLift(model))
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .id(t.id)
+                        .transition(Motion.Transitions.toast)
                 }
                 if !settings.published.firstRunDone {
                     FirstRunPanel().clipShape(Theme.Radius.shape(Theme.Radius.card))
                 }
             }
-            .motion(Motion.toast, value: model.toastState)
             // Where the last click landed, so a Peek opened by it can grow from there.
             .background(ClickRecorder())
             .coordinateSpace(name: "content")
@@ -263,7 +267,7 @@ struct WebArea: View {
     var body: some View {
         ZStack(alignment: .top) {
             WebContainer(tab: tab, role: role)
-            TintedProgressLine(progress: tab.progress, visible: tab.isLoading && tab.progress < 1)
+            LoadProgress(tab: tab)
             if let err = tab.loadError {
                 VStack(spacing: Theme.Space.m) {
                     Text("Couldn't open this page")

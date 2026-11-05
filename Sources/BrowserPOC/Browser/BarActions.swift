@@ -78,7 +78,7 @@ enum BarActions {
         BarAction(id: "tab.find", title: "Find in page", icon: "text.magnifyingglass", shortcut: "⌘F", keywords: ["search page"],
                   available: { m in m.currentTab.map { $0.isWeb || $0.isNote } ?? false }) { m in DispatchQueue.main.async { m.openFind() } },
         BarAction(id: "today.clear", title: "Clear Today", icon: "sparkles", shortcut: "⇧⌘K", keywords: ["close all", "unpinned", "tidy"],
-                  available: { !$0.refs(in: .today).isEmpty }) { _ = $0.clearToday() },
+                  available: { !$0.refs(in: .today).isEmpty }) { m in TodaySweep.shared.run { _ = m.clearToday() } },
         BarAction(id: "peek.expand", title: "Open Peek as a tab", icon: "arrow.up.left.and.arrow.down.right", shortcut: "⌘O",
                   available: { $0.peek != nil }) { $0.expandPeek() },
         BarAction(id: "split.new", title: "New split view", icon: "rectangle.split.2x1", shortcut: "⌃⇧=", keywords: ["split", "side by side"],

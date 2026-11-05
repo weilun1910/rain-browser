@@ -119,6 +119,8 @@ struct FindBar: View {
                       onNext: { model.findNext(backwards: $0) }, onClose: { model.closeFind() })
                 .frame(width: 180, height: 20)
             Text(countText).font(Theme.Font.caption.monospacedDigit()).foregroundStyle(.secondary).frame(minWidth: 54, alignment: .trailing)
+                .contentTransition(.numericText())
+                .motion(Motion.crossfade, value: countText)
             SmallIconButton(symbol: "chevron.up", help: "Previous (Shift-Cmd-G)") { model.findNext(backwards: true) }
             SmallIconButton(symbol: "chevron.down", help: "Next (Cmd-G)") { model.findNext() }
             SmallIconButton(symbol: "xmark", help: "Done (Esc)") { model.closeFind() }
@@ -191,6 +193,8 @@ struct ToastView: View {
     var body: some View {
         HStack(spacing: Theme.Space.l) {
             Text(toast.message).font(Theme.Font.secondary)
+                .id(toast.message)
+                .transition(.opacity)
             if let a = toast.actionTitle {
                 Button(a) { model.runToastAction() }
                     .buttonStyle(QuietActionStyle(accent: accent))
@@ -200,6 +204,9 @@ struct ToastView: View {
         .padding(.horizontal, Theme.Space.l + 2)
         .frame(height: 34)
         .floatingSurface(radius: Theme.Radius.card)
+        .motion(Motion.crossfade, value: toast.message)
+        // Hovering a toast keeps it, like Zen.
+        .onHover { model.holdToast($0) }
     }
 }
 

@@ -111,6 +111,7 @@ struct SpacePage: View {
     var isCurrent: Bool { model.currentSpaceID == spaceID }
 
     @ObservedObject private var drag = SidebarDrag.shared
+    @ObservedObject private var sweep = TodaySweep.shared
 
     private func row(_ ref: SidebarRef) -> some View {
         // A row you dropped lands in the gap it was dropped in, so it isn't matched to where it was.
@@ -190,7 +191,7 @@ struct SpacePage: View {
         let rows = model.refs(in: .today, space: spaceID)
         let trailing = HStack(spacing: 2) {
             if !rows.isEmpty {
-                Button("Clear") { _ = model.clearToday() }
+                Button("Clear") { TodaySweep.shared.run { _ = model.clearToday() } }
                     .buttonStyle(QuietActionStyle())
                     .help("Archive every tab here (Shift-Cmd-K)")
                     .padding(.trailing, Theme.Space.xs)
@@ -206,7 +207,10 @@ struct SpacePage: View {
                 }
             }
             .buttonStyle(SidebarActionRowStyle(selected: isCurrent && model.bar.isOpen && model.bar.mode == .newTab))
-            ForEach(rows, id: \.self) { row($0).transition(Motion.Transitions.tabRow) }
+            // Clear Today sweeps the rows out top to bottom, and Undo brings them back the same way.
+            ForEach(Array(rows.enumerated()), id: \.element) { i, r in
+                row(r).transition(Motion.Transitions.todayRow(index: i, sweeping: sweep.sweeping))
+            }
         }
         .motion(Motion.insert, value: rows)
     }
@@ -747,11 +751,10 @@ struct MediaBar: View {
 
     var body: some View {
         let playing = Array(model.playingElsewhere.prefix(2))
-        if !playing.isEmpty {
-            VStack(spacing: 2) {
-                ForEach(playing) { MediaRow(tab: $0) }
-            }
+        VStack(spacing: 2) {
+            ForEach(playing) { MediaRow(tab: $0) }
         }
+        .motion(Motion.insert, value: playing.map(\.id))
     }
 }
 
@@ -786,6 +789,8 @@ struct DownloadsButton: View {
     @State private var showing = false
 
     var body: some View {
+        // The button arrives when the first download starts.
+        Group {
         if !downloads.items.isEmpty {
             Button { showing.toggle() } label: {
                 ZStack {
@@ -803,6 +808,9 @@ struct DownloadsButton: View {
             .popover(isPresented: $showing, arrowEdge: .top) {
                 DownloadsList(compact: true).frame(width: 320).padding(10)
             }
+            .transition(Motion.Transitions.tabRow)
         }
+        }
+        .motion(Motion.insert, value: downloads.items.isEmpty)
     }
 }

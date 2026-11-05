@@ -51,7 +51,7 @@ struct NoteEditorView: View {
             .frame(height: 40)
             if let change = doc.diskChange {
                 DiskChangeBar(doc: doc, change: change)
-                    .transition(.opacity)
+                    .transition(Motion.Transitions.folderContents)
             }
             Rectangle().fill(Theme.Palette.hairline).frame(height: 1)
             switch doc.state {
@@ -68,13 +68,20 @@ struct NoteEditorView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .ready:
-                if doc.showPreview {
-                    MarkdownPreview(markdown: doc.text, title: doc.title, baseURL: doc.url.deletingLastPathComponent())
-                } else {
-                    MarkdownTextView(doc: doc)
+                // Edit and Preview crossfade.
+                ZStack {
+                    if doc.showPreview {
+                        MarkdownPreview(markdown: doc.text, title: doc.title, baseURL: doc.url.deletingLastPathComponent())
+                            .transition(.opacity)
+                    } else {
+                        MarkdownTextView(doc: doc)
+                            .transition(.opacity)
+                    }
                 }
+                .motion(Motion.crossfade, value: doc.showPreview, fadeOnly: true)
             }
         }
+        .motion(Motion.insert, value: doc.diskChange != nil)
     }
 }
 

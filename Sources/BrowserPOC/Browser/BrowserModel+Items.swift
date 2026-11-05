@@ -501,7 +501,8 @@ extension BrowserModel {
             selectPrevious(excluding: current!)
         }
         toast(ids.count == 1 ? "Cleared 1 tab" : "Cleared \(ids.count) tabs", action: "Undo") { [weak self] in
-            self?.restoreClosed(ids)
+            // The rows come back the way they left, top to bottom.
+            TodaySweep.shared.run { self?.restoreClosed(ids) }
         }
         objectWillChange.send()
         scheduleSave()
@@ -534,6 +535,16 @@ extension BrowserModel {
         let w = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.toastState = nil; self?.toastAction = nil } }
         toastWork = w
         DispatchQueue.main.asyncAfter(deadline: .now() + (action == nil ? 2.5 : 6), execute: w)
+    }
+
+    /// Hovering a toast keeps it on screen. Leaving gives it another moment and a half.
+    func holdToast(_ held: Bool) {
+        guard toastState != nil else { return }
+        toastWork?.cancel()
+        guard !held else { return }
+        let w = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.toastState = nil; self?.toastAction = nil } }
+        toastWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: w)
     }
 
     func runToastAction() {
