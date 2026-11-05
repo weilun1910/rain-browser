@@ -88,6 +88,8 @@ enum DemoSnapshots {
         func openFirstCard(_ name: String, docs: Bool, overPage tab: Tab? = nil) {
             guard let card = (docs ? model.resurfacer.docCards : model.resurfacer.siteCards).first ?? model.resurfacer.cards.first else { return }
             window.appearance = dark
+            // Let the page repaint in the new appearance before taking its picture.
+            _ = wait(0.8) { false }
             if let tab { shelf.backdrop = ShelfSmoke.pageImage(tab); LookRenders.skipWeb = true }
             shelf.focus(.card(card.id))
             _ = wait(1.2) { false }
