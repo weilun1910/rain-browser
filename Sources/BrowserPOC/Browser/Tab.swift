@@ -3,6 +3,8 @@ import WebKit
 
 enum TabKind: String, Codable {
     case web, note, file
+    /// The global graph, opened as an item in the sidebar.
+    case graph
 }
 
 struct PageExtract {

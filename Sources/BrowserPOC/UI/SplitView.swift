@@ -48,7 +48,9 @@ extension View {
 struct PaneView: View {
     let tab: Tab?
     var body: some View {
-        if let tab, tab.kind != .web {
+        if let tab, tab.kind == .graph {
+            GraphPane()
+        } else if let tab, tab.kind != .web {
             NotePane(tab: tab)
         } else if let tab {
             TabContent(tab: tab)
@@ -192,7 +194,7 @@ struct SplitRow: View {
 
     func half(_ t: Tab?, focused: Bool) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: t?.kind == .web ? "globe" : "note.text")
+            Image(systemName: t?.kind == .web ? "globe" : (t?.kind == .graph ? GraphTab.icon : "note.text"))
                 .font(.system(size: 10)).foregroundStyle(.secondary)
             Text(t?.displayTitle ?? "")
                 .font(.system(size: 12, weight: focused ? .medium : .regular))

@@ -131,6 +131,7 @@ struct LeftSidebar: View {
             }
             HStack {
                 SmallIconButton(symbol: "gearshape", help: "Settings") { AppDelegate.shared?.openSettings() }
+                SmallIconButton(symbol: GraphTab.icon, help: "Graph") { model.openGraph() }
                 Spacer()
                 SpaceBar()
             }
@@ -248,6 +249,7 @@ struct TabRow: View {
         switch tab.kind {
         case .web: return tab.isPinned ? "pin" : "globe"
         case .note, .file: return tab.isMissing ? "questionmark.square.dashed" : "note.text"
+        case .graph: return GraphTab.icon
         }
     }
 
@@ -296,7 +298,7 @@ struct TabMenu: View {
     @EnvironmentObject var model: BrowserModel
 
     var body: some View {
-        if tab.kind == .web { webMenu } else { noteMenu }
+        if tab.kind == .web { webMenu } else if tab.kind == .graph { GraphTabMenu(tab: tab) } else { noteMenu }
     }
 
     @ViewBuilder var splitMenu: some View {
