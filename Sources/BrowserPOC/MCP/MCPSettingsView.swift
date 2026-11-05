@@ -73,7 +73,7 @@ struct AIClientsSettings: View {
         } header: {
             Text("Connect an AI client")
         } footer: {
-            Text(Paths.overrideRoot == nil
+            Text(MCPInstall.currentDataDir == nil
                  ? "The client starts this app's binary with --mcp. It reads your index without changing it, and only while the client is open."
                  : "This window runs on a separate profile, so these steps point the client at that profile.")
                 .font(.caption).foregroundStyle(.secondary)

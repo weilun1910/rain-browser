@@ -58,6 +58,7 @@ enum MotionTour {
             print("--motion-tour only runs with --data-dir, so it never touches your real profile.")
             return
         }
+        if CommandLine.arguments.contains("readme") { ReadmeTour.start(model); return }
         if CommandLine.arguments.contains("bar") { startBar(model); return }
         if CommandLine.arguments.contains("glass") { GlassTour.start(model); return }
         if let name = MotionTours.requested { MotionTours.start(name, model); return }

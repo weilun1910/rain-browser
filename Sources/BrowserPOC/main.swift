@@ -105,6 +105,8 @@ if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
 }
 // The Related shelf demo and the motion tours keep nothing of WebKit's on disk.
 if args.contains("--shelf-demo") || args.contains("--motion-tour") { MainActor.assumeIsolated { BrowserModel.useEphemeralStore = true } }
+// The tours record and capture the window, so their pages keep drawing even when it's covered.
+if args.contains("--motion-tour") { MainActor.assumeIsolated { BrowserModel.keepPaintingWhenHidden = true } }
 
 let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--workdir", "--extract-check", "--data-dir",
                           "--render-art", "--render-review", "--profile", "--query", "--motion-tour", "--reduce-motion", "--reduce-transparency",
