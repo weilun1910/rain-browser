@@ -113,8 +113,11 @@ final class KnowledgeReader {
                 return items(where: "url = ?", [ref]).first
             }
         }
-        // A note's title or file name.
-        return items(where: "source IN ('note','markdown') AND title = ? COLLATE NOCASE ORDER BY mtime DESC LIMIT 1", [ref]).first
+        // An exact title: notes first, then the most recently seen page or doc.
+        if let note = items(where: "source IN ('note','markdown') AND title = ? COLLATE NOCASE ORDER BY mtime DESC LIMIT 1", [ref]).first {
+            return note
+        }
+        return items(where: "title = ? COLLATE NOCASE ORDER BY max(last_opened, last_seen) DESC LIMIT 1", [ref]).first
     }
 
     func body(id: Int64) -> String {

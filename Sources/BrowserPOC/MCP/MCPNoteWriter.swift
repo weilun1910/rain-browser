@@ -51,7 +51,7 @@ final class MCPNoteWriter {
             description: "Adds a Markdown link from a note to another item (a page, doc or note) under the note's \"## Related\" heading, the same way the browser's Add to research button does. Does nothing if the note already links there.",
             input: S.obj([
                 "note": S.str("The note to add the link to: path, item id or title"),
-                "target": S.str("The item to link to: item id, URL or note path"),
+                "target": S.str("The item to link to: item id, URL, note path or exact title"),
                 "title": S.str("Link text. Defaults to the item's title."),
                 "expected_version": S.str("The version read_note returned"),
             ], required: ["note", "target"]),
@@ -155,7 +155,7 @@ final class MCPNoteWriter {
     func link(_ a: JSON, box: MCPToolbox) throws -> JSON {
         let ctx = context
         let url = try box.noteURL(a, "note")
-        guard let ref = MCPToolbox.str(a, "target") else { throw ToolError(message: "Pass target: an item id, URL or note path.") }
+        guard let ref = MCPToolbox.str(a, "target") else { throw ToolError(message: "Pass target: an item id, URL, note path or exact title.") }
         var title = MCPToolbox.str(a, "title")
         var target: String
         if let it = ctx.reader.resolve(ref) {

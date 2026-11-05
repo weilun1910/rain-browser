@@ -16,6 +16,7 @@ enum MCPTests {
         do { fx = try MCPFixture.build(at: root, pid: getpid()) } catch { check(false, "fixture profile", "\(error)"); return }
         legacySession(bin: bin, fx: fx)
         modernSession(bin: bin, fx: fx)
+        launcherSession(bin: bin, fx: fx)
         privacySession(bin: bin, fx: fx)
         writeSession(bin: bin, fx: fx)
         check(!FileManager.default.fileExists(atPath: fx.root.appendingPathComponent("index.sqlite-journal").path), "index was only read")
@@ -34,9 +35,14 @@ enum MCPTests {
         var modern = false
         var clientName = "selftest"
 
-        init(bin: String, root: URL) throws {
-            process.executableURL = URL(fileURLWithPath: bin)
-            process.arguments = ["--mcp", "--data-dir", root.path]
+        convenience init(bin: String, root: URL) throws {
+            try self.init(executable: bin, arguments: ["--mcp", "--data-dir", root.path])
+        }
+
+        init(executable: String, arguments: [String], environment: [String: String]? = nil) throws {
+            process.executableURL = URL(fileURLWithPath: executable)
+            process.arguments = arguments
+            if let environment { process.environment = environment }
             process.standardInput = inPipe
             process.standardOutput = outPipe
             process.standardError = errPipe
@@ -315,7 +321,39 @@ enum MCPTests {
               "a missing resource is -32602 in the modern era")
         let rl = c.result("resources/list")
         check(rl["ttlMs"] is Int && rl["cacheScope"] as? String == "private", "resources/list carries cache fields")
+
+        // The app keeps writing while the server runs. Play the app: write a page with a second connection.
+        if let writer = try? IndexStore(url: fx.root.appendingPathComponent("index.sqlite")) {
+            let text = "Zebra crossings slow traffic near schools. Painted stripes and a beacon."
+            let now = Date().timeIntervalSince1970
+            writer.recordCapture(DocUpsert(key: "https://example.org/zebra-crossings", source: .web, url: "https://example.org/zebra-crossings",
+                                           title: "Zebra crossings", body: text, firstSeen: now, lastSeen: now),
+                                 analysis: TextAnalysis.analyze(title: "Zebra crossings", description: "", text: text))
+        }
+        let fresh = titles((c.result("tools/call", ["name": "search", "arguments": ["query": "zebra crossings"]])["structuredContent"] as? JSON)?["results"])
+        check(fresh == ["Zebra crossings"], "the server sees pages the app indexes while it runs", fresh.joined(separator: "; "))
         check(MCPLog.read(root: fx.root).contains { $0.client == "selftest-modern" }, "the log takes the client name from _meta")
+    }
+
+    // MARK: The packaged launcher
+
+    /// The launcher every package ships finds the app from BROWSER_POC_APP, and without it from
+    /// the path the app noted in the profile's current-context.json.
+    static func launcherSession(bin: String, fx: MCPFixture.Built) {
+        guard let dir = MCPInstall.integrationsFolder() else { return }
+        let launcher = dir.appendingPathComponent("launcher/browser-mcp").path
+        let base = ["PATH": "/usr/bin:/bin", "HOME": NSHomeDirectory()]
+        for (label, extra) in [("from BROWSER_POC_APP", ["BROWSER_POC_APP": bin, "BROWSER_POC_DATA_DIR": fx.root.path]),
+                               ("from the path the app noted", ["BROWSER_POC_DATA_DIR": fx.root.path])] {
+            guard let c = try? Client(executable: launcher, arguments: [], environment: base.merging(extra) { $1 }) else {
+                check(false, "launcher starts \(label)"); continue
+            }
+            let ini = c.result("initialize", ["protocolVersion": "2025-11-25", "capabilities": [:] as JSON])
+            let ov = c.tool("overview").0
+            check(ini["protocolVersion"] as? String == "2025-11-25" && ov["data_folder"] as? String == fx.root.path,
+                  "the launcher finds the app \(label) and keeps the profile")
+            c.close()
+        }
     }
 
     // MARK: Privacy switches
@@ -396,6 +434,9 @@ enum MCPTests {
               "add_link puts the link under Related", lkText)
         check(c.tool("add_link", ["note": path, "target": "\(kaID)"]).0["changed"] as? Bool == false, "add_link doesn't add a link twice")
         check(c.tool("add_link", ["note": path, "target": fx.privatePage]).1, "add_link won't write a private URL into a note")
+        let byTitle = c.tool("add_link", ["note": again, "target": "Bread pop-up plan"])
+        check(!byTitle.1 && ((try? String(contentsOfFile: again, encoding: .utf8)) ?? "").contains("[Bread pop-up plan](https://docs.google.com/"),
+              "add_link finds a page by its exact title", byTitle.2)
 
         check(c.tool("append_to_note", ["note": fx.outside.path, "text": "x"]).1, "append_to_note refuses files outside the notes folders")
         let txt = fx.notes.appendingPathComponent("plain.txt")

@@ -33,7 +33,7 @@ enum MCPFixture {
     static let day: Double = 86400
 
     @discardableResult
-    static func build(at root: URL, pid: Int32 = 0, now: Date = Date()) throws -> Built {
+    static func build(at root: URL, pid: Int32 = 0, binary: String? = Bundle.main.executablePath, now: Date = Date()) throws -> Built {
         let fm = FileManager.default
         try? fm.removeItem(at: root)
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
@@ -186,6 +186,7 @@ enum MCPFixture {
         let logRef = Ref(title: "Bread bake log", url: breadLog.standardizedFileURL.absoluteString, kind: "note", key: URLKey.fileKey(breadLog))
         let docRef = Ref(title: "Bread pop-up plan", url: googleKey, kind: "page", key: googleKey)
         var cc = CurrentContextFile(updatedAt: now, pid: pid)
+        cc.binary = binary
         cc.space = .init(id: baking.id.uuidString, name: baking.name)
         cc.focused = planRef
         cc.splitWith = kaRef
