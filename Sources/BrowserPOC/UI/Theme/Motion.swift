@@ -54,23 +54,107 @@ enum Motion {
     static let progress = Animation.easeOut(duration: 0.25)
     /// Related cards arriving, one after another.
     static func card(index: Int) -> Animation {
-        Animation.smooth(duration: 0.3).delay(Double(min(index, 6)) * 0.04)
+        Animation.smooth(duration: 0.3).delay(stagger(index))
     }
+
+    // The tokens below came with the Motion plan (notes/plans/2026-11-05-motion.md).
+
+    /// The end of any gesture: a zero-bounce spring to where it lands. Use
+    /// `settle(velocity:distance:)` so it starts at the speed the fingers were moving.
+    static let settle = Animation.spring(duration: 0.3, bounce: 0)
+    /// `settle`, starting at `velocity` points per second toward a target `distance` points away.
+    static func settle(velocity: CGFloat, distance: CGFloat) -> Animation {
+        guard abs(distance) > 0.5 else { return settle }
+        return Animation.interpolatingSpring(duration: 0.3, bounce: 0, initialVelocity: Double(velocity / distance))
+    }
+    /// A gesture's end under Reduce Motion: a short ease-out with no spring.
+    static let reducedSettle = Animation.easeOut(duration: 0.15)
+    /// Rows gliding to a new place and icons reordering. The same spring as `expand`.
+    static let reorder = expand
+    /// Peek shrinking back. Quicker than it opens, and easing in.
+    static let peekOut = Animation.easeIn(duration: 0.18)
+    /// Peek filling the pane. The same spring as `split`.
+    static let peekExpand = split
+    /// Cmd-S sliding the sidebar out and back. Quick, because the page's width changes every frame.
+    static let sidebarToggle = Animation.spring(duration: 0.2, bounce: 0)
+    /// Compact mode's floating sidebar sliding in on hover, and away again.
+    static let reveal = Animation.spring(duration: 0.24, bounce: 0)
+    static let conceal = Animation.easeIn(duration: 0.16)
+    /// Small floating controls arriving: the find bar, Peek's buttons.
+    static let float = Animation.spring(duration: 0.18, bounce: 0)
+    /// Content swapping in place: Edit and Preview, a toast's text.
+    static let crossfade = Animation.easeInOut(duration: 0.15)
+
+    /// The delay before the `index`th item of a list arrives, `step` apart. Items past `cap`
+    /// arrive together, so a long list never keeps you waiting for its last rows.
+    static func stagger(_ index: Int, step: TimeInterval = Timing.cardStagger, cap: Int = Timing.staggerCap) -> TimeInterval {
+        Double(min(max(index, 0), cap)) * step
+    }
+
+    /// The same motion as plain values, for a per-frame driver that steps it itself (the space
+    /// strip), since an `Animation` doesn't expose its in-flight value.
+    enum Springs {
+        static let spaceSwitch = Spring(duration: 0.28, bounce: 0)
+        static let settle = Spring(duration: 0.3, bounce: 0)
+        /// `reducedSettle` isn't a spring. Step it along this curve over this long.
+        static let reducedSettleCurve = UnitCurve.easeOut
+        static let reducedSettleDuration: TimeInterval = 0.15
+    }
+
+    /// Delays that decide when motion starts, in seconds.
+    enum Timing {
+        /// Compact mode: the pointer rests at the edge this long before the sidebar slides in.
+        static let revealDwell: TimeInterval = 0.15
+        /// Compact mode: the sidebar slides away this long after the pointer leaves it.
+        static let concealDelay: TimeInterval = 0.3
+        /// A load still running this long after it starts shows its progress line.
+        static let progressDelay: TimeInterval = 0.15
+        /// The Ctrl-Tab switcher shows if Ctrl is still held this long later.
+        static let switcherDelay: TimeInterval = 0.12
+        /// Holding a dragged tab over the page this long offers a split.
+        static let holdToSplit: TimeInterval = 0.5
+        /// Hovering a dragged row over a closed folder this long opens it.
+        static let springLoad: TimeInterval = 0.6
+        /// The media row stays this long after playback stops, so a pause between tracks doesn't flicker it.
+        static let mediaLinger: TimeInterval = 2.0
+        /// Related cards and shelf pills arrive this far apart. One value, so the two never drift.
+        static let cardStagger: TimeInterval = 0.04
+        /// Clear Today's rows leave this far apart.
+        static let rowStagger: TimeInterval = 0.02
+        /// Items past this many in a list arrive together.
+        static let staggerCap = 6
+    }
+
+    /// True while nothing should animate: during a live window resize and under the launch cover.
+    /// `animation`, `run`, `.motion` and the transitions below all turn into cuts while it's set.
+    nonisolated(unsafe) static var suppressed = false
 
     /// The fade used instead of movement under Reduce Motion.
     static let reducedFade = Animation.easeInOut(duration: 0.12)
 
     /// `a`, or what to use instead under Reduce Motion. `fadeOnly` animations (opacity changes
-    /// with no movement) keep a short fade; movement is dropped entirely.
-    static func animation(_ a: Animation, reduce: Bool = reduceMotion, fadeOnly: Bool = false) -> Animation? {
+    /// with no movement) keep a short fade; triggered movement is dropped entirely.
+    ///
+    /// Gestures are the exception, as Apple's HIG allows. Anything under the fingers (the space
+    /// swipe, a drag) sets its values directly with no animation, and keeps doing so under Reduce
+    /// Motion. Pass `tracked` for the movement that finishes such a gesture: under Reduce Motion
+    /// it becomes `reducedSettle` rather than a cut, since the content is already moving.
+    static func animation(_ a: Animation, reduce: Bool = reduceMotion, fadeOnly: Bool = false, tracked: Bool = false) -> Animation? {
+        if suppressed { return nil }
         guard reduce else { return a }
+        if tracked { return reducedSettle }
         return fadeOnly ? reducedFade : nil
+    }
+
+    /// The settle at the end of a gesture that followed the fingers, or nil while motion is suppressed.
+    static func gestureEnd(velocity: CGFloat, distance: CGFloat, reduce: Bool = reduceMotion) -> Animation? {
+        animation(settle(velocity: velocity, distance: distance), reduce: reduce, tracked: true)
     }
 
     /// Runs `body` with animation `a`, or without movement under Reduce Motion.
     @MainActor
-    static func run(_ a: Animation, fadeOnly: Bool = false, _ body: () -> Void) {
-        if let anim = animation(a, fadeOnly: fadeOnly) { withAnimation(anim, body) } else { body() }
+    static func run(_ a: Animation, fadeOnly: Bool = false, tracked: Bool = false, _ body: () -> Void) {
+        if let anim = animation(a, fadeOnly: fadeOnly, tracked: tracked) { withAnimation(anim, body) } else { body() }
     }
 
     // MARK: Transitions
@@ -78,6 +162,7 @@ enum Motion {
     enum Transitions {
         /// Rows arriving and leaving: a fade and a slight scale from the top, like Zen's 0.95 to 1.
         static var tabRow: AnyTransition {
+            if Motion.suppressed { return .identity }
             if Motion.reduceMotion { return .opacity }
             return .asymmetric(
                 insertion: .opacity.combined(with: .scale(scale: 0.97, anchor: .top)).animation(Motion.insert),
@@ -86,12 +171,14 @@ enum Motion {
         /// A folder's contents sliding out from under the folder row as it opens, and back in as it
         /// closes. Put it inside `FolderReveal` so the slide is clipped to the folder's own space.
         static var folderContents: AnyTransition {
+            if Motion.suppressed { return .identity }
             if Motion.reduceMotion { return .opacity }
             return .move(edge: .top).combined(with: .opacity)
         }
         /// A Related card arriving, `index` places in the list, so cards come in one after another.
         /// Cards leave at once, so a replaced list never overlaps the new one.
         static func card(index: Int) -> AnyTransition {
+            if Motion.suppressed { return .identity }
             if Motion.reduceMotion { return .asymmetric(insertion: .opacity.animation(Motion.reducedFade), removal: .identity) }
             return .asymmetric(insertion: .opacity.combined(with: .offset(y: 6)).animation(Motion.card(index: index)),
                                removal: .identity)
@@ -99,6 +186,7 @@ enum Motion {
         /// The command bar for Cmd-T: it rises 10 pt from just below where it rests and grows from
         /// 97 percent, and leaves with a small shrink and a fade.
         static var commandBar: AnyTransition {
+            if Motion.suppressed { return .identity }
             if Motion.reduceMotion { return .opacity.animation(Motion.reducedFade) }
             return .asymmetric(
                 insertion: .opacity.combined(with: .scale(scale: 0.97, anchor: .center)).combined(with: .offset(y: 10)).animation(Motion.barIn),
@@ -109,12 +197,14 @@ enum Motion {
         /// toward. The old one fades out quickly where it is instead of sliding too, so two lists
         /// never sit on top of each other and the direction is always right.
         static func spaceSlide(_ step: Int) -> AnyTransition {
+            if Motion.suppressed { return .identity }
             if Motion.reduceMotion || step == 0 { return .opacity }
             return .asymmetric(insertion: .move(edge: step > 0 ? .trailing : .leading).combined(with: .opacity),
                                removal: .opacity.animation(.easeOut(duration: 0.1)))
         }
         /// A side panel sliding in from its edge.
         static func panel(edge: Edge) -> AnyTransition {
+            if Motion.suppressed { return .identity }
             if Motion.reduceMotion { return .opacity }
             return .move(edge: edge).combined(with: .opacity)
         }
