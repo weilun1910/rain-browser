@@ -240,6 +240,7 @@ enum SelfTest {
         CommandBarTests.run(dir: dir)
         EngineTests.run(dir: dir)
         ArcZenTests.run(dir: dir)
+        ShelfTests.run(dir: dir)
 
         print(failures == 0 ? "\nAll checks passed." : "\n\(failures) check(s) failed.")
         return failures == 0 ? 0 : 1
