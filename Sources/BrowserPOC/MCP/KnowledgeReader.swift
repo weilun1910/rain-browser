@@ -153,6 +153,7 @@ final class KnowledgeReader {
     /// same kind of page read in the browser.
     func switchCounts() -> [String: Int] {
         var out: [String: Int] = [:]
+        for s in MCPSources.builtIn { out[s.id] = 0 }
         for row in counts() { out[row.source, default: 0] += row.total }
         guard let db else { return out }
         let docs = (try? db.query("""
