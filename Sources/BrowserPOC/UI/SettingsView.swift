@@ -5,6 +5,7 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }
+            BrowsingSettings().tabItem { Label("Browsing", systemImage: "sidebar.left") }
             SourcesSettings().tabItem { Label("Sources", systemImage: "tray.full") }
             TuningSettings().tabItem { Label("Tuning", systemImage: "slider.horizontal.3") }
         }
