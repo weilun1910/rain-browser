@@ -4,6 +4,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
-swift build -c debug --scratch-path "$ROOT/.build"
+swift build -c debug --disable-keychain --scratch-path "$ROOT/.build"
 mkdir -p "$ROOT/.build/selftest"
 "$ROOT/.build/debug/BrowserPOC" --selftest --workdir "$ROOT/.build/selftest/run"
