@@ -86,6 +86,13 @@ enum ThemeTests {
         _ = steps.step(for: 0)
         let right = steps.step(for: 2), left = steps.step(for: 1), same = steps.step(for: 1)
         check(right == 1 && left == -1 && same == -1, "space switching knows which way to slide")
+        let before = Motion.forceReduce
+        Motion.forceReduce = true
+        let reducedGraph = GraphTheme.glide < 0.01 && GraphTheme.momentumTime < 0.01
+        Motion.forceReduce = false
+        let fullGraph = GraphTheme.glide == 0.5 && GraphTheme.momentumTime == 0.35
+        Motion.forceReduce = before
+        check(reducedGraph && fullGraph, "the graph's camera jumps instead of gliding under Reduce Motion")
     }
 
     static func startup() {
