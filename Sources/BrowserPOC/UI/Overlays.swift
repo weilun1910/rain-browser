@@ -70,16 +70,19 @@ struct PeekOverlay: View {
     }
 
     private var header: some View {
-        HStack(spacing: Theme.Space.s) {
-            PeekTitle(tab: peek.tab)
-            Spacer()
-            HStack(spacing: 0) {
-                PeekButton(symbol: "rectangle.split.2x1", help: "Open in split view") { model.splitPeek() }
-                PeekButton(symbol: "arrow.up.left.and.arrow.down.right", help: "Open as a tab (Cmd-O)") { model.expandPeek() }
-                PeekButton(symbol: "xmark", help: "Close (Esc)") { model.closePeek() }
+        // The title and the buttons sample the page together.
+        GlassEffectContainer(spacing: Theme.GlassStyle.containerSpacing) {
+            HStack(spacing: Theme.Space.s) {
+                PeekTitle(tab: peek.tab)
+                Spacer()
+                HStack(spacing: 0) {
+                    PeekButton(symbol: "rectangle.split.2x1", help: "Open in split view") { model.splitPeek() }
+                    PeekButton(symbol: "arrow.up.left.and.arrow.down.right", help: "Open as a tab (Cmd-O)") { model.expandPeek() }
+                    PeekButton(symbol: "xmark", help: "Close (Esc)") { model.closePeek() }
+                }
+                .padding(.horizontal, 2)
+                .floatingSurface(radius: Theme.Radius.row)
             }
-            .padding(.horizontal, 2)
-            .floatingSurface(radius: Theme.Radius.row)
         }
         .padding(.horizontal, Theme.Space.xs)
     }
@@ -95,7 +98,7 @@ struct PeekTitle: View {
         }
         .padding(.horizontal, Theme.Space.m)
         .frame(height: 26)
-        .floatingSurface(radius: Theme.Radius.row)
+        .floatingSurface(radius: Theme.Radius.row, wash: true)
     }
 }
 
@@ -203,7 +206,7 @@ struct ToastView: View {
         }
         .padding(.horizontal, Theme.Space.l + 2)
         .frame(height: 34)
-        .floatingSurface(radius: Theme.Radius.card)
+        .floatingSurface(radius: Theme.Radius.card, wash: true)
         .motion(Motion.crossfade, value: toast.message)
         // Hovering a toast keeps it, like Zen.
         .onHover { model.holdToast($0) }
@@ -239,7 +242,7 @@ struct SwitcherOverlay: View {
         .motion(Motion.selection, value: state.index)
         .padding(Theme.Space.m)
         .frame(width: 380)
-        .floatingSheet()
+        .glassPanel(radius: Theme.Radius.sheet)
         .appearEffect(scale: 0.97, y: 6, animation: Motion.barIn)
     }
 

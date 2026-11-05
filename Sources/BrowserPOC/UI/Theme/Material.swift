@@ -85,34 +85,43 @@ extension Theme.Radius {
     static let popover: CGFloat = 12
 }
 
-/// A surface that floats over page content: system blur, a neutral wash, a hairline and a soft
-/// shadow. For the Related shelf's pills, toasts and anything else that sits on a page.
+/// A small surface that floats over the page: Peek's title and buttons, toasts and the split pane
+/// controls. Liquid Glass, with the reading wash when it carries text (`wash`). Under Reduce
+/// Transparency, the opaque sheet with a hairline and a soft shadow.
 struct FloatingSurface: ViewModifier {
     var radius: CGFloat = Theme.Radius.chip
     var hovering = false
+    var wash = false
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     func body(content: Content) -> some View {
         let shape = Theme.Radius.shape(radius)
-        return content
-            .background(
-                ZStack {
-                    shape.fill(.ultraThinMaterial)
-                    shape.fill(hovering ? Theme.Palette.floatingWashHover : Theme.Palette.floatingWash)
-                }
-                .themeShadow(.floating)
-            )
-            .overlay(shape.strokeBorder(Theme.Palette.hairline, lineWidth: 0.5))
-            .motion(Motion.hover, value: hovering, fadeOnly: true)
+        return Group {
+            if Theme.GlassStyle.isSolid(reduceTransparency) {
+                content
+                    .background(ZStack {
+                        shape.fill(Theme.Palette.sheet)
+                        shape.fill(hovering ? Theme.GlassStyle.activeFill : .clear)
+                    }.themeShadow(.floating))
+                    .overlay(shape.strokeBorder(Theme.Palette.hairline, lineWidth: 0.5))
+            } else {
+                content
+                    .background(ZStack {
+                        shape.fill(wash ? Theme.GlassStyle.readingWash : .clear)
+                        shape.fill(hovering ? Theme.GlassStyle.activeFill : .clear)
+                    })
+                    .glassEffect(.regular, in: shape)
+            }
+        }
+        .motion(Motion.hover, value: hovering, fadeOnly: true)
     }
 }
 
-/// A popover: opaque, so its text reads cleanly over anything, with a deeper shadow.
+/// A popover that hangs off a control, like the find bar: Liquid Glass with the reading wash.
+/// Under Reduce Transparency, the opaque sheet with a deeper shadow.
 struct PopoverSurface: ViewModifier {
     var radius: CGFloat = Theme.Radius.popover
     func body(content: Content) -> some View {
-        let shape = Theme.Radius.shape(radius)
-        return content
-            .background(shape.fill(Theme.Palette.sheet).themeShadow(.popover))
-            .overlay(shape.strokeBorder(Theme.Palette.hairline, lineWidth: 0.5))
+        content.glassPanel(radius: radius, fallbackShadow: .popover)
     }
 }
 
@@ -189,11 +198,11 @@ struct ContentFade: View {
 }
 
 extension View {
-    /// Blur, neutral wash, hairline and soft shadow, for things floating over a page.
-    func floatingSurface(radius: CGFloat = Theme.Radius.chip, hovering: Bool = false) -> some View {
-        modifier(FloatingSurface(radius: radius, hovering: hovering))
+    /// Glass for a small thing floating over a page. `wash` when it carries text.
+    func floatingSurface(radius: CGFloat = Theme.Radius.chip, hovering: Bool = false, wash: Bool = false) -> some View {
+        modifier(FloatingSurface(radius: radius, hovering: hovering, wash: wash))
     }
-    /// An opaque popover with a deeper shadow.
+    /// A glass popover with the reading wash.
     func popoverSurface(radius: CGFloat = Theme.Radius.popover) -> some View {
         modifier(PopoverSurface(radius: radius))
     }

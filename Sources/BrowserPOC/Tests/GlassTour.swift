@@ -39,16 +39,28 @@ enum GlassTour {
         Settings.shared.update { $0.firstRunDone = true }
         RelatedPrefs.shared.setMode(.shelf)
 
+        // `overlays` plays only the small floating surfaces: find, a toast, Ctrl-Tab, Peek and the
+        // split pane controls.
+        let only = args.contains("overlays")
+        // A toast's copy must never reach the real clipboard.
+        BrowserModel.pasteboard = NSPasteboard(name: NSPasteboard.Name("local.browserpoc.glass-tour"))
         Task { @MainActor in
             await pause(2.6)
             let shelf = ShelfState.shared
+            var pageTabs: [Tab] = []
             for (name, html) in pages {
                 let tab = model.newTab(url: nil, select: true)
                 let wv = tab.ensureWebView()
                 // Keep painting even if the window is covered or the display sleeps.
                 wv.configuration.preferences.inactiveSchedulingPolicy = .none
                 wv.loadHTMLString(html, baseURL: URL(string: "https://fieldnotes.smoke.test/\(name)")!)
+                pageTabs.append(tab)
                 await pause(1.0)
+                if only {
+                    await pause(1.0)
+                    await overlays(name, html: html, tab: tab, model)
+                    continue
+                }
                 guard await until(30, { !model.resurfacer.cards.isEmpty }) else { note("no cards on \(name)"); continue }
                 await pause(1.4)
                 await ready("\(name)-shelf")
@@ -75,6 +87,24 @@ enum GlassTour {
                 await ready("\(name)-bar")
                 model.bar.close()
                 await pause(0.5)
+                await overlays(name, html: html, tab: tab, model)
+            }
+            // A split of the busy and dark pages, with every pane's controls showing.
+            if pageTabs.count == 3 {
+                PaneLeaf.tourShowsControls = true
+                model.select(pageTabs[1])
+                _ = model.openInSplit(pageTabs[2], side: .right)
+                await pause(1.4)
+                await ready("split")
+                if let sp = model.currentSplit { model.separate(sp) }
+                PaneLeaf.tourShowsControls = false
+                await pause(0.6)
+            }
+            if only {
+                note("done")
+                await pause(0.3)
+                NSApp.terminate(nil)
+                return
             }
             _ = model.openGraph()
             let g = GraphController.global
@@ -98,6 +128,36 @@ enum GlassTour {
             await pause(0.3)
             NSApp.terminate(nil)
         }
+    }
+
+    /// Find, a toast with Undo, the Ctrl-Tab switcher and Peek, each over the current page.
+    static func overlays(_ name: String, html: String, tab: Tab, _ model: BrowserModel) async {
+        model.openFind()
+        model.setFindQuery("extension")
+        await pause(0.9)
+        await ready("\(name)-find")
+        model.closeFind()
+        await pause(0.4)
+        model.toast("Cleared 4 tabs from Today", action: "Undo") {}
+        await pause(0.8)
+        await ready("\(name)-toast")
+        model.beginSwitcher()
+        await pause(0.7)
+        await ready("\(name)-switcher")
+        model.switcher = nil
+        await pause(0.5)
+        PeekMotion.shared.recordClick(CGPoint(x: 620, y: 420))
+        model.openPeek(URL(string: "https://fieldnotes.smoke.test/peek-\(name)")!, from: tab)
+        await pause(0.2)
+        if let pt = model.peek?.tab {
+            let wv = pt.ensureWebView()
+            wv.configuration.preferences.inactiveSchedulingPolicy = .none
+            wv.loadHTMLString(html, baseURL: URL(string: "https://fieldnotes.smoke.test/peek-\(name)")!)
+        }
+        await pause(1.4)
+        await ready("\(name)-peek")
+        model.closePeek()
+        await pause(0.8)
     }
 
     // MARK: Pages

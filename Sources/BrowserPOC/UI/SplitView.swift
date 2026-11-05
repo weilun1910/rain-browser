@@ -224,6 +224,8 @@ struct PaneLeaf: View {
     @EnvironmentObject var model: BrowserModel
     @State private var hovering = false
     @Environment(\.paneSpace) private var paneSpace
+    /// `--motion-tour glass` sets this to show every pane's controls without a pointer.
+    nonisolated(unsafe) static var tourShowsControls = false
 
     var body: some View {
         let tab = model.tab(id)
@@ -231,7 +233,7 @@ struct PaneLeaf: View {
             .paneCard(focusRing: split.focused == id)
             .background(PaneClickCatcher { model.focusPane(item: id) })
             .overlay(alignment: .top) {
-                if hovering, let tab {
+                if hovering || Self.tourShowsControls, let tab {
                     PaneControls(split: split, tab: tab).padding(.top, Theme.Space.s)
                         .transition(.opacity.combined(with: .offset(y: Motion.reduceMotion ? 0 : -3)))
                 }
