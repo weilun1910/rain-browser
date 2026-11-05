@@ -90,3 +90,11 @@ Full comparison from a research pass on 2026-11-05. MTEB numbers are from the mo
 
 - Precision at 3: of the top three cards shown for a context, how many a person would call useful. It matches the panel, which shows up to three cards per section.
 - The eval also counts "should stay empty" contexts. A pipeline that shows anything for those is penalised, since a quiet panel is part of the design.
+
+## Measured after building (2026-11-05)
+
+- **Tested.** On the labelled fixture, the full round 3 pipeline (EmbeddingGemma 2, rank fusion, Qwen3 Reranker, Foundation Models context and judgment) reached precision at 3 of 1.00 and recall at 3 of 0.86, and stayed quiet on all 5 contexts that should show nothing. Round 2 reached 0.94, 0.71 and 4 of 5. The full table is in the [Engine plan](../plans/2026-11-04-engine.md).
+- **Tested.** Reranker scores are close to 0 or 1. Relevant items scored 0.55 to 1.00, unrelated ones under 0.1, so its bar sits at 0.15.
+- **Tested.** Foundation Models as a judge says yes to near misses that share a subject (a bread-machine review judged the bake log helpful) and rarely says no with confidence above 0.6. It works as a veto at confidence 0.4 or more on borderline cards, not as the main gate.
+- **Tested.** A flat scan over 20,000 passages of 768 dimensions with 6 query vectors, plus BM25 and fusion, takes about 110 ms. 60,000 passages take about 370 ms.
+- **Tested.** llama.cpp's Metal backend asserts at process exit if models are still loaded (`ggml-metal-device.m: GGML_ASSERT([rsets->data count] == 0)`). The app frees models in an exit handler registered after the first load.
