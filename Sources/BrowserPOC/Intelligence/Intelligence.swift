@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import NaturalLanguage
 
@@ -40,12 +41,45 @@ final class Intelligence: @unchecked Sendable {
     /// Tests turn the reranker off to check the fallback path.
     var rerankerDisabled = false
 
+    /// Jobs using a model right now. Shutdown waits for them before freeing anything.
+    private let useCondition = NSCondition()
+    private var inFlight = 0
+    private var stopping = false
+    private var quitObserver: NSObjectProtocol?
+
     private init() {
         let t = DispatchSource.makeTimerSource(queue: loadQueue)
         t.schedule(deadline: .now() + 60, repeating: 60, leeway: .seconds(10))
         t.setEventHandler { [weak self] in self?.unloadIfIdle() }
         t.resume()
         idleTimer = t
+        // The app is quitting: stop background work and free the models while everything else
+        // is still alive, waiting briefly for a job in the middle of a batch.
+        quitObserver = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: nil) { _ in
+            Reembedder.shared.enabled = false
+            _ = Intelligence.shared.shutdown(timeout: 3)
+        }
+    }
+
+    /// True once shutdown has begun. Model calls return nil from then on.
+    var isShuttingDown: Bool {
+        useCondition.lock(); defer { useCondition.unlock() }
+        return stopping
+    }
+
+    /// Runs `body` as a job that holds the models, or returns nil when shutting down.
+    private func using<T>(_ body: () -> T?) -> T? {
+        useCondition.lock()
+        if stopping { useCondition.unlock(); return nil }
+        inFlight += 1
+        useCondition.unlock()
+        defer {
+            useCondition.lock()
+            inFlight -= 1
+            useCondition.broadcast()
+            useCondition.unlock()
+        }
+        return body()
     }
 
     // MARK: Loading
@@ -89,20 +123,60 @@ final class Intelligence: @unchecked Sendable {
         return m
     }
 
-    /// Frees the models. llama.cpp's Metal backend asserts if models are still loaded when the
-    /// process exits, so this also runs from an exit handler.
-    func shutdown() {
-        lock.lock(); defer { lock.unlock() }
+    /// Stops new model work, waits up to `timeout` for jobs in flight to finish, then frees the
+    /// models and with them llama.cpp's Metal resources. Returns false if a job was still
+    /// running when time ran out, in which case nothing is freed under it.
+    /// llama.cpp's Metal backend asserts if models are still alive when the process tears down
+    /// its statics, so this runs on quit and again from an exit handler.
+    @discardableResult
+    func shutdown(timeout: TimeInterval = 5) -> Bool {
+        useCondition.lock()
+        stopping = true
+        let deadline = Date().addingTimeInterval(timeout)
+        while inFlight > 0 && Date() < deadline { _ = useCondition.wait(until: deadline) }
+        let drained = inFlight == 0
+        useCondition.unlock()
+        guard drained else {
+            appLog.error("models still busy at shutdown; leaving them loaded")
+            return false
+        }
+        lock.lock()
+        let g = gemma, r = reranker
         gemma = nil
         reranker = nil
+        lock.unlock()
+        // Freed here, on this thread, before anything else can tear Metal down.
+        withExtendedLifetime((g, r)) {}
+        return true
+    }
+
+    /// For tests that shut down and then keep going.
+    func reopenAfterShutdownForTests() {
+        useCondition.lock(); stopping = false; useCondition.unlock()
+    }
+
+    var hasLoadedModels: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return gemma != nil || reranker != nil
     }
 
     private static let exitHook: Void = {
-        atexit { Intelligence.shared.shutdown() }
+        atexit {
+            // Normally a no-op: quitting already shut down. If a job never finished, skip
+            // llama.cpp's static teardown rather than crash in it.
+            if !Intelligence.shared.shutdown(timeout: 5) {
+                fflush(nil)
+                _exit(0)
+            }
+        }
     }()
 
     /// Frees about a gigabyte of model memory when nothing used it for five minutes.
     private func unloadIfIdle() {
+        useCondition.lock()
+        let busy = inFlight > 0 || stopping
+        useCondition.unlock()
+        guard !busy else { return }
         lock.lock(); defer { lock.unlock() }
         guard gemma != nil || reranker != nil, Date().timeIntervalSince(lastUse) > 300 else { return }
         gemma = nil
@@ -137,8 +211,8 @@ final class Intelligence: @unchecked Sendable {
         let backend = id ?? documentEmbedder
         switch backend {
         case .gemma:
-            if let g = loadedGemma() {
-                return (.gemma, g.embed(items.map { Self.documentPrompt(title: $0.title, text: $0.text) }))
+            if let v = using({ loadedGemma().map { $0.embed(items.map { Self.documentPrompt(title: $0.title, text: $0.text) }) } }) {
+                return (.gemma, v)
             }
             return (.sentence, items.map { Self.sentenceVector($0.text) })
         case .contextual:
@@ -152,8 +226,7 @@ final class Intelligence: @unchecked Sendable {
     func embedQueries(_ queries: [String], using id: EmbedderID) -> [[Float]?] {
         switch id {
         case .gemma:
-            guard let g = loadedGemma() else { return queries.map { _ in nil } }
-            return g.embed(queries.map(Self.queryPrompt))
+            return using { loadedGemma().map { $0.embed(queries.map(Self.queryPrompt)) } } ?? queries.map { _ in nil }
         case .contextual:
             return queries.map { ContextualEmbedder.shared.vector($0) }
         case .sentence:
@@ -177,8 +250,8 @@ final class Intelligence: @unchecked Sendable {
 
     /// One query per document, so each candidate is judged against the part of the context it matched.
     func rerank(queries: [String], documents: [String]) -> [Float]? {
-        guard !documents.isEmpty, queries.count == documents.count, let r = loadedReranker() else { return nil }
-        return r.rerank(pairs: Array(zip(queries, documents)), instruction: Self.rerankInstruction)
+        guard !documents.isEmpty, queries.count == documents.count else { return nil }
+        return using { loadedReranker().map { $0.rerank(pairs: Array(zip(queries, documents)), instruction: Self.rerankInstruction) } }
     }
 }
 

@@ -18,6 +18,59 @@ enum EngineTests {
         notionTests(dir: dir)
         googleDocsTests()
         granolaTests()
+        shutdownTests()
+        quitTests()
+    }
+
+    /// Shutdown waits for a job holding a model and refuses new ones.
+    static func shutdownTests() {
+        let started = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            started.signal()
+            _ = Intelligence.shared.embedQueries(["a"], using: .sentence)
+        }
+        started.wait()
+        let t = Date()
+        let ok = Intelligence.shared.shutdown(timeout: 5)
+        let refused = Intelligence.shared.rerank(query: "x", documents: ["y"]) == nil && Intelligence.shared.isShuttingDown
+        Intelligence.shared.reopenAfterShutdownForTests()
+        check(ok && refused && Date().timeIntervalSince(t) < 5 && !Intelligence.shared.hasLoadedModels,
+              "shutdown drains model work within its time limit and refuses new work")
+    }
+
+    /// Quits a child process mid-re-embed with both models loaded, the app's way and with a bare
+    /// exit, and checks it ends cleanly. Needs the models: set BROWSERPOC_MODELS_DIR.
+    static func quitTests() {
+        guard let dirPath = ProcessInfo.processInfo.environment["BROWSERPOC_MODELS_DIR"], !dirPath.isEmpty,
+              ModelCatalog.all.allSatisfy({ FileManager.default.fileExists(atPath: URL(fileURLWithPath: dirPath).appendingPathComponent($0.file + ".verified").path) }) else {
+            print("      quit check skipped: set BROWSERPOC_MODELS_DIR to a folder with both models")
+            return
+        }
+        guard let exe = Bundle.main.executablePath else { return }
+        for mode in ["app", "exit"] {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: exe)
+            p.arguments = ["--quit-check", mode, "--models-dir", dirPath]
+            let pipe = Pipe()
+            p.standardOutput = pipe
+            p.standardError = pipe
+            do { try p.run() } catch { check(false, "quit check starts", "\(error)"); continue }
+            // Read as it runs, so a full pipe can't stall the child.
+            var data = Data()
+            let reader = DispatchQueue(label: "quit-check-read")
+            let done = DispatchSemaphore(value: 0)
+            reader.async { data = pipe.fileHandleForReading.readDataToEndOfFile(); done.signal() }
+            let deadline = Date().addingTimeInterval(180)
+            while p.isRunning && Date() < deadline { Thread.sleep(forTimeInterval: 0.1) }
+            if p.isRunning { p.terminate() }
+            _ = done.wait(timeout: .now() + 5)
+            let out = String(decoding: data, as: UTF8.self)
+            let crashed = out.contains("GGML_ASSERT") || out.contains("Segmentation") || p.terminationReason == .uncaughtSignal
+            let line = out.split(separator: "\n").first(where: { $0.contains("quit-check") }).map(String.init) ?? "status \(p.terminationStatus)"
+            check(out.contains(EngineQuitCheck.marker) && !crashed && p.terminationStatus == 0,
+                  "quitting mid-re-embed with the models loaded exits cleanly (\(mode))",
+                  crashed ? String(out.suffix(300)) : line)
+        }
     }
 
     static func modelStoreTests(dir: URL) {
