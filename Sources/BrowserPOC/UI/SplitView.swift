@@ -118,7 +118,30 @@ extension SplitNode {
 /// A split drawn from its tree: rows and columns of panes with dividers you can drag.
 struct SplitPanes: View {
     let split: SplitRecord
-    var body: some View { SplitNodeView.make(split: split, node: split.root, path: []) }
+    var body: some View {
+        SplitNodeView.make(split: split, node: split.root, path: [])
+            // Swaps, closes, new panes and layout changes all move the panes to their new frames on
+            // the split spring. Panes are keyed by item, so each glides from where it was.
+            .motion(Motion.split, value: split.root)
+    }
+}
+
+private struct PaneSpaceKey: EnvironmentKey { static let defaultValue: Namespace.ID? = nil }
+
+extension EnvironmentValues {
+    /// The content area's namespace for panes, so a page going into a split, or coming out of one,
+    /// moves from its old frame to its new one instead of jumping.
+    var paneSpace: Namespace.ID? {
+        get { self[PaneSpaceKey.self] }
+        set { self[PaneSpaceKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Matches a pane to its page's other panes in the content area, by item.
+    @ViewBuilder func matchedPane(_ id: UUID?, in space: Namespace.ID?) -> some View {
+        if let id, let space { matchedGeometryEffect(id: id, in: space) } else { self }
+    }
 }
 
 enum SplitNodeView {
@@ -200,6 +223,7 @@ struct PaneLeaf: View {
     let id: UUID
     @EnvironmentObject var model: BrowserModel
     @State private var hovering = false
+    @Environment(\.paneSpace) private var paneSpace
 
     var body: some View {
         let tab = model.tab(id)
@@ -213,9 +237,23 @@ struct PaneLeaf: View {
                 }
             }
             .onHover { h in Motion.run(Motion.hover, fadeOnly: true) { hovering = h } }
-            // A pane joining a split eases in instead of popping.
-            .appearEffect(scale: 0.985, y: 0, animation: Motion.split)
+            // The page that joins a split eases in. The one already on screen moves from where it
+            // was, matched by item, instead of fading in again.
+            .modifier(PaneArrival(joining: split.focused == id))
+            .matchedPane(id, in: paneSpace)
             .background(GeometryReader { g in Color.clear.preference(key: PaneFramesKey.self, value: [id: g.frame(in: .named("content"))]) })
+    }
+}
+
+/// A pane joining a split eases in from 0.985 and fades. Others arrive as they are.
+private struct PaneArrival: ViewModifier {
+    let joining: Bool
+    @State private var joined: Bool?
+    func body(content: Content) -> some View {
+        Group {
+            if joined ?? joining { content.appearEffect(scale: 0.985, y: 0, animation: Motion.split) } else { content }
+        }
+        .onAppear { if joined == nil { joined = joining } }
     }
 }
 

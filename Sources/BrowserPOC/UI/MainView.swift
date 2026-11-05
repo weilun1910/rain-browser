@@ -152,6 +152,7 @@ struct ContentArea: View {
     @State private var frames: [UUID: CGRect] = [:]
     @Environment(\.spaceAccent) private var spaceAccent
     @ObservedObject private var peekMotion = PeekMotion.shared
+    @Namespace private var paneSpace
 
     /// A Peek is up and not on its way out.
     var underPeek: Bool { model.peek != nil && peekMotion.phase != .closing }
@@ -162,10 +163,16 @@ struct ContentArea: View {
                 Group {
                     if let sp = model.currentSplit, sp.items.allSatisfy({ model.tab($0) != nil }) {
                         SplitPanes(split: sp)
+                            .transition(.identity)
                     } else {
                         PaneView(tab: model.currentTab).paneCard()
+                            .matchedPane(model.currentTab?.id, in: paneSpace)
+                            .transition(.identity)
                     }
                 }
+                .environment(\.paneSpace, paneSpace)
+                // Going into a split and coming out of one moves the page between its frames.
+                .motion(Motion.split, value: model.currentSplit?.id)
                 .relatedShelf(frame: RelatedShelf.paneFrame(model, frames: frames, size: g.size))
                 // Under Peek the page settles back a touch and dims, like Zen's Glance. It comes back
                 // as soon as the Peek starts to close.
