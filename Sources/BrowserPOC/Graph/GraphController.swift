@@ -223,6 +223,8 @@ final class GraphController: ObservableObject {
     }
 
     private var highlightMoving = false
+    /// Frames drawn on screen, for the debug log.
+    private(set) var framesDrawn = 0
     private var fitDistance: Float = 0
 
     /// Builds what to draw this frame and advances the small animations.
@@ -373,7 +375,13 @@ final class GraphController: ObservableObject {
                 return want
             }
         }
-        if !needsRedraw { v.isPaused = true }
+        framesDrawn += 1
+        if !needsRedraw {
+            v.isPaused = true
+            if IndexStore.debug {
+                print("graph \(mode == .global ? "global" : "local"): paused after \(framesDrawn) frames, \(n) nodes, GPU \(String(format: "%.2f", renderer.lastGPUTime)) ms")
+            }
+        }
     }
 
     /// Renders offscreen. For snapshots and the performance check.
