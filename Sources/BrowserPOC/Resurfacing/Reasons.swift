@@ -83,7 +83,10 @@ enum Reasons {
         guard judgment.helpful, !judgment.reason.isEmpty else { return template(m, visits: visits) }
         let h = history(m.doc, visits: visits)
         let room = max(6, maxWords - h.split(separator: " ").count)
-        guard let covers = tidy(judgment.reason, maxWords: room) else { return template(m, visits: visits) }
+        // A sentence cut short reads badly, so a long one gives way to the plain line.
+        guard let covers = tidy(judgment.reason), covers.split(separator: " ").count <= room + 2 else {
+            return template(m, visits: visits)
+        }
         return Fmt.clean(h + " " + covers)
     }
 

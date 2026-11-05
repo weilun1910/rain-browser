@@ -48,7 +48,12 @@ enum ModelFiles {
     /// Set by tests and the eval to point at an existing folder of models.
     nonisolated(unsafe) static var overrideDir: URL?
 
-    static var dir: URL { overrideDir ?? Paths.root.appendingPathComponent("Models", isDirectory: true) }
+    static var dir: URL {
+        if let overrideDir { return overrideDir }
+        // Lets the smoke test run with models from another throwaway folder.
+        if let env = ProcessInfo.processInfo.environment["BROWSERPOC_MODELS_DIR"], !env.isEmpty { return URL(fileURLWithPath: env, isDirectory: true) }
+        return Paths.root.appendingPathComponent("Models", isDirectory: true)
+    }
     static func path(_ spec: ModelSpec) -> URL { dir.appendingPathComponent(spec.file) }
     static func partial(_ spec: ModelSpec) -> URL { dir.appendingPathComponent(spec.file + ".part") }
     static func marker(_ spec: ModelSpec) -> URL { dir.appendingPathComponent(spec.file + ".verified") }
@@ -117,6 +122,34 @@ final class ModelDownloader: NSObject, URLSessionDataDelegate, @unchecked Sendab
             try await fetch(spec.url, into: part, from: existing, expected: spec.bytes, progress: progress)
         }
         try Self.finish(spec)
+    }
+
+    /// `--download-models`: fetches both models into the support folder, printing progress.
+    /// Stopping it and running it again resumes where it left off.
+    static func commandLine() -> Int32 {
+        print("Models folder: \(ModelFiles.dir.path)")
+        var code: Int32 = 0
+        for spec in ModelCatalog.all {
+            if ModelFiles.isReady(spec) { print("\(spec.name): ready"); continue }
+            let part = ModelFiles.partial(spec)
+            let start = ((try? FileManager.default.attributesOfItem(atPath: part.path))?[.size] as? NSNumber)?.int64Value ?? 0
+            print("\(spec.name): \(start > 0 ? "resuming at \(start) bytes" : "starting"), \(spec.bytes) bytes in all")
+            let sem = DispatchSemaphore(value: 0)
+            nonisolated(unsafe) var failure: Error?
+            nonisolated(unsafe) var lastTenth = -1
+            Task.detached {
+                do {
+                    try await ModelDownloader().download(spec) { done, total in
+                        let tenth = Int(Double(done) / Double(max(total, 1)) * 10)
+                        if tenth != lastTenth { lastTenth = tenth; print("  \(tenth * 10)%") }
+                    }
+                } catch { failure = error }
+                sem.signal()
+            }
+            sem.wait()
+            if let failure { print("  failed: \(failure)"); code = 1 } else { print("  verified and ready") }
+        }
+        return code
     }
 
     /// Checks the partial file's size and checksum, then moves it into place.
