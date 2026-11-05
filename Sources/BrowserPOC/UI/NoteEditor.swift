@@ -137,6 +137,7 @@ struct MarkdownTextView: NSViewRepresentable {
         var doc: NoteDocument
         var lastRevision = -1
         var focusObserver: NSObjectProtocol?
+        var frameObserver: NSObjectProtocol?
         weak var textView: NSTextView?
 
         init(doc: NoteDocument) { self.doc = doc }
@@ -171,7 +172,12 @@ struct MarkdownTextView: NSViewRepresentable {
         tv.textColor = .labelColor
         tv.isEditable = !doc.isReadOnly
         tv.isSelectable = true
-        tv.textContainerInset = NSSize(width: 44, height: 32)
+        tv.textContainerInset = NSSize(width: ReadingMeasure.minSide, height: 32)
+        // Long notes keep a comfortable line length: the text column centres once the pane is wide.
+        scroll.contentView.postsFrameChangedNotifications = true
+        context.coordinator.frameObserver = NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: scroll.contentView, queue: .main) { [weak tv, weak scroll] _ in
+            MainActor.assumeIsolated { if let tv, let scroll { ReadingMeasure.apply(tv, width: scroll.contentView.bounds.width) } }
+        }
         tv.textContainer?.lineFragmentPadding = 0
         tv.defaultParagraphStyle = MarkdownStyler.paragraph
         tv.typingAttributes = MarkdownStyler.baseAttributes
@@ -208,6 +214,22 @@ struct MarkdownTextView: NSViewRepresentable {
 
     static func dismantleNSView(_ scroll: NSScrollView, coordinator: Coordinator) {
         if let o = coordinator.focusObserver { NotificationCenter.default.removeObserver(o) }
+        if let o = coordinator.frameObserver { NotificationCenter.default.removeObserver(o) }
+    }
+}
+
+/// A comfortable line length for notes: about 75 characters of 15 pt text, centred in a wide
+/// pane, with at least 44 pt of margin when the pane is narrow.
+@MainActor
+enum ReadingMeasure {
+    static let column: CGFloat = 700
+    static let minSide: CGFloat = 44
+
+    static func side(for width: CGFloat) -> CGFloat { max(minSide, ((width - column) / 2).rounded()) }
+
+    static func apply(_ tv: NSTextView, width: CGFloat) {
+        let s = side(for: width)
+        if abs(tv.textContainerInset.width - s) > 0.5 { tv.textContainerInset = NSSize(width: s, height: tv.textContainerInset.height) }
     }
 }
 
