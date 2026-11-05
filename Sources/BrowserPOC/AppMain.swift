@@ -47,7 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         appLog.notice("Sentence embedding: \(Embedder.shared.isAvailable ? "available" : "not available", privacy: .public)")
 
         model = BrowserModel()
-        RelatedShelf.launch()
+        RelatedShelf.launch(model)
         buildMenu()
 
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1380, height: 880),

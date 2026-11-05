@@ -187,6 +187,8 @@ final class ShelfState: ObservableObject {
     @Published private(set) var pinned = false
     /// Test hook: stands in for the model download's progress.
     @Published var progressOverride: Double?
+    /// Test hook: a picture drawn where the page is, since offscreen snapshots can't draw WebKit.
+    @Published var backdrop: NSImage?
 
     private var typingWork: DispatchWorkItem?
     private var openWork: DispatchWorkItem?
@@ -342,9 +344,10 @@ enum ShelfGraph {
 
 enum RelatedShelf {
     /// Called once at launch, before the window: settles the mode and starts noticing typing.
-    @MainActor static func launch() {
+    @MainActor static func launch(_ model: BrowserModel) {
         _ = RelatedPrefs.shared
         ShelfState.shared.installTypingMonitor()
+        ShelfDemo.start(model: model)
     }
 
     /// The focused pane's frame in the content area: the whole area, or the focused pane of a split.

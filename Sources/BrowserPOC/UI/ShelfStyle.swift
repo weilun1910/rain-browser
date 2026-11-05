@@ -64,6 +64,8 @@ enum ShelfStyle {
     /// `Theme.Palette.hairline`.
     static let hairline = dynamic(NSColor(white: 0, alpha: 0.08), NSColor(white: 1, alpha: 0.10))
     static let popoverFill = dynamic(NSColor(white: 0.995, alpha: 1), NSColor(white: 0.161, alpha: 1))
+    /// The line between Sites and Notes / Docs. A mid grey, so it shows over light and dark pages.
+    static let divider = Color.secondary.opacity(0.45)
     /// The fade: toward black in dark mode, toward the light frame grey (`frameLight`, #EDEDED) in light mode.
     static let fadeColor = dynamic(NSColor(white: 0.929, alpha: 1), NSColor(white: 0, alpha: 1))
     static let fadeStrength = (light: 0.75, dark: 0.5)

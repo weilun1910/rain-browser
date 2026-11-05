@@ -202,7 +202,10 @@ enum SmokeTest {
         snapshot(window.contentView!, snaps.appendingPathComponent("8-command-bar.png"))
         model.bar.close()
 
-        // 10. Arc and Zen: sessions, favicons, find, splits, Peek, media, archive, the bar, layouts.
+        // 10. The Related shelf: over a page and a note, the page's inset, hover, light and dark, sidebar mode.
+        ShelfSmoke.run(model: model, window: window, snaps: snaps)
+
+        // 11. Arc and Zen: sessions, favicons, find, splits, Peek, media, archive, the bar, layouts.
         ArcZenSmoke.run(model: model, window: window, snaps: snaps)
 
         model.prepareForQuit()

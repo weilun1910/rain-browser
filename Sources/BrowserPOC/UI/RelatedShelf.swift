@@ -32,12 +32,6 @@ struct RelatedShelfHost: ViewModifier {
     }
 }
 
-/// Test hook: a picture drawn where the page is, since offscreen snapshots can't draw WebKit.
-@MainActor
-enum ShelfBackdrop {
-    static var image: NSImage?
-}
-
 /// Where the pills and the graph button sit, in the layer's space, for anchoring the popover.
 struct ShelfAnchorsKey: PreferenceKey {
     static let defaultValue: [ShelfTarget: CGRect] = [:]
@@ -72,7 +66,7 @@ struct RelatedShelfLayer: View {
         let entries = ShelfLayout.entries(sites: resurfacer.siteCards, docs: resurfacer.docCards, progress: progress)
         let covers = ShelfLayout.coversPage(p, hasCards: !resurfacer.cards.isEmpty)
         ZStack(alignment: .bottomLeading) {
-            if let img = ShelfBackdrop.image {
+            if let img = state.backdrop {
                 Image(nsImage: img).resizable().frame(width: size.width, height: size.height)
                     .clipShape(RoundedRectangle(cornerRadius: ShelfStyle.cardRadius, style: .continuous))
                     .allowsHitTesting(false)
@@ -173,7 +167,8 @@ struct ShelfRow: View {
                                 insertion: ShelfStyle.reduceMotion ? .opacity.animation(ShelfStyle.reducedFade)
                                     : .opacity.combined(with: .offset(y: 6)).combined(with: .scale(scale: 0.96, anchor: .bottom))
                                         .animation(.spring(duration: 0.34, bounce: 0.08).delay(Double(min(i, 8)) * ShelfStyle.stagger)),
-                                removal: .opacity.animation(.easeOut(duration: 0.1))))
+                                // Pills leave at once, so a replaced row never overlaps the new one.
+                                removal: .identity))
                     }
                 }
                 .padding(Self.inner)
@@ -223,7 +218,7 @@ struct ShelfRow: View {
                 }
                 .onKeyPress(.return) { model.open(c); return .handled }
         case .divider:
-            Rectangle().fill(ShelfStyle.hairline)
+            Rectangle().fill(ShelfStyle.divider)
                 .frame(width: 1, height: ShelfStyle.dividerHeight)
                 .padding(.horizontal, ShelfStyle.dividerGap)
                 .frame(width: ShelfMetrics.width(e))
@@ -391,10 +386,9 @@ struct ShelfPill: View {
                 .foregroundStyle(hovering || state.open == target ? .primary : .secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, ShelfStyle.pillPadding)
-        .frame(width: width, height: ShelfStyle.pillHeight)
+        .frame(width: width, height: ShelfStyle.pillHeight, alignment: .leading)
         .modifier(PillSurface(hovering: hovering || state.open == target))
         .background(GeometryReader { g in Color.clear.preference(key: ShelfAnchorsKey.self, value: [target: g.frame(in: .named("shelf"))]) })
         .onHover { h in
@@ -462,10 +456,9 @@ struct ShelfProgressPill: View {
                 .font(ShelfStyle.pillCaption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, ShelfStyle.pillPadding)
-        .frame(width: width, height: ShelfStyle.pillHeight)
+        .frame(width: width, height: ShelfStyle.pillHeight, alignment: .leading)
         .modifier(PillSurface(hovering: hovering))
         .background(GeometryReader { g in Color.clear.preference(key: ShelfAnchorsKey.self, value: [.progress: g.frame(in: .named("shelf"))]) })
         .onHover { h in
