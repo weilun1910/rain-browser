@@ -110,6 +110,7 @@ struct GraphPane: View {
     }
 
     private var toolbar: some View {
+        GlassEffectContainer(spacing: Theme.GlassStyle.containerSpacing) {
         HStack(spacing: 10) {
             GraphSearchField(text: $store.value.search)
                 .frame(width: 250)
@@ -147,6 +148,7 @@ struct GraphPane: View {
             }
             .buttonStyle(GraphIconButton(active: store.value.panelOpen))
             .help("Filters, groups, display and forces")
+        }
         }
         .padding(.horizontal, 12)
         .frame(height: 44)
@@ -223,9 +225,7 @@ struct GraphHoverCard: View {
         .padding(.horizontal, 11)
         .padding(.vertical, 9)
         .frame(width: 290, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: GraphTheme.cardRadius, style: .continuous).fill(GraphTheme.panelFill))
-        .overlay(RoundedRectangle(cornerRadius: GraphTheme.cardRadius, style: .continuous).strokeBorder(GraphTheme.hairline, lineWidth: 1))
-        .shadow(color: .black.opacity(0.18), radius: 10, y: 3)
+        .glassPanel(radius: GraphTheme.cardRadius, fallbackShadow: .popover)
     }
 }
 
@@ -268,8 +268,8 @@ struct GraphSearchField: View {
         }
         .padding(.horizontal, 9)
         .frame(height: 28)
-        .background(RoundedRectangle(cornerRadius: GraphTheme.buttonRadius, style: .continuous).fill(GraphTheme.panelFill))
-        .overlay(RoundedRectangle(cornerRadius: GraphTheme.buttonRadius, style: .continuous).strokeBorder(Color.primary.opacity(focused ? 0.22 : 0.1), lineWidth: 0.5))
+        .glassControl(radius: GraphTheme.buttonRadius)
+        .overlay(RoundedRectangle(cornerRadius: GraphTheme.buttonRadius, style: .continuous).strokeBorder(Color.primary.opacity(focused ? 0.22 : 0), lineWidth: 0.5))
         .help("Words match titles, addresses and projects. type:note, site:github.com and project:Browser narrow it.")
     }
 }
@@ -280,10 +280,7 @@ struct GraphIconButton: ButtonStyle {
         configuration.label
             .frame(width: 28, height: 28)
             .foregroundStyle(active ? Color.primary : Color.secondary)
-            .background(RoundedRectangle(cornerRadius: GraphTheme.buttonRadius, style: .continuous)
-                .fill(GraphTheme.panelFill)
-                .opacity(configuration.isPressed ? 0.6 : 1))
-            .overlay(RoundedRectangle(cornerRadius: GraphTheme.buttonRadius, style: .continuous).strokeBorder(Color.primary.opacity(active ? 0.25 : 0.1), lineWidth: 0.5))
+            .glassControl(radius: GraphTheme.buttonRadius, active: active || configuration.isPressed)
             .contentShape(Rectangle())
     }
 }
@@ -295,8 +292,7 @@ struct GraphQuietButton: ButtonStyle {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 9)
             .frame(height: 26)
-            .background(RoundedRectangle(cornerRadius: GraphTheme.buttonRadius, style: .continuous).fill(GraphTheme.panelFill).opacity(configuration.isPressed ? 0.6 : 1))
-            .overlay(RoundedRectangle(cornerRadius: GraphTheme.buttonRadius, style: .continuous).strokeBorder(GraphTheme.hairline, lineWidth: 1))
+            .glassControl(radius: GraphTheme.buttonRadius, active: configuration.isPressed)
     }
 }
 
@@ -332,9 +328,8 @@ struct GraphSettingsPanel: View {
             .padding(12)
         }
         .scrollIndicators(.never)
-        .background(RoundedRectangle(cornerRadius: GraphTheme.panelRadius, style: .continuous).fill(GraphTheme.panelFill))
-        .overlay(RoundedRectangle(cornerRadius: GraphTheme.panelRadius, style: .continuous).strokeBorder(GraphTheme.hairline, lineWidth: 1))
-        .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
+        .clipShape(RoundedRectangle(cornerRadius: GraphTheme.panelRadius, style: .continuous))
+        .glassPanel(radius: GraphTheme.panelRadius, fallbackShadow: .floating)
         .controlSize(.small)
     }
 

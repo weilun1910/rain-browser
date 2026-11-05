@@ -47,8 +47,14 @@ struct RelatedShelfLayer: View {
     @ObservedObject var models = ModelStore.shared
     @ObservedObject var settings = Settings.shared
     @State private var anchors: [ShelfTarget: CGRect] = [:]
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Namespace private var glass
 
     var progress: Double? { state.progressOverride ?? models.overallProgress }
+
+    /// On glass the pills hold their own against the page, so the fade behind them goes. The solid
+    /// pills of the Reduce Transparency fallback keep it.
+    var usesFade: Bool { Theme.GlassStyle.isSolid(reduceTransparency) }
 
     var presence: ShelfLayout.Presence {
         ShelfLayout.presence(.init(mode: prefs.mode, hidden: prefs.value.shelfHidden, hasCards: !resurfacer.cards.isEmpty,
@@ -65,16 +71,21 @@ struct RelatedShelfLayer: View {
         let p = presence
         let entries = ShelfLayout.entries(sites: resurfacer.siteCards, docs: resurfacer.docCards, progress: progress)
         let covers = ShelfLayout.coversPage(p, hasCards: !resurfacer.cards.isEmpty)
+        // One container, so the pills and the popover sample the page together and the popover
+        // keeps its glass as it glides from pill to pill.
+        GlassEffectContainer(spacing: Theme.GlassStyle.containerSpacing) {
         ZStack(alignment: .bottomLeading) {
             if let img = state.backdrop {
                 Image(nsImage: img).resizable().frame(width: size.width, height: size.height)
                     .clipShape(RoundedRectangle(cornerRadius: ShelfStyle.cardRadius, style: .continuous))
                     .allowsHitTesting(false)
             }
-            ShelfFade()
-                .frame(width: size.width, height: ShelfStyle.fadeHeight)
-                .opacity(covers ? 1 : 0)
-                .allowsHitTesting(false)
+            if usesFade {
+                ShelfFade()
+                    .frame(width: size.width, height: ShelfStyle.fadeHeight)
+                    .opacity(covers ? 1 : 0)
+                    .allowsHitTesting(false)
+            }
             if p != .gone {
                 ShelfRow(entries: entries, resurfacer: resurfacer)
                     .padding(.horizontal, ShelfStyle.margin - ShelfRow.inner)
@@ -86,8 +97,9 @@ struct RelatedShelfLayer: View {
                     .transition(ShelfStyle.reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 12)))
             }
             if p == .shown, let t = state.open, let a = anchors[t] {
-                ShelfPopover(target: t, anchor: a, container: size, resurfacer: resurfacer, progress: progress)
+                ShelfPopover(target: t, anchor: a, container: size, resurfacer: resurfacer, progress: progress, glass: glass)
             }
+        }
         }
         .frame(width: size.width, height: size.height, alignment: .bottomLeading)
         .coordinateSpace(name: "shelf")
@@ -353,18 +365,27 @@ enum ShelfSource {
 
 // MARK: - Pills
 
+/// A pill's surface: Liquid Glass that answers the pointer, with a faint fill on the glass while
+/// it's hovered or open. Under Reduce Transparency, the solid pill with its two-layer shadow.
 struct PillSurface: ViewModifier {
     let hovering: Bool
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: ShelfStyle.pillRadius, style: .continuous)
-        return content
-            .background(shape.fill(hovering ? ShelfStyle.pillHover : ShelfStyle.pillFill)
-                .shelfShadow(ShelfStyle.pillShadow(dark: scheme == .dark, hovering: hovering)))
-            .overlay(shape.strokeBorder(ShelfStyle.hairline, lineWidth: 0.5).allowsHitTesting(false))
-            .contentShape(shape)
-            .offset(y: hovering && !ShelfStyle.reduceMotion ? -1 : 0)
-            .animation(ShelfStyle.hover, value: hovering)
+        return Group {
+            if Theme.GlassStyle.isSolid(reduceTransparency) {
+                content
+                    .background(shape.fill(hovering ? ShelfStyle.pillHover : ShelfStyle.pillFill)
+                        .shelfShadow(ShelfStyle.pillShadow(dark: scheme == .dark, hovering: hovering)))
+                    .overlay(shape.strokeBorder(ShelfStyle.hairline, lineWidth: 0.5).allowsHitTesting(false))
+            } else {
+                content.glassControl(radius: ShelfStyle.pillRadius, active: hovering)
+            }
+        }
+        .contentShape(shape)
+        .offset(y: hovering && !ShelfStyle.reduceMotion ? -1 : 0)
+        .animation(ShelfStyle.hover, value: hovering)
     }
 }
 
@@ -496,8 +517,10 @@ struct ShelfPopover: View {
     let container: CGSize
     @ObservedObject var resurfacer: Resurfacer
     let progress: Double?
+    let glass: Namespace.ID
     @ObservedObject var state = ShelfState.shared
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var width: CGFloat { target == .graph ? ShelfStyle.graphPopoverWidth : ShelfStyle.popoverWidth }
 
@@ -515,9 +538,8 @@ struct ShelfPopover: View {
                 .transition(.opacity)
         }
         .frame(width: width, alignment: .leading)
-        .background(shape.fill(ShelfStyle.popoverFill).shelfShadow(ShelfStyle.popoverShadow(dark: scheme == .dark)))
-        .overlay(shape.strokeBorder(ShelfStyle.hairline, lineWidth: 0.5).allowsHitTesting(false))
         .clipShape(shape)
+        .modifier(ShelfPopoverSurface(solid: Theme.GlassStyle.isSolid(reduceTransparency), dark: scheme == .dark, glass: glass))
         .contentShape(shape)
         .onHover { inside in if inside { state.enterPopover() } else { state.leavePopover() } }
         .offset(x: x, y: -(container.height - anchor.minY) - ShelfStyle.popoverGap)
@@ -549,6 +571,27 @@ struct ShelfPopover: View {
                     .padding(.bottom, ShelfStyle.popoverPadding - 10)
                     .frame(width: ShelfStyle.graphPopoverWidth)
             }
+        }
+    }
+}
+
+/// The popover's surface: one Liquid Glass panel with a stable identity, so moving between pills
+/// slides the same glass rather than making a new one. Solid under Reduce Transparency.
+struct ShelfPopoverSurface: ViewModifier {
+    let solid: Bool
+    let dark: Bool
+    let glass: Namespace.ID
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: ShelfStyle.popoverRadius, style: .continuous)
+        if solid {
+            content
+                .background(shape.fill(ShelfStyle.popoverFill).shelfShadow(ShelfStyle.popoverShadow(dark: dark)))
+                .overlay(shape.strokeBorder(ShelfStyle.hairline, lineWidth: 0.5).allowsHitTesting(false))
+        } else {
+            content
+                .glassPanel(radius: ShelfStyle.popoverRadius)
+                .glassEffectID("shelf-popover", in: glass)
+                .glassEffectTransition(.materialize)
         }
     }
 }
