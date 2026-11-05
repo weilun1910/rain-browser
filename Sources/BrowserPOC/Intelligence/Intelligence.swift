@@ -172,8 +172,13 @@ final class Intelligence: @unchecked Sendable {
 
     /// Scores in 0...1, or nil when the reranker isn't ready.
     func rerank(query: String, documents: [String]) -> [Float]? {
-        guard !documents.isEmpty, let r = loadedReranker() else { return nil }
-        return r.rerank(query: query, instruction: Self.rerankInstruction, documents: documents)
+        rerank(queries: Array(repeating: query, count: documents.count), documents: documents)
+    }
+
+    /// One query per document, so each candidate is judged against the part of the context it matched.
+    func rerank(queries: [String], documents: [String]) -> [Float]? {
+        guard !documents.isEmpty, queries.count == documents.count, let r = loadedReranker() else { return nil }
+        return r.rerank(pairs: Array(zip(queries, documents)), instruction: Self.rerankInstruction)
     }
 }
 

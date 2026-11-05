@@ -114,7 +114,7 @@ final class TopicTagger: @unchecked Sendable {
                                            instructions: "List the main topics of the text.")
         let input = "Title: \(title)\n\(text.prefix(2400))"
         do {
-            let r = try await session.respond(to: input, generating: Tags.self, options: GenerationOptions(temperature: 0))
+            let r = try await session.respond(to: input, generating: Tags.self, options: GenerationOptions(sampling: .greedy))
             return r.content.topics.map { Fmt.clean($0.trimmingCharacters(in: .whitespacesAndNewlines)) }.filter { !$0.isEmpty }
         } catch {
             return nil
