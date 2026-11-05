@@ -112,6 +112,8 @@ final class BrowserModel: ObservableObject {
     @Published var find = FindState()
     /// The Ctrl-Tab switcher while Ctrl is held.
     @Published var switcher: SwitcherState?
+    /// Keyboard focus in the sidebar (Cmd-.): the row the arrow keys are on.
+    @Published var sidebarCursor: SidebarStop?
 
     var addressEditing = false
     let webConfig: WKWebViewConfiguration
@@ -160,6 +162,7 @@ final class BrowserModel: ObservableObject {
         c.allowsAirPlayForMediaPlayback = true
         TypingCounter.install(on: c.userContentController)
         MediaWatch.install(on: c.userContentController)
+        Favicons.install(on: c.userContentController)
         return c
     }
 
@@ -387,6 +390,7 @@ final class BrowserModel: ObservableObject {
         if peek != nil { closePeek() }
         if find.visible { closeFind() }
         multiSelection = []
+        sidebarCursor = nil
         selection = new
         let now = Date()
         for t in leaving { t.lastActiveAt = now }
@@ -715,8 +719,23 @@ final class BrowserModel: ObservableObject {
 
     func toggleFolder(_ f: Folder) {
         guard let i = folders.firstIndex(where: { $0.id == f.id }) else { return }
-        folders[i].isExpanded.toggle()
+        setFolder(f.id, open: !folders[i].isExpanded)
+    }
+
+    /// Opens or closes a folder. The state is saved per folder and comes back after a relaunch.
+    func setFolder(_ id: UUID, open: Bool) {
+        guard let i = folders.firstIndex(where: { $0.id == id }), folders[i].isExpanded != open else { return }
+        folders[i].isExpanded = open
         scheduleSave()
+    }
+
+    func isFolderOpen(_ id: UUID) -> Bool { folders.first { $0.id == id }?.isExpanded ?? false }
+
+    /// What a closed folder still shows: the items on screen, like Arc and Zen keep the active tab
+    /// visible under a collapsed folder.
+    func shownInClosedFolder(_ f: Folder) -> [SidebarRef] {
+        let shown = Set(visibleTabs.map { $0.id })
+        return refs(in: .folder(f.id)).filter { shown.contains($0.id) }
     }
 
     func setAllFolders(expanded: Bool) {

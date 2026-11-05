@@ -531,7 +531,7 @@ struct SuggestionRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Group {
-                if let u = s.url, Favicons.shared.hasIcon(for: u) {
+                if let u = s.url, Favicons.key(u) != nil {
                     FaviconView(url: u, size: 15)
                 } else {
                     Image(systemName: s.icon)

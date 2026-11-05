@@ -101,6 +101,14 @@ struct LeftSidebar: View {
                         }
                     }
                     .padding(.leading, 14)
+                    .folderReveal()
+                } else {
+                    // A closed folder still shows what's on screen, like Arc and Zen.
+                    let shown = model.shownInClosedFolder(f)
+                    if !shown.isEmpty {
+                        VStack(spacing: 1) { ForEach(shown, id: \.self) { SidebarRow(ref: $0) } }
+                            .padding(.leading, 14)
+                    }
                 }
             }
         }
@@ -235,6 +243,7 @@ struct EssentialTile: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
         }
+        .sidebarCursor(model.sidebarCursor == .row(.tab(tab.id)))
         .contentShape(Rectangle())
         .onTapGesture { model.select(tab) }
         .simultaneousGesture(TapGesture(count: 2).onEnded { if tab.isAwayFromPin { model.resetPinned(tab) } })
@@ -430,6 +439,7 @@ struct SidebarRow: View {
             case .split(let id): if let s = model.split(id) { SplitRow(split: s) }
             }
         }
+        .sidebarCursor(model.sidebarCursor == .row(ref))
         .overlay(alignment: indicator == .above ? .top : .bottom) {
             if indicator == .above || indicator == .below {
                 Rectangle().fill(Color.accentColor).frame(height: 2).padding(.horizontal, 6).allowsHitTesting(false)
@@ -655,14 +665,7 @@ struct FolderRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "chevron.right")
-                .font(.system(size: 9, weight: .semibold))
-                .rotationEffect(.degrees(folder.isExpanded ? 90 : 0))
-                .foregroundStyle(.tertiary)
-                .frame(width: 10)
-            Image(systemName: folder.isExpanded ? "folder" : "folder.fill")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+            FolderGlyph(isOpen: folder.isExpanded)
             Text(folder.name).font(.system(size: 13)).lineLimit(1)
             Spacer(minLength: 0)
             Text("\(model.tabs(in: folder).count)")
@@ -672,8 +675,9 @@ struct FolderRow: View {
         .padding(.horizontal, 8)
         .frame(height: 28)
         .modifier(RowBackground(selected: targeted, hovering: hovering))
+        .sidebarCursor(model.sidebarCursor == .folder(folder.id))
         .contentShape(Rectangle())
-        .onTapGesture { model.toggleFolder(folder) }
+        .onTapGesture { withAnimation(FolderMotion.toggle) { model.toggleFolder(folder) } }
         .onHover { hovering = $0 }
         .onDrag { ItemDrag.provider(folder: folder.id) }
         .onDrop(of: [ItemDrag.type], isTargeted: $targeted) { providers in
