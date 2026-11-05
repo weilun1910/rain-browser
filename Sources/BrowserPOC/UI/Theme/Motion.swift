@@ -91,11 +91,13 @@ enum Motion {
                 removal: .opacity.combined(with: .scale(scale: 0.99, anchor: .top)).animation(Motion.barOut))
         }
         /// The sidebar list when you move between spaces. `step` is +1 moving right, -1 moving left.
+        /// Like Zen, the new space's list slides in a whole page from the side you're moving
+        /// toward. The old one fades out quickly where it is instead of sliding too, so two lists
+        /// never sit on top of each other and the direction is always right.
         static func spaceSlide(_ step: Int) -> AnyTransition {
             if Motion.reduceMotion || step == 0 { return .opacity }
-            let d: CGFloat = 24 * CGFloat(step)
-            return .asymmetric(insertion: .opacity.combined(with: .offset(x: d)),
-                               removal: .opacity.combined(with: .offset(x: -d)))
+            return .asymmetric(insertion: .move(edge: step > 0 ? .trailing : .leading).combined(with: .opacity),
+                               removal: .opacity.animation(.easeOut(duration: 0.1)))
         }
         /// A side panel sliding in from its edge.
         static func panel(edge: Edge) -> AnyTransition {
@@ -129,6 +131,12 @@ struct AppearEffect: ViewModifier {
 extension View {
     func appearEffect(scale: CGFloat = 0.98, y: CGFloat = -6, animation: Animation = Motion.barIn) -> some View {
         modifier(AppearEffect(scale: scale, y: y, animation: animation))
+    }
+
+    /// A Related card arriving: it fades and rises 6 pt, `index` places after the first card, the
+    /// first time it shows. A card that stays put isn't animated again.
+    func cardAppear(index: Int) -> some View {
+        modifier(AppearEffect(scale: 1, y: 6, animation: Motion.card(index: index)))
     }
 }
 

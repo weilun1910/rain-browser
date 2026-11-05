@@ -51,12 +51,15 @@ struct RightPanelContent: View {
                 Spacer()
             } else {
                 ScrollView {
+                    // Keyed by what's open, so a new page or note brings a fresh list instead of
+                    // cards sliding past each other. New cards fade and rise one after another.
+                    // Cards that stay don't move while you type.
                     VStack(alignment: .leading, spacing: Theme.Space.m) {
                         if !resurfacer.siteCards.isEmpty {
                             SectionLabel(CardSection.sites.title)
                             ForEach(Array(resurfacer.siteCards.enumerated()), id: \.element.id) { i, card in
                                 CardView(card: card, showScores: settings.published.showScores)
-                                    .transition(Motion.Transitions.card(index: i))
+                                    .cardAppear(index: i)
                             }
                         }
                         if !resurfacer.docCards.isEmpty {
@@ -64,18 +67,17 @@ struct RightPanelContent: View {
                                 .padding(.top, resurfacer.siteCards.isEmpty ? 0 : Theme.Space.m)
                             ForEach(Array(resurfacer.docCards.enumerated()), id: \.element.id) { i, card in
                                 CardView(card: card, showScores: settings.published.showScores)
-                                    .transition(Motion.Transitions.card(index: resurfacer.siteCards.count + i))
+                                    .cardAppear(index: resurfacer.siteCards.count + i)
                             }
                         }
                     }
                     .padding(.bottom, Theme.Space.l)
+                    .id(resurfacer.context?.key ?? "")
                 }
                 .scrollIndicators(.never)
             }
         }
         .padding(.horizontal, Theme.Space.windowMargin)
-        // New cards fade and rise one after another. Cards that stay don't move while you type.
-        .motion(Motion.insert, value: resurfacer.cards.map { $0.id })
     }
 
     var emptyTitle: String { resurfacer.hasContext ? "Nothing related yet" : "Nothing open" }

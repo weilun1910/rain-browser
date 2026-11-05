@@ -27,6 +27,8 @@ struct LeftSidebar: View {
                     .transition(Motion.Transitions.spaceSlide(step))
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .clipped()
             ScrollView {
                 // The list is keyed by space, so moving between spaces slides the new list in.
                 ZStack(alignment: .top) {
@@ -36,6 +38,9 @@ struct LeftSidebar: View {
                         tabsSection
                     }
                     .padding(.bottom, Theme.Space.l)
+                    // A folder opening or closing moves everything below it on the same spring,
+                    // so the rows under it travel with the drawer instead of jumping.
+                    .motion(Motion.expand, value: model.spaceFolders.map { $0.isExpanded })
                     .id(model.currentSpaceID)
                     .transition(Motion.Transitions.spaceSlide(step))
                 }
