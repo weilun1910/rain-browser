@@ -582,8 +582,20 @@ struct CommandPanel: View {
         .motion(Motion.selection, value: bar.selected)
         .motion(Motion.barResize, value: bar.results.map { $0.id })
         .motion(Motion.hover, value: bar.actionsOnly, fadeOnly: true)
-        .floatingSheet()
-        .themeShadow(.commandBar)
+        .modifier(CommandPanelSurface())
+    }
+}
+
+/// The bar floats on Liquid Glass, so the page shows through it softly, and its shape follows the
+/// results as they come and go. Under Reduce Transparency it's the solid sheet with a deep shadow.
+struct CommandPanelSurface: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    func body(content: Content) -> some View {
+        if Theme.GlassStyle.isSolid(reduceTransparency) {
+            content.floatingSheet().themeShadow(.commandBar)
+        } else {
+            content.glassPanel(radius: Theme.Radius.sheet)
+        }
     }
 }
 

@@ -22,13 +22,39 @@ struct SpaceIcon: View {
 struct SpaceBar: View {
     @EnvironmentObject var model: BrowserModel
 
+    var body: some View { SpaceBarIcons(strip: SpaceStrip.of(model)) }
+}
+
+/// The space icons, with one highlight that slides between them in step with the sidebar's strip,
+/// so a swipe moves it under the fingers too, like Arc's icon transition.
+private struct SpaceBarIcons: View {
+    @ObservedObject var strip: SpaceStrip
+    @EnvironmentObject var model: BrowserModel
+
+    static let iconWidth: CGFloat = 26
+    static let gap: CGFloat = 3
+
     var body: some View {
-        HStack(spacing: 3) {
+        let at = strip.spacePosition
+        let lo = Int(at.rounded(.down))
+        let frac = at - Double(lo)
+        let colours = model.spaces.map { Theme.Palette.tint($0.color).opacity(0.16) }
+        HStack(spacing: Self.gap) {
             ForEach(Array(model.spaces.enumerated()), id: \.element.id) { i, sp in
-                SpaceButton(space: sp, index: i)
+                SpaceButton(space: sp, index: i, lit: max(0, 1 - abs(at - Double(i))))
                     .transition(Motion.Transitions.tabRow)
             }
             SmallIconButton(symbol: "plus", help: "New space") { model.promptNewSpace() }
+        }
+        .background(alignment: .leading) {
+            if colours.indices.contains(lo) {
+                let next = colours.indices.contains(lo + 1) ? colours[lo + 1] : colours[lo]
+                Theme.Radius.shape(Theme.Radius.button)
+                    .fill(colours[lo].mix(with: next, by: frac))
+                    .frame(width: Self.iconWidth, height: 24)
+                    .offset(x: CGFloat(at) * (Self.iconWidth + Self.gap))
+                    .allowsHitTesting(false)
+            }
         }
     }
 }
@@ -36,22 +62,22 @@ struct SpaceBar: View {
 struct SpaceButton: View {
     let space: Space
     let index: Int
+    /// How close the strip is to this space, from 0 to 1. It's 1 on the current space.
+    var lit: Double = 0
     @EnvironmentObject var model: BrowserModel
     @State private var hovering = false
 
-    var current: Bool { model.currentSpaceID == space.id }
-
     var body: some View {
         // Only the current space shows its colour. The others are grey until you hover them, like Zen.
+        // While the strip moves, the colour follows it from one icon to the next.
+        let on = hovering ? 1 : lit
         SpaceIcon(icon: space.icon)
-            .foregroundStyle(current || hovering ? Theme.Palette.accent(space.color) : Color.secondary)
-            .saturation(current || hovering ? 1 : 0)
-            .opacity(current || hovering ? 1 : 0.7)
+            .foregroundStyle(on > 0.5 ? Theme.Palette.accent(space.color) : Color.secondary)
+            .saturation(on)
+            .opacity(0.7 + 0.3 * on)
             .frame(width: 26, height: 24)
-            .background(Theme.Radius.shape(Theme.Radius.button)
-                .fill(current ? Theme.Palette.tint(space.color).opacity(0.16) : (hovering ? Theme.Palette.rowHover : .clear)))
+            .background(Theme.Radius.shape(Theme.Radius.button).fill(hovering && lit < 0.5 ? Theme.Palette.rowHover : .clear))
             .motion(Motion.hover, value: hovering, fadeOnly: true)
-            .motion(Motion.spaceSwitch, value: current, fadeOnly: true)
             .contentShape(Rectangle())
             .onTapGesture { model.switchSpace(to: space.id) }
             .onHover { hovering = $0 }
@@ -138,46 +164,4 @@ struct MoveToSpaceMenu: View {
             }
         }
     }
-}
-
-/// Two-finger horizontal swipes over the sidebar move between spaces. Mostly vertical
-/// scrolls are left alone so the sidebar still scrolls normally.
-struct SpaceSwipeCatcher: NSViewRepresentable {
-    let onSwipe: (Int) -> Void
-
-    final class CatcherView: NSView {
-        var onSwipe: ((Int) -> Void)?
-        private var monitor: Any?
-        private var dx: CGFloat = 0
-        private var dy: CGFloat = 0
-        private var fired = false
-        override func hitTest(_ point: NSPoint) -> NSView? { nil }
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            if let monitor { NSEvent.removeMonitor(monitor); self.monitor = nil }
-            guard window != nil else { return }
-            monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] e in
-                guard let self, let w = self.window, e.window === w, e.hasPreciseScrollingDeltas else { return e }
-                let p = self.convert(e.locationInWindow, from: nil)
-                guard self.bounds.contains(p) else { return e }
-                if e.phase == .began { self.dx = 0; self.dy = 0; self.fired = false }
-                self.dx += e.scrollingDeltaX
-                self.dy += e.scrollingDeltaY
-                if !self.fired && abs(self.dx) > 90 && abs(self.dx) > 3 * abs(self.dy) {
-                    self.fired = true
-                    self.onSwipe?(self.dx > 0 ? -1 : 1)
-                }
-                if e.phase == .ended || e.phase == .cancelled { self.dx = 0; self.dy = 0 }
-                return e
-            }
-        }
-        deinit { if let monitor { NSEvent.removeMonitor(monitor) } }
-    }
-
-    func makeNSView(context: Context) -> CatcherView {
-        let v = CatcherView()
-        v.onSwipe = onSwipe
-        return v
-    }
-    func updateNSView(_ v: CatcherView, context: Context) { v.onSwipe = onSwipe }
 }

@@ -47,7 +47,9 @@ extension BrowserModel {
     // MARK: Peek
 
     func openPeek(_ url: URL, from parent: Tab?) {
-        if peek != nil { closePeek() }
+        // A Peek still on its way out finishes first, and an open one gives way at once.
+        PeekMotion.shared.flush()
+        if peek != nil { closePeekNow() }
         let t = Tab(url: url)
         t.model = self
         t.spaceID = parent.map { $0.isEssential ? currentSpaceID : ($0.spaceID ?? currentSpaceID) } ?? currentSpaceID
@@ -57,16 +59,33 @@ extension BrowserModel {
     }
 
     /// Esc, a click outside, Cmd-W or the close button. It goes to Recently Closed, so
-    /// Cmd-Shift-T brings it back as a tab.
+    /// Cmd-Shift-T brings it back as a tab. In the app it shrinks back toward its link first.
     func closePeek() {
+        guard let p = peek else { return }
+        if PeekMotion.shared.play(.closing, tab: p.tab.id, duration: PeekMotion.closeDuration, finish: { [weak self] in
+            if self?.peek?.tab.id == p.tab.id { self?.closePeekNow() }
+        }) { return }
+        closePeekNow()
+    }
+
+    private func closePeekNow() {
         guard let p = peek else { return }
         peek = nil
         recordClosed([p.tab], reason: .closed)
         p.tab.unload()
     }
 
-    /// Cmd-O: the page becomes a normal tab. The same web view moves, so nothing reloads.
+    /// Cmd-O: the page becomes a normal tab. The same web view moves, so nothing reloads. In the
+    /// app the Peek fills the pane first, so the page doesn't jump.
     func expandPeek() {
+        guard let p = peek else { return }
+        if PeekMotion.shared.play(.expanding, tab: p.tab.id, duration: PeekMotion.expandDuration, finish: { [weak self] in
+            if self?.peek?.tab.id == p.tab.id { self?.expandPeekNow() }
+        }) { return }
+        expandPeekNow()
+    }
+
+    private func expandPeekNow() {
         guard let p = peek else { return }
         peek = nil
         let t = p.tab
@@ -77,8 +96,16 @@ extension BrowserModel {
         focusWeb(t)
     }
 
-    /// The page joins what's on screen as a split.
+    /// The page joins what's on screen as a split. In the app the Peek moves to the right half first.
     func splitPeek() {
+        guard let p = peek else { return }
+        if PeekMotion.shared.play(.splitting, tab: p.tab.id, duration: PeekMotion.expandDuration, finish: { [weak self] in
+            if self?.peek?.tab.id == p.tab.id { self?.splitPeekNow() }
+        }) { return }
+        splitPeekNow()
+    }
+
+    private func splitPeekNow() {
         guard let p = peek else { return }
         peek = nil
         let t = p.tab

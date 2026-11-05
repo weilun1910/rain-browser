@@ -239,6 +239,7 @@ enum SelfTest {
         SpaceTests.run(dir: dir)
         CommandBarTests.run(dir: dir)
         ThemeTests.run()
+        MotionTests.run(dir: dir)
         EngineTests.run(dir: dir)
         ArcZenTests.run(dir: dir)
         ShelfTests.run(dir: dir)
