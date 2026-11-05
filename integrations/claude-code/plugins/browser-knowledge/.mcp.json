@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "browser": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/scripts/browser-mcp",
+      "args": [],
+      "env": {
+        "BROWSER_POC_APP": "${user_config.app_path}",
+        "BROWSER_POC_DATA_DIR": "${user_config.data_dir}"
+      }
+    }
+  }
+}

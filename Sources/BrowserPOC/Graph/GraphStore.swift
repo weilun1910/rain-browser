@@ -38,9 +38,9 @@ final class GraphStore: @unchecked Sendable {
 
     /// Points the shared store at another index. Used by the tests.
     @discardableResult
-    static func reset(indexURL: URL) -> GraphStore {
+    static func reset(indexURL: URL, index: IndexStore? = nil) -> GraphStore {
         sharedLock.lock(); defer { sharedLock.unlock() }
-        let s = (try? GraphStore(indexURL: indexURL)) ?? GraphStore(failedAt: indexURL)
+        let s = (try? GraphStore(indexURL: indexURL, index: index)) ?? GraphStore(failedAt: indexURL)
         _shared = s
         return s
     }
@@ -63,7 +63,7 @@ final class GraphStore: @unchecked Sendable {
     /// Session pairs need this many occurrences before they show. Splits show at once.
     static let sessionMinCount = 2
 
-    init(indexURL: URL, readOnly: Bool = false) throws {
+    init(indexURL: URL, readOnly: Bool = false, index: IndexStore? = nil) throws {
         url = indexURL
         self.readOnly = readOnly
         Paths.ensure(indexURL.deletingLastPathComponent())
@@ -99,7 +99,10 @@ final class GraphStore: @unchecked Sendable {
                 """)
             }
         }
-        semantic = Self.makeSemanticSource(reader: reader)
+        // The Engine's neighbours need its index store for the same file. The app's shared one
+        // is it; tests pass their own.
+        let engine = index ?? IndexStore.shared.flatMap { $0.fileURL.path == indexURL.resolvingSymlinksInPath().path ? $0 : nil }
+        semantic = Self.makeSemanticSource(reader: reader, index: engine)
         topics = Self.makeTopicSource(reader: reader)
     }
 
@@ -110,9 +113,11 @@ final class GraphStore: @unchecked Sendable {
         reader = nil
     }
 
-    /// The one line to change when the Engine agent's `semanticNeighbours(itemID, k)` lands.
-    static func makeSemanticSource(reader: IndexReader) -> SemanticNeighbourSource {
-        IndexVectorNeighbours(reader: reader)
+    /// The Engine's `semanticNeighbours` when there's an index store for this file, else this
+    /// folder's own reader of the sentence vectors.
+    static func makeSemanticSource(reader: IndexReader, index: IndexStore?) -> SemanticNeighbourSource {
+        if let index { return EngineNeighbours(index: index) }
+        return IndexVectorNeighbours(reader: reader)
     }
 
     static func makeTopicSource(reader: IndexReader) -> TopicSource {
@@ -120,6 +125,14 @@ final class GraphStore: @unchecked Sendable {
     }
 
     var isOpen: Bool { db != nil }
+
+    /// Stored edges. Zero until the app has synced this index at least once.
+    var edgeCount: Int {
+        queue.sync {
+            guard let db else { return 0 }
+            return Int((try? db.scalarInt("SELECT count(*) FROM g_edges")) ?? 0)
+        }
+    }
 
     // MARK: - Meta
 
@@ -226,6 +239,7 @@ final class GraphStore: @unchecked Sendable {
             setMeta("links_version", "2")
         }
         let watermark = Double(meta("synced_at") ?? "") ?? 0
+        neighbourMemo = [:]
         let sig = semantic?.signature ?? ""
         let fullSimilarity = meta("vector_sig") != sig
         if !semanticLoaded || fullSimilarity {
@@ -315,16 +329,23 @@ final class GraphStore: @unchecked Sendable {
         }
     }
 
-    /// Above this, a pair counts as similar on its own.
-    static let strongSimilarity = 0.88
+    /// Neighbour lists already asked for in this sync, so each item is asked once.
+    private var neighbourMemo: [Int64: [(docID: Int64, score: Double)]] = [:]
+
+    private func rawNeighbours(_ id: Int64) -> [(docID: Int64, score: Double)] {
+        if let m = neighbourMemo[id] { return m }
+        let n = semantic?.neighbours(of: id, k: Self.similarK) ?? []
+        neighbourMemo[id] = n
+        return n
+    }
 
     /// An item's top neighbours by meaning, kept only when the pair is mutual (each in the other's
-    /// top k) or very close. Short notes in one style tend to look alike to a sentence model, and
-    /// a one-sided match is usually that.
+    /// top k) or very close for its model. Short notes in one style tend to look alike to a
+    /// sentence model, and a one-sided match is usually that.
     private func similarNeighbours(of id: Int64) -> [(docID: Int64, score: Double)] {
         guard let semantic else { return [] }
-        return semantic.neighbours(of: id, k: Self.similarK).filter { n in
-            n.score >= Self.strongSimilarity || semantic.neighbours(of: n.docID, k: Self.similarK).contains { $0.docID == id }
+        return rawNeighbours(id).filter { n in
+            semantic.isStrong(n.score, for: id) || rawNeighbours(n.docID).contains { $0.docID == id }
         }
     }
 

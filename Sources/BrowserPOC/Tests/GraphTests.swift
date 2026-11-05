@@ -75,6 +75,7 @@ enum GraphTests {
             case .web: store.recordCapture(d, analysis: a)
             case .chrome: d.body = ""; _ = store.importChrome([(d, a)])
             case .note, .markdown: d.project = "Notes"; d.root = notesDir; store.upsertFile(d, analysis: a)
+            default: store.upsertFile(d, analysis: a)
             }
         }
     }
@@ -85,7 +86,7 @@ enum GraphTests {
         Paths.ensure(gdir)
         let indexURL = gdir.appendingPathComponent("index.sqlite")
         guard let index = try? IndexStore(url: indexURL) else { check(false, "graph fixture index opens"); return }
-        let store = GraphStore.reset(indexURL: indexURL)
+        let store = GraphStore.reset(indexURL: indexURL, index: index)
         let now = Date().timeIntervalSince1970
         let first: [Fix] = [plan, engine, bread, webkitBlog, appleDoc, hn, starter, starter2] + gh
         seed(index, first, at: now - 86400 * 3)
@@ -184,6 +185,14 @@ enum GraphTests {
         check(leftover == 0, "links from a deleted note are pruned from the table", "\(leftover)")
 
         recorderTests(dir: gdir, store: store)
+        // The MCP server's connections tool reads the graph's own edges, read-only.
+        if let src = GraphStoreSource.open(indexURL: indexURL), let pid = store.itemID(forKey: key(plan)) {
+            let e = src.edges(itemID: pid, types: nil, limit: 50)
+            check(src.name == "graph" && e.contains { $0.type == "link" && !$0.why.isEmpty }, "the MCP connections tool serves the graph's edges",
+                  e.prefix(3).map(\.why).joined(separator: " | "))
+        } else {
+            check(false, "the MCP connections tool serves the graph's edges")
+        }
         GraphLayoutTests.builderTests(store)
         GraphMotionTests.run(store: store)
         GraphLayoutTests.simulationTests()

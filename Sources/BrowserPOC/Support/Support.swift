@@ -364,7 +364,7 @@ enum WritingKey {
 
     static func section(source: SourceType, url: String, typed: Int, override: CardSection?, writingSites: [String]) -> CardSection {
         if let override { return override }
-        if source == .note || source == .markdown { return .docs }
+        if source.isWriting { return .docs }
         guard let u = URL(string: url) else { return .sites }
         if isWritingSite(u, list: writingSites) { return .docs }
         if typed >= typedThreshold { return .docs }

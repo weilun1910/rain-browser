@@ -17,27 +17,105 @@ struct VisualEffect: NSViewRepresentable {
 struct MainView: View {
     @EnvironmentObject var model: BrowserModel
     @ObservedObject var settings = Settings.shared
+    @ObservedObject var prefs = BrowserPrefs.shared
+    /// Compact mode: the sidebar is showing because the pointer reached the edge.
+    @State private var peeking = false
+    @State private var hideWork: DispatchWorkItem?
+
+    static let sidebarWidth: CGFloat = 252
+    static let panelWidth: CGFloat = 300
 
     @MainActor static func host(_ model: BrowserModel) -> NSView {
         NSHostingView(rootView: MainView().environmentObject(model))
     }
 
+    var hidden: Bool { prefs.value.sidebarHidden }
+    var right: Bool { prefs.value.sidebarOnRight }
+
     var body: some View {
         HStack(spacing: 0) {
-            LeftSidebar()
-                .frame(width: 252)
+            if right { panel(leading: true) } else { sidebarSlot }
             ContentArea()
                 .padding(.vertical, 8)
-                .padding(.trailing, settings.published.rightPanelOpen ? 0 : 8)
-            if settings.published.rightPanelOpen {
-                RightPanel()
-                    .frame(width: 300)
-            }
+                .padding(.top, right && !hidden ? 22 : 0)
+                .padding(.leading, (hidden && !right) || (right && !settings.published.rightPanelOpen) ? 8 : 0)
+                .padding(.trailing, (hidden && right) || (!right && !settings.published.rightPanelOpen) ? 8 : 0)
+            if right { sidebarSlot } else { panel(leading: false) }
         }
         .background(VisualEffect().ignoresSafeArea())
-        .overlay { CommandBarOverlay(bar: model.bar) }
+        .overlay(alignment: right ? .trailing : .leading) { compactSidebar }
+        .overlay {
+            CommandBarOverlay(bar: model.bar,
+                              leadingClear: hidden || right ? 0 : Self.sidebarWidth,
+                              trailingClear: hidden || !right ? 0 : Self.sidebarWidth)
+        }
+        .overlay { if let s = model.switcher { SwitcherOverlay(state: s) } }
+        .background(TrafficLights(hidden: hidden && !peeking))
         .ignoresSafeArea()
         .frame(minWidth: 900, minHeight: 560)
+        .animation(.spring(response: 0.3, dampingFraction: 0.9), value: hidden)
+        .animation(.spring(response: 0.3, dampingFraction: 0.9), value: right)
+    }
+
+    @ViewBuilder var sidebarSlot: some View {
+        if !hidden {
+            LeftSidebar().frame(width: Self.sidebarWidth)
+                .transition(.move(edge: right ? .trailing : .leading).combined(with: .opacity))
+        }
+    }
+
+    @ViewBuilder func panel(leading: Bool) -> some View {
+        if settings.published.rightPanelOpen {
+            // On the left it starts below the window buttons.
+            RightPanel().frame(width: Self.panelWidth).padding(.top, leading ? 24 : 0)
+        }
+    }
+
+    /// Compact mode: a thin edge that brings the sidebar back as an overlay. It hides one second
+    /// after the pointer leaves, like Zen.
+    @ViewBuilder var compactSidebar: some View {
+        if hidden {
+            ZStack(alignment: right ? .trailing : .leading) {
+                Color.clear.frame(width: 6).contentShape(Rectangle())
+                    .onHover { if $0 { show() } }
+                if peeking {
+                    LeftSidebar()
+                        .frame(width: Self.sidebarWidth)
+                        .background(VisualEffect(material: .sidebar).clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous)))
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .shadow(color: .black.opacity(0.2), radius: 18, x: right ? -4 : 4)
+                        .padding(6)
+                        .onHover { inside in if inside { show() } else { scheduleHide() } }
+                        .transition(.move(edge: right ? .trailing : .leading).combined(with: .opacity))
+                }
+            }
+            .frame(maxHeight: .infinity)
+        }
+    }
+
+    func show() {
+        hideWork?.cancel()
+        if !peeking { withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) { peeking = true } }
+    }
+
+    func scheduleHide() {
+        hideWork?.cancel()
+        let w = DispatchWorkItem { withAnimation(.easeOut(duration: 0.2)) { peeking = false } }
+        hideWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: w)
+    }
+}
+
+/// Hides the window buttons in compact mode, so they don't sit on top of the page.
+struct TrafficLights: NSViewRepresentable {
+    let hidden: Bool
+    func makeNSView(context: Context) -> NSView { NSView() }
+    func updateNSView(_ v: NSView, context: Context) {
+        DispatchQueue.main.async {
+            for b in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+                v.window?.standardWindowButton(b)?.isHidden = hidden
+            }
+        }
     }
 }
 
@@ -52,8 +130,13 @@ struct WindowDragArea: View {
 
 struct CommandBarOverlay: View {
     @ObservedObject var bar: CommandBar
+    var leadingClear: CGFloat = 0
+    var trailingClear: CGFloat = 0
     var body: some View {
-        if bar.isOpen { CommandBarView(bar: bar) }
+        ZStack {
+            if bar.isOpen { CommandBarView(bar: bar, leadingClear: leadingClear, trailingClear: trailingClear) }
+        }
+        .animation(.easeOut(duration: 0.14), value: bar.isOpen)
     }
 }
 
@@ -61,29 +144,68 @@ struct ContentArea: View {
     @EnvironmentObject var model: BrowserModel
     @ObservedObject var settings = Settings.shared
 
-    @State private var dropSide: PaneSide?
+    @State private var dropTarget: DropTarget?
+    @State private var frames: [UUID: CGRect] = [:]
 
     var body: some View {
         GeometryReader { g in
             ZStack {
-                if let sp = model.currentSplit, let l = model.tab(sp.left), let r = model.tab(sp.right) {
-                    SplitPanes(split: sp, left: l, right: r, width: g.size.width)
-                } else {
-                    PaneView(tab: model.currentTab).paneCard()
-                }
-                if let side = dropSide {
-                    HStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 9).fill(Color.accentColor.opacity(side == .left ? 0.12 : 0))
-                        RoundedRectangle(cornerRadius: 9).fill(Color.accentColor.opacity(side == .right ? 0.12 : 0))
+                Group {
+                    if let sp = model.currentSplit, sp.items.allSatisfy({ model.tab($0) != nil }) {
+                        SplitPanes(split: sp)
+                    } else {
+                        PaneView(tab: model.currentTab).paneCard()
                     }
-                    .allowsHitTesting(false)
+                }
+                .scaleEffect(model.peek == nil ? 1 : 0.985)
+                .animation(.spring(response: 0.32, dampingFraction: 0.86), value: model.peek == nil)
+                if let t = dropTarget {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.12))
+                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color.accentColor.opacity(0.45), lineWidth: 1))
+                        .frame(width: t.preview.width, height: t.preview.height)
+                        .position(x: t.preview.midX, y: t.preview.midY)
+                        .allowsHitTesting(false)
+                        .animation(.easeOut(duration: 0.12), value: t)
+                }
+                if model.find.visible, model.currentWebTab != nil {
+                    FindBar()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                        .padding(.top, findTop)
+                        .padding(.trailing, findTrailing(width: g.size.width))
+                }
+                if let p = model.peek {
+                    PeekOverlay(peek: p).id(p.tab.id)
+                }
+                if let t = model.toastState {
+                    ToastView(toast: t)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                        .padding(.bottom, 18)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .id(t.id)
                 }
                 if !settings.published.firstRunDone {
                     FirstRunPanel().clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                 }
             }
-            .onDrop(of: [ItemDrag.type], delegate: PaneDropDelegate(width: g.size.width, side: $dropSide, model: model))
+            .animation(.easeOut(duration: 0.18), value: model.toastState)
+            .coordinateSpace(name: "content")
+            .onPreferenceChange(PaneFramesKey.self) { frames = $0 }
+            .onDrop(of: [ItemDrag.type], delegate: ContentDropDelegate(frames: model.currentSplit == nil ? [:] : frames,
+                                                                      bounds: CGRect(origin: .zero, size: g.size),
+                                                                      target: $dropTarget, model: model))
         }
+    }
+
+    /// The find bar sits at the top right of the focused pane.
+    var findTop: CGFloat {
+        if let id = model.currentTab?.id, let f = frames[id], model.currentSplit != nil { return f.minY + 10 }
+        return 10
+    }
+
+    func findTrailing(width: CGFloat) -> CGFloat {
+        if let id = model.currentTab?.id, let f = frames[id], model.currentSplit != nil { return width - f.maxX + 10 }
+        return 10
     }
 }
 
@@ -144,8 +266,9 @@ final class WebHostView: NSView {
     private weak var current: WKWebView?
 
     func show(_ wv: WKWebView) {
-        guard current !== wv else { return }
-        current?.removeFromSuperview()
+        // A split relayout can move this web view into another host, so check where it is too.
+        guard current !== wv || wv.superview !== self else { return }
+        if let c = current, c !== wv, c.superview === self { c.removeFromSuperview() }
         wv.frame = bounds
         wv.autoresizingMask = [.width, .height]
         addSubview(wv)

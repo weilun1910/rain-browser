@@ -45,7 +45,7 @@ struct LocalGraphSlot: View {
 
     /// The focused item, or with the graph focused in a split, the item next to it.
     private var followed: Tab? {
-        if model.currentTab?.kind == .graph { return model.visibleTabs.first { $0.kind != .graph } }
+        if model.currentTab?.isGraph == true { return model.visibleTabs.first { !$0.isGraph } }
         return model.currentTab
     }
 

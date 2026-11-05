@@ -1,9 +1,18 @@
 import Foundation
+import SQLite3
+
+extension IndexStore {
+    /// The index file this store has open, from its SQLite connection.
+    var fileURL: URL {
+        let path = db.handle.flatMap { sqlite3_db_filename($0, "main") }.map { String(cString: $0) } ?? ""
+        return URL(fileURLWithPath: path).resolvingSymlinksInPath()
+    }
+}
 
 /// Read-only queries the graph needs from the index tables (`docs`, `passages`, `entities`,
-/// `typing`, `overrides`). They run on the graph's own SQLite connection, because `IndexStore`
-/// keeps its connection private and this agent doesn't edit `IndexStore.swift`.
-/// Not thread-safe; `GraphStore` calls it from its own queue.
+/// `topics`, `typing`, `overrides`). They run on the graph's own SQLite connection, so the graph
+/// doesn't edit `IndexStore.swift`. Similarity in the app goes through the Engine's own calls
+/// (`EngineNeighbours`). Not thread-safe; `GraphStore` calls it from its own queue.
 final class IndexReader {
     let db: SQLiteDB
 
@@ -74,8 +83,23 @@ final class IndexReader {
         Set((try? db.query("SELECT key FROM docs") { $0.text(0) }) ?? [])
     }
 
+    func columns(_ table: String) -> Set<String> {
+        Set((try? db.query("PRAGMA table_info(\(table))") { $0.text(1) }) ?? [])
+    }
+
+    func hasTable(_ name: String) -> Bool {
+        ((try? db.scalarInt("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?", [name])) ?? 0) > 0
+    }
+
+    /// The index can hold vectors from several models (round 3 added EmbeddingGemma and Apple's
+    /// contextual embedding next to the old sentence vectors). This reader only uses the sentence
+    /// ones, so vectors of different models never get averaged together.
+    private var sentenceOnly: String {
+        columns("passages").contains("vec_model") ? " AND (p.vec_model IS NULL OR p.vec_model = 'nlsent')" : ""
+    }
+
     func vectorDimension() -> Int {
-        let rows = (try? db.query("SELECT vec FROM passages WHERE vec IS NOT NULL LIMIT 1") { $0.blob(0) }) ?? []
+        let rows = (try? db.query("SELECT p.vec FROM passages p WHERE p.vec IS NOT NULL\(sentenceOnly) LIMIT 1") { $0.blob(0) }) ?? []
         guard let first = rows.first, let blob = first else { return 0 }
         return blob.count / MemoryLayout<Float>.size
     }
@@ -101,13 +125,13 @@ final class IndexReader {
                 let ph = Array(repeating: "?", count: part.count).joined(separator: ",")
                 let rows = (try? db.query("""
                     SELECT p.doc_id, p.vec FROM passages p JOIN docs d ON d.id = p.doc_id
-                    WHERE p.vec IS NOT NULL AND d.has_text = 1 AND p.doc_id IN (\(ph))
+                    WHERE p.vec IS NOT NULL AND d.has_text = 1 AND p.doc_id IN (\(ph))\(sentenceOnly)
                     """, part) { ($0.int(0), $0.blob(1)) }) ?? []
                 for (d, b) in rows { add(d, b) }
             }
         } else {
             let rows = (try? db.query("""
-                SELECT p.doc_id, p.vec FROM passages p JOIN docs d ON d.id = p.doc_id WHERE p.vec IS NOT NULL AND d.has_text = 1
+                SELECT p.doc_id, p.vec FROM passages p JOIN docs d ON d.id = p.doc_id WHERE p.vec IS NOT NULL AND d.has_text = 1\(sentenceOnly)
                 """) { ($0.int(0), $0.blob(1)) }) ?? []
             for (d, b) in rows { add(d, b) }
         }
@@ -138,6 +162,21 @@ final class IndexReader {
                 byName[name] = e
             } else {
                 byName[name] = (display, kind, [doc])
+            }
+        }
+        // Topics the Engine's content-tagging model gave items, when it has run.
+        if hasTable("topics") {
+            let tagged = (try? db.query("""
+                SELECT t.topic, t.doc_id FROM topics t JOIN docs d ON d.id = t.doc_id WHERE t.source = 'model' AND d.has_text = 1
+                """) { ($0.text(0), $0.int(1)) }) ?? []
+            var byTopic: [String: (String, Set<Int64>)] = [:]
+            for (topic, doc) in tagged where !topic.isEmpty {
+                let key = TextAnalysis.fold(Substring(topic))
+                byTopic[key, default: (topic, [])].1.insert(doc)
+            }
+            for (key, e) in byTopic where e.1.count >= minDocs && e.1.count <= maxDocs {
+                let name = "topic:" + key
+                if byName[name] == nil { byName[name] = (e.0, "topic", Array(e.1)) }
             }
         }
         return byName.compactMap { name, e in

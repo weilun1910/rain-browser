@@ -32,6 +32,38 @@ if args.contains("--chrome-dry-run") {
     exit(ChromeHistory.dryRun())
 }
 
+// --mcp serves the knowledge index to AI clients over stdio. It reads the profile in --data-dir,
+// or the normal one, and never starts the app or creates the folder.
+if args.contains("--mcp") {
+    if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
+        Paths.overrideRoot = URL(fileURLWithPath: (args[i + 1] as NSString).expandingTildeInPath, isDirectory: true)
+    }
+    exit(MCPServer.runStdio(root: Paths.root))
+}
+
+// --mcp-fixture <dir> writes a throwaway profile with made-up content, for MCP tests.
+if let i = args.firstIndex(of: "--mcp-fixture"), i + 1 < args.count {
+    exit(MCPFixture.run(URL(fileURLWithPath: (args[i + 1] as NSString).expandingTildeInPath, isDirectory: true)))
+}
+
+// Engine: resurfacing quality and read-only source checks.
+if args.contains("--eval") {
+    var workdir: URL?
+    if let i = args.firstIndex(of: "--workdir"), i + 1 < args.count {
+        workdir = URL(fileURLWithPath: args[i + 1], isDirectory: true)
+    }
+    exit(EngineEval.run(workdir: workdir))
+}
+if args.contains("--notion-dry-run") { exit(NotionSource.dryRun()) }
+if args.contains("--download-models") {
+    // Downloads the on-device models into a profile's Models folder, with --data-dir.
+    if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
+        Paths.overrideRoot = URL(fileURLWithPath: (args[i + 1] as NSString).expandingTildeInPath, isDirectory: true)
+    }
+    exit(ModelDownloader.commandLine())
+}
+if args.contains("--granola-dry-run") { exit(GranolaSource.dryRun()) }
+
 // --data-dir <dir> runs the app on its own support folder and its own WebKit store, so test
 // and demo runs never read or write the real profile.
 if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
@@ -41,9 +73,11 @@ if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
     MainActor.assumeIsolated { BrowserModel.dataStoreID = Paths.storeID(for: dir) }
 }
 
-let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--workdir", "--extract-check", "--data-dir", "--graph-bench"]
+let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--workdir", "--extract-check", "--data-dir",
+                          "--eval", "--models-dir", "--verbose", "--notion-dry-run", "--granola-dry-run", "--download-models", "--scale",
+                          "--mcp", "--mcp-fixture", "--graph-bench"]
 if let unknown = args.dropFirst().first(where: { $0.hasPrefix("--") && !known.contains($0) }) {
-    print("Unknown flag \(unknown). Flags: --selftest, --smoketest, --chrome-dry-run, each with optional --workdir <dir> for the tests, and --data-dir <dir> to run the app on a separate profile.")
+    print("Unknown flag \(unknown). Flags: --selftest, --smoketest, --chrome-dry-run, each with optional --workdir <dir> for the tests, --data-dir <dir> to run the app on a separate profile, --mcp to serve the index to AI clients, and --mcp-fixture <dir> to write a test profile.")
     exit(2)
 }
 

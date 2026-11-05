@@ -81,7 +81,7 @@ struct GraphPane: View {
 
     /// In a split, the item next to the graph gets the "you are here" ring.
     private func updateYouAreHere() {
-        controller.youAreHereKey = model.visibleTabs.first { $0.kind != .graph }.flatMap(GraphRecorder.key)
+        controller.youAreHereKey = model.visibleTabs.first { !$0.isGraph }.flatMap(GraphRecorder.key)
     }
 
     private var live: ArraySlice<LayoutNode> { controller.layout.nodes.prefix(controller.liveCount) }
@@ -182,23 +182,20 @@ struct GraphPane: View {
 }
 
 
+/// The global graph is an app page (`browser://graph`), so it pins, files, splits, comes back
+/// after a relaunch and shows in the command bar like History does.
 enum GraphTab {
     static let icon = "point.3.connected.trianglepath.dotted"
+    static let host = "graph"
+
+    @MainActor static var appPage: AppPage {
+        AppPage(host: host, title: "Graph", icon: icon) { _ in AnyView(GraphPane()) }
+    }
 }
 
-/// The Graph item's right-click menu in the sidebar.
-struct GraphTabMenu: View {
-    @ObservedObject var tab: Tab
-    @EnvironmentObject var model: BrowserModel
-
-    var body: some View {
-        Button("Open in split view") { model.openInSplit(tab, side: .right) }
-            .disabled(model.currentTab?.id == tab.id && model.currentSplit == nil)
-        Button(tab.isPinned ? "Unpin" : "Pin") { model.togglePin(tab) }
-        MoveToSpaceMenu { id in model.move(tab, toSpace: id) }
-        Divider()
-        Button("Close") { model.remove(tab) }
-    }
+extension Tab {
+    /// True for the global graph's item.
+    var isGraph: Bool { isApp && url?.host?.lowercased() == GraphTab.host && url?.scheme?.lowercased() == AppPages.scheme }
 }
 
 /// Title, kind and why it's connected, next to the hovered node.

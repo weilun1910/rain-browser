@@ -137,7 +137,7 @@ enum GraphSmoke {
         GraphRecorder.shared.attach(model)
         let graphTab = model.openGraph()
         let g = GraphController.global
-        check(model.currentTab?.id == graphTab.id && graphTab.kind == .graph, "the Graph item opens in the content area")
+        check(model.currentTab?.id == graphTab.id && graphTab.isGraph, "the Graph item opens in the content area")
         let loaded = SmokeTest.wait(15) { g.hasLoaded && g.layout.nodes.count > 20 }
         check(loaded && g.layout.edges.count >= 25, "the global graph loads the fixture items",
               "\(g.layout.nodes.count) nodes, \(g.layout.edges.count) lines")
