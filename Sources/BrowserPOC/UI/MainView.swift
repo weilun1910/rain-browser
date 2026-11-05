@@ -25,17 +25,22 @@ struct MainView: View {
     var body: some View {
         HStack(spacing: 0) {
             LeftSidebar()
-                .frame(width: 252)
+                .frame(width: Theme.Space.sidebarWidth)
             ContentArea()
-                .padding(.vertical, 8)
-                .padding(.trailing, settings.published.rightPanelOpen ? 0 : 8)
+                .padding(.vertical, Theme.Space.windowMargin)
+                .padding(.trailing, settings.published.rightPanelOpen ? 0 : Theme.Space.windowMargin)
             if settings.published.rightPanelOpen {
                 RightPanel()
-                    .frame(width: 300)
+                    .frame(width: Theme.Space.panelWidth)
+                    .transition(Motion.Transitions.panel(edge: .trailing))
             }
         }
-        .background(VisualEffect().ignoresSafeArea())
+        .motion(Motion.panel, value: settings.published.rightPanelOpen)
+        // The frame: neutral grey with the space's colour washed over the sidebar side.
+        .background(SpaceTintBackground(hex: model.currentSpace?.color))
         .overlay { CommandBarOverlay(bar: model.bar) }
+        .overlay { StartupOverlayHost() }
+        .spaceTint(model.currentSpace?.color)
         .ignoresSafeArea()
         .frame(minWidth: 900, minHeight: 560)
     }
@@ -53,7 +58,11 @@ struct WindowDragArea: View {
 struct CommandBarOverlay: View {
     @ObservedObject var bar: CommandBar
     var body: some View {
-        if bar.isOpen { CommandBarView(bar: bar) }
+        ZStack {
+            if bar.isOpen { CommandBarView(bar: bar).transition(.opacity) }
+        }
+        // The scrim fades in while the bar springs in on its own. Leaving is a quick fade.
+        .motion(bar.isOpen ? Motion.scrim : Motion.barOut, value: bar.isOpen, fadeOnly: true)
     }
 }
 
@@ -62,6 +71,7 @@ struct ContentArea: View {
     @ObservedObject var settings = Settings.shared
 
     @State private var dropSide: PaneSide?
+    @Environment(\.spaceAccent) private var spaceAccent
 
     var body: some View {
         GeometryReader { g in
@@ -72,14 +82,15 @@ struct ContentArea: View {
                     PaneView(tab: model.currentTab).paneCard()
                 }
                 if let side = dropSide {
-                    HStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 9).fill(Color.accentColor.opacity(side == .left ? 0.12 : 0))
-                        RoundedRectangle(cornerRadius: 9).fill(Color.accentColor.opacity(side == .right ? 0.12 : 0))
+                    HStack(spacing: Theme.Space.windowMargin) {
+                        Theme.Radius.shape(Theme.Radius.card).fill(spaceAccent.opacity(side == .left ? 0.14 : 0))
+                        Theme.Radius.shape(Theme.Radius.card).fill(spaceAccent.opacity(side == .right ? 0.14 : 0))
                     }
+                    .motion(Motion.hover, value: side, fadeOnly: true)
                     .allowsHitTesting(false)
                 }
                 if !settings.published.firstRunDone {
-                    FirstRunPanel().clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    FirstRunPanel().clipShape(Theme.Radius.shape(Theme.Radius.card))
                 }
             }
             .onDrop(of: [ItemDrag.type], delegate: PaneDropDelegate(width: g.size.width, side: $dropSide, model: model))
@@ -117,24 +128,26 @@ struct WebArea: View {
     var body: some View {
         ZStack(alignment: .top) {
             WebContainer(tab: tab)
-            if tab.isLoading && tab.progress < 1 {
-                GeometryReader { g in
-                    Rectangle()
-                        .fill(Color.accentColor.opacity(0.7))
-                        .frame(width: max(8, g.size.width * tab.progress), height: 2)
-                }
-                .frame(height: 2)
-                .allowsHitTesting(false)
-            }
+            TintedProgressLine(progress: tab.progress, visible: tab.isLoading && tab.progress < 1)
             if let err = tab.loadError {
-                VStack(spacing: 10) {
-                    Text("Couldn't open this page").font(.title3.weight(.semibold))
-                    Text(err).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 420)
+                VStack(spacing: Theme.Space.m) {
+                    Text("Couldn't open this page")
+                        .font(Theme.Font.display(22))
+                        .displayTracking()
+                    Text(err)
+                        .font(Theme.Font.row)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(3)
+                        .frame(maxWidth: 420)
                     Button("Try again") { model.reload() }
+                        .controlSize(.large)
+                        .padding(.top, Theme.Space.m)
                 }
-                .padding(28)
+                .padding(Theme.Space.x4)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(nsColor: .textBackgroundColor))
+                .background(Theme.Palette.card)
+                .transition(.opacity)
             }
         }
     }
@@ -163,22 +176,41 @@ struct WebContainer: NSViewRepresentable {
     }
 }
 
+/// The empty card: the mark, faint, and two ways to start.
 struct StartView: View {
     @EnvironmentObject var model: BrowserModel
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: Theme.Space.xl) {
+            BrandMark(weight: 0.07, color: .primary, opacity: 0.16)
+                .frame(width: 40, height: 40)
             Text("Search or enter an address")
-                .font(.title3)
-                .foregroundStyle(.tertiary)
-            HStack(spacing: 18) {
-                Button("New tab") { model.newTabCommand() }
-                Button("New note") { model.newNote() }
+                .font(Theme.Font.display(22))
+                .displayTracking()
+                .foregroundStyle(.secondary)
+            HStack(spacing: Theme.Space.x3) {
+                StartAction(title: "New tab", keys: "\u{2318}T") { model.newTabCommand() }
+                StartAction(title: "New note", keys: "\u{21E7}\u{2318}N") { model.newNote() }
             }
-            .buttonStyle(.link)
-            .font(.callout)
         }
+        .padding(.bottom, 40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct StartAction: View {
+    let title: String
+    let keys: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Theme.Space.s) {
+                Text(title)
+                Text(keys).foregroundStyle(.tertiary)
+            }
+            .font(Theme.Font.row)
+        }
+        .buttonStyle(QuietActionStyle())
     }
 }
 
@@ -188,47 +220,76 @@ struct FirstRunPanel: View {
     @ObservedObject var settings = Settings.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Start with what you've already seen")
-                .font(.title2.weight(.semibold))
-            Text("Cards on the right come from pages and notes you've looked at before. Pick the folders that hold your notes and bring in your Chrome history now, or later in Settings.")
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            VStack(alignment: .leading, spacing: 4) {
-                Button("Import Chrome history") { chrome.start() }
-                    .disabled(chrome.isRunning)
-                Text("Reads a copy of your Chrome history from the last 90 days. Text is fetched without cookies, only for pages you opened at least twice.")
-                    .font(.caption).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: Theme.Space.x3) {
+            VStack(alignment: .leading, spacing: Theme.Space.m) {
+                BrandMark(weight: 0.08, color: .primary, opacity: 0.85)
+                    .frame(width: 30, height: 30)
+                    .padding(.bottom, Theme.Space.s)
+                Text("Start with what you've already seen")
+                    .font(Theme.Font.display(26))
+                    .displayTracking()
+                Text("Cards on the right come from pages and notes you've looked at before. Pick the folders that hold your notes and bring in your Chrome history now, or later in Settings.")
+                    .font(Theme.Font.row)
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
-                if chrome.phase == .needsPermission {
-                    ChromePermissionHelp()
-                } else if chrome.phase != .idle {
-                    Text(ChromeStatus.text(chrome.phase)).font(.caption).foregroundStyle(.secondary)
-                }
             }
-            VStack(alignment: .leading, spacing: 4) {
-                Button("Choose notes folders...") { SourcesActions.addNotesFolders() }
-                Text("The .md files in these folders become your notes here. You can open and edit them like any note, and new notes go in the first folder.")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if !Settings.shared.value.usesFallbackNotes {
-                    Text(Settings.shared.value.notesFolders.map { URL(fileURLWithPath: $0).lastPathComponent }.joined(separator: ", "))
-                        .font(.caption).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: Theme.Space.m) {
+                FirstRunStep(title: "Import Chrome history", disabled: chrome.isRunning,
+                             detail: "Reads a copy of your Chrome history from the last 90 days. Text is fetched without cookies, only for pages you opened at least twice.",
+                             action: { chrome.start() }) {
+                    if chrome.phase == .needsPermission {
+                        ChromePermissionHelp()
+                    } else if chrome.phase != .idle {
+                        Text(ChromeStatus.text(chrome.phase)).font(Theme.Font.secondary).foregroundStyle(.secondary)
+                    }
+                }
+                FirstRunStep(title: "Choose notes folders...", disabled: false,
+                             detail: "The .md files in these folders become your notes here. You can open and edit them like any note, and new notes go in the first folder.",
+                             action: { SourcesActions.addNotesFolders() }) {
+                    if !Settings.shared.value.usesFallbackNotes {
+                        Text(Settings.shared.value.notesFolders.map { URL(fileURLWithPath: $0).lastPathComponent }.joined(separator: ", "))
+                            .font(Theme.Font.secondary).foregroundStyle(.secondary)
+                    }
                 }
             }
             HStack {
                 Spacer()
                 Button("Done") { Settings.shared.update { $0.firstRunDone = true } }
                     .keyboardShortcut(.defaultAction)
+                    .controlSize(.large)
             }
         }
-        .padding(24)
-        .frame(width: 460)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(nsColor: .windowBackgroundColor)))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.1)))
-        .shadow(color: .black.opacity(0.15), radius: 20, y: 6)
+        .padding(Theme.Space.x4)
+        .frame(width: 500)
+        .floatingSheet()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black.opacity(0.04))
+        .background(Theme.Palette.card)
+    }
+}
+
+/// One step on the first run panel: a button, what it does, and its status.
+private struct FirstRunStep<Status: View>: View {
+    let title: String
+    let disabled: Bool
+    let detail: String
+    let action: () -> Void
+    @ViewBuilder var status: () -> Status
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            Button(title, action: action)
+                .disabled(disabled)
+            Text(detail)
+                .font(Theme.Font.secondary)
+                .foregroundStyle(.secondary)
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+            status()
+        }
+        .padding(Theme.Space.xl)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Radius.shape(Theme.Radius.card).fill(Theme.Palette.field))
     }
 }
 
@@ -250,12 +311,13 @@ struct ChromePermissionHelp: View {
     @ObservedObject var chrome = ChromeImporter.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
             Text("Browser POC needs your OK to read Chrome's history")
-                .font(.system(size: 12, weight: .semibold))
+                .font(Theme.Font.rowEmphasis)
             Text("macOS asks before one app reads another app's data. If a prompt came up, click Allow, then try again. If you clicked Don't Allow or no prompt came up, open System Settings, go to Privacy & Security, then Files & Folders, find Browser POC and turn on Google Chrome.")
-                .font(.system(size: 12))
+                .font(Theme.Font.secondary)
                 .foregroundStyle(.secondary)
+                .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button("Open System Settings") {
@@ -266,8 +328,9 @@ struct ChromePermissionHelp: View {
                 Button("Try again") { chrome.start() }
             }
         }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
+        .padding(Theme.Space.l)
+        .background(Theme.Radius.shape(Theme.Radius.row).fill(Theme.Palette.sheet))
+        .overlay(Theme.Radius.shape(Theme.Radius.row).strokeBorder(Theme.Palette.hairline, lineWidth: 0.5))
     }
 }
 

@@ -51,8 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                          styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                          backing: .buffered, defer: false)
         w.title = "Browser POC"
-        w.titlebarAppearsTransparent = true
-        w.titleVisibility = .hidden
+        WindowChrome.configure(w)
         w.isMovableByWindowBackground = false
         w.collectionBehavior.insert(.fullScreenPrimary)
         w.minSize = NSSize(width: 900, height: 560)
@@ -61,6 +60,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         w.setFrameAutosaveName("BrowserPOCMain")
         if !w.setFrameUsingName("BrowserPOCMain") { w.center() }
         window = w
+        WindowChrome.setDockIconIfUnbundled()
+        Startup.shared.begin()
         w.makeKeyAndOrderFront(nil)
         NSApp.activate()
 
