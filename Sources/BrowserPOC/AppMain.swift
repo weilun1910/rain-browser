@@ -61,6 +61,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if !w.setFrameUsingName("BrowserPOCMain") { w.center() }
         window = w
         WindowChrome.setDockIconIfUnbundled()
+        WindowChrome.installQuietTrafficLights(w)
+        if CommandLine.arguments.contains("--motion-tour") { MotionTour.start(model) }
         Startup.shared.begin()
         w.makeKeyAndOrderFront(nil)
         NSApp.activate()
@@ -143,7 +145,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let main = NSMenu()
 
         let appMenu = NSMenu()
-        appMenu.addItem(item("About Browser POC", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), target: NSApp))
+        appMenu.addItem(item("About Rain", #selector(aboutAction), target: self))
         appMenu.addItem(.separator())
         appMenu.addItem(item("Settings...", #selector(settingsAction), ",", target: self))
         appMenu.addItem(.separator())
@@ -213,6 +215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc func settingsAction() { openSettings() }
+    @objc func aboutAction() { WindowChrome.showAbout() }
     @objc func newTabAction() { showMain(); model.newTabCommand() }
     @objc func newNoteAction() { showMain(); model.newNote() }
     @objc func splitNewTabAction() { showMain(); model.splitWithNewTab() }
