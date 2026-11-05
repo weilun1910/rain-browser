@@ -11,7 +11,7 @@ enum Paths {
     static var root: URL {
         if let overrideRoot { return overrideRoot }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return base.appendingPathComponent("BrowserPOC", isDirectory: true)
+        return base.appendingPathComponent(AppIdentity.supportFolder, isDirectory: true)
     }
     static var stateFile: URL { root.appendingPathComponent("state.json") }
     static var settingsFile: URL { root.appendingPathComponent("settings.json") }

@@ -72,11 +72,24 @@ BrowserPOC --demo-snapshots <out folder> --profile <demo profile>  # the opening
 python3 -I Demo/tools/check_demo.py [--network]                 # checks the demo content itself
 ```
 
+## Your data across updates
+
+Tabs, spaces, history, notes and cookies live outside the app, so a new build never replaces them. Three things keep them safe as the app changes:
+
+- The first time a new build opens a profile, it backs the profile up to `Backups/` inside it before reading anything. That covers spaces and tabs, settings, history, the index, Rain's own Notes folder, and WebKit's cookies and site data for the profile and its named profiles. The models and caches are left out. The last five backups are kept, and each has an "About this backup.txt" that says where every part goes back to.
+- If the app can't read a file it saved (state.json, settings.json and the rest), it moves the file into `Recovered/` before starting that part over, and says so in a sheet. If only part of a file can't be read, say one tab, it loads the rest and keeps a copy of the whole file in `Recovered/`. A file it can't read or move is never written to.
+- The self test loads frozen samples of every saved format (spaces and tabs, settings, preferences, recently closed, history and the index) and fails if anything goes missing.
+
+So when a change touches how something is saved, the new code has to read the old format too, or move it over once. New fields in state.json are optional or have a default, and old samples in `Tests/DataSafetyTests.swift` stay as they are.
+
+The bundle ID (`local.browserpoc`) and the profile folder name (`BrowserPOC`) stay fixed. WebKit files cookies and logins under the bundle ID, so changing either one opens an empty profile and signs you out of everything. A rename needs a step that moves the data first. `scripts/build.sh` refuses another bundle ID, and the self test checks both.
+
 ## Where things live
 
 - App data: `~/Library/Application Support/BrowserPOC/` (state.json, settings.json, index.sqlite, and Notes/ when no notes folders are chosen). Round 3 adds Models/ (the downloaded models), sources.json (the source switches), related.json (Related as a shelf or a sidebar) and granola-auth.json (the Granola sign-in, readable only by my account). The AI client settings are in mcp.json, the served log in mcp-log.jsonl, and what's on screen in current-context.json.
 - Browsing data sits next to it: browser.json (Browsing settings), history.sqlite (visits), closed.json (recently closed and the archive), sessions/ (back and forward for each tab), favicons/ and downloads.json.
-- WebKit keeps cookies and caches under `~/Library/WebKit/local.browserpoc` and `~/Library/Caches/local.browserpoc`. Each named profile has its own WebKit store there too.
+- WebKit keeps site data under `~/Library/WebKit/local.browserpoc`, the default profile's cookies in `~/Library/HTTPStorages/local.browserpoc.binarycookies`, and caches under `~/Library/Caches/local.browserpoc`. Each named profile has its own WebKit store, cookies included, in `~/Library/WebKit/local.browserpoc/WebsiteDataStore/`.
+- Backups/ (one per new build, the last five) and Recovered/ (files the app couldn't read) sit in the app data folder, and last-build.txt says which build opened it last.
 - Clearing the index removes indexed entries only. Notes stay exactly as they are.
 
 ## Code map

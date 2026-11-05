@@ -22,6 +22,17 @@ APP="$STAGE/Rain.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/BrowserPOC" "$APP/Contents/MacOS/BrowserPOC"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
+# WebKit keeps your cookies and logins under the bundle ID, so changing it signs you out of every
+# site. A rename has to move that data first (see DEVELOPING.md, "Your data across updates").
+BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist")"
+if [ "$BUNDLE_ID" != "local.browserpoc" ]; then
+  echo "Info.plist's bundle ID is $BUNDLE_ID, not local.browserpoc. Changing it loses everyone's cookies and logins." >&2
+  exit 1
+fi
+# Every build gets its own ID, so the app knows when a new one opens and backs up the profile first.
+COMMIT="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+git -C "$ROOT" diff --quiet HEAD -- 2>/dev/null || COMMIT="$COMMIT-modified"
+/usr/libexec/PlistBuddy -c "Add :RainBuild string $COMMIT-$(date -u +%Y%m%dT%H%M%SZ)" "$APP/Contents/Info.plist"
 # The icon is drawn in code; scripts/make-icon.sh renders it into Resources/AppIcon.icns.
 if [ -f "$ROOT/Resources/AppIcon.icns" ]; then
   cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"

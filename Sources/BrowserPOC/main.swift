@@ -128,4 +128,7 @@ if let unknown = args.dropFirst().first(where: { $0.hasPrefix("--") && !known.co
     exit(2)
 }
 
+// The app itself. A build that hasn't opened this profile before backs it up first, before
+// anything in it is read or written.
+MainActor.assumeIsolated { DataSafety.prepareLaunch() }
 MainActor.assumeIsolated { AppMain.run() }

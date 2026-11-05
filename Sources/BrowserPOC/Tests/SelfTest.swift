@@ -247,6 +247,7 @@ enum SelfTest {
         GraphTests.run(dir: dir)
         DemoTests.run(dir: dir)
         SavedDataTests.run(dir: dir)
+        BackupTests.run(dir: dir)
 
         print(failures == 0 ? "\nAll checks passed." : "\n\(failures) check(s) failed.")
         return failures == 0 ? 0 : 1
