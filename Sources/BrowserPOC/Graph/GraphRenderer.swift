@@ -181,8 +181,10 @@ final class GraphRenderer {
 
     /// Draws into the view's next drawable. `positions` copies node positions into the buffer
     /// and returns how many it wrote.
-    func draw(in view: MTKView, _ frame: GraphFrame, positions: (UnsafeMutableRawPointer, Int) -> Int) {
+    func draw(in view: MTKView, _ frame: GraphFrame, onPresented: (@Sendable (CFTimeInterval) -> Void)? = nil,
+              positions: (UnsafeMutableRawPointer, Int) -> Int) {
         guard let pass = view.currentRenderPassDescriptor, let drawable = view.currentDrawable else { return }
+        if let onPresented { drawable.addPresentedHandler { d in onPresented(d.presentedTime) } }
         inFlight.wait()
         guard let cb = queue.makeCommandBuffer() else { inFlight.signal(); return }
         encode(cb, pass, frame, positions: positions)

@@ -204,6 +204,7 @@ final class GraphController: ObservableObject {
             edgesDirty = true
         }
         if !hasLoaded { reload(sync: true) }
+        if mode == .global { GraphMotionScript.start(self, view: v) }
         wake()
     }
 
@@ -225,6 +226,8 @@ final class GraphController: ObservableObject {
     private var highlightMoving = false
     /// Frames drawn on screen, for the debug log.
     private(set) var framesDrawn = 0
+    /// Frame pacing, measured while the motion script runs.
+    let pacer = GraphFramePacer()
     private var fitDistance: Float = 0
 
     /// Builds what to draw this frame and advances the small animations.
@@ -365,16 +368,22 @@ final class GraphController: ObservableObject {
     /// Draws into the view. Called from the view's draw.
     func drawFrame(in v: GraphMetalView) {
         guard let renderer else { return }
+        let t0 = CACurrentMediaTime()
         if edgesDirty { renderer.setEdges(edgeData); edgesDirty = false }
         let frame = makeFrame(size: v.bounds.size, pixelRatio: v.window?.backingScaleFactor ?? 2, appearance: v.effectiveAppearance)
         let n = frame.styles.count
-        renderer.draw(in: v, frame) { dst, want in
-            sim.withPositions { src, _ in
+        let pacer = self.pacer
+        let sim = self.sim
+        var onPresented: (@Sendable (CFTimeInterval) -> Void)?
+        if pacer.isMeasuring { onPresented = { (t: CFTimeInterval) in pacer.presented(t) } }
+        renderer.draw(in: v, frame, onPresented: onPresented) { dst, want in
+            sim.withPositions { (src, _) -> Int in
                 guard src.count >= want, want == n else { return 0 }
                 dst.copyMemory(from: UnsafeRawPointer(src.baseAddress!), byteCount: want * MemoryLayout<SIMD2<Float>>.stride)
                 return want
             }
         }
+        pacer.prepared(ms: (CACurrentMediaTime() - t0) * 1000)
         framesDrawn += 1
         if !needsRedraw {
             v.isPaused = true
@@ -621,6 +630,22 @@ final class GraphController: ObservableObject {
         }
         return m
     }
+}
+
+/// View-addressed calls, used by the motion script.
+extension GraphController {
+    func screen(_ w: SIMD2<Float>, in v: GraphMetalView) -> CGPoint { screen(w) }
+    func pointerMoved(_ p: CGPoint, in v: GraphMetalView) { pointerMoved(p) }
+    func pointerExited(in v: GraphMetalView) { pointerExited() }
+    func pan(_ dx: Float, _ dy: Float, in v: GraphMetalView) { pan(dx, dy) }
+    func zoom(by f: Float, at p: CGPoint, in v: GraphMetalView) { zoom(by: f, at: p) }
+    func pointerDown(_ p: CGPoint, in v: GraphMetalView) { pointerDown(p) }
+    func pointerDragged(_ p: CGPoint, in v: GraphMetalView) { pointerDragged(p) }
+    func pointerUp(_ p: CGPoint, modifiers: NSEvent.ModifierFlags, in v: GraphMetalView) { pointerUp(p, modifiers: modifiers) }
+    func focusClick(_ i: Int, in v: GraphMetalView) { focusID = layout.nodes[i].id }
+    func clearSelection(in v: GraphMetalView) { focusID = nil }
+    func fit(in v: GraphMetalView) { fit() }
+    func wakeAll() { wake() }
 }
 
 /// A menu item that runs a closure.
