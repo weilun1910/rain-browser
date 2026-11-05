@@ -53,6 +53,7 @@ extension BrowserModel {
         t.spaceID = parent.map { $0.isEssential ? currentSpaceID : ($0.spaceID ?? currentSpaceID) } ?? currentSpaceID
         _ = t.ensureWebView()
         peek = PeekState(tab: t, parentID: parent?.id)
+        focusWeb(t)
     }
 
     /// Esc, a click outside, Cmd-W or the close button. It goes to Recently Closed, so

@@ -395,7 +395,8 @@ final class BrowserModel: ObservableObject {
         let now = Date()
         for t in leaving { t.lastActiveAt = now }
         for t in visibleTabs { t.lastActiveAt = now }
-        if bar.isOpen, case .navigate = bar.mode { bar.close() }
+        // Picking something in the sidebar while the bar is open means you're done with the bar.
+        if bar.isOpen { bar.close() }
         mediaSelectionChanged(leaving: leaving)
         refreshFocus()
         syncAddress()

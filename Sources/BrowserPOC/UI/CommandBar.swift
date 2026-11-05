@@ -592,9 +592,18 @@ struct CommandField: NSViewRepresentable {
                 switch sel {
                 case #selector(NSResponder.moveUp(_:)): bar.move(-1); return true
                 case #selector(NSResponder.moveDown(_:)): bar.move(1); return true
-                case #selector(NSResponder.insertNewline(_:)):
+                // Option-Return and Ctrl-Return arrive as other newline commands, and Cmd-Return
+                // as a no-op, so all of them submit with the keys held.
+                case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)),
+                     #selector(NSResponder.insertLineBreak(_:)):
                     bar.submit(flags: NSApp.currentEvent?.modifierFlags.intersection(.deviceIndependentFlagsMask) ?? [])
                     return true
+                case Selector(("noop:")):
+                    if let e = NSApp.currentEvent, e.type == .keyDown, e.keyCode == 36 || e.keyCode == 76 {
+                        bar.submit(flags: e.modifierFlags.intersection(.deviceIndependentFlagsMask))
+                        return true
+                    }
+                    return false
                 case #selector(NSResponder.cancelOperation(_:)): bar.close(); return true
                 case #selector(NSResponder.insertTab(_:)):
                     if bar.query.isEmpty { bar.setActionsOnly(!bar.actionsOnly); return true }
