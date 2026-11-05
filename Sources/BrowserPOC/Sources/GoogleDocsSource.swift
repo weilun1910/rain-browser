@@ -68,9 +68,15 @@ enum GoogleDocsSource {
         let all = store.googleDocURLs(limit: 400)
         let now = Date().timeIntervalSince1970
         let due = all.filter { !$0.hasText || now - $0.indexedAt > refreshAfter }.prefix(perRun)
-        guard !due.isEmpty else { return "\(all.count) documents, all up to date" }
-        let cookies = await MainActor.run { dataStore() }.httpCookieStore.allCookies().filter { $0.domain.lowercased().hasSuffix("google.com") }
-        guard !cookies.isEmpty else { return "Sign in to Google in this browser first. \(all.count) documents found in your history." }
+        guard !due.isEmpty else { return all.count == 1 ? "1 document, up to date" : "\(all.count) documents, all up to date" }
+        // WebKit's cookie store lives on the main thread.
+        let all_: [HTTPCookie] = await withCheckedContinuation { c in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { dataStore() }.httpCookieStore.getAllCookies { c.resume(returning: $0) }
+            }
+        }
+        let cookies = all_.filter { $0.domain.lowercased().hasSuffix("google.com") }
+        guard !cookies.isEmpty else { return "Sign in to Google in this browser first. Found \(all.count == 1 ? "1 document" : "\(all.count) documents") in your history." }
         let cfg = URLSessionConfiguration.ephemeral
         cfg.httpCookieAcceptPolicy = .never
         cfg.httpShouldSetCookies = false

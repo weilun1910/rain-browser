@@ -178,6 +178,13 @@ extension IndexStore {
         }
     }
 
+    /// Removes everything a source brought in, when its switch is turned off. Pages read in
+    /// the browser stay.
+    func deleteSource(_ source: SourceType) {
+        let keys = queue.sync { (try? db.query("SELECT key FROM docs WHERE source = ?", [source.rawValue]) { $0.text(0) }) ?? [] }
+        deleteDocs(keys: keys)
+    }
+
     /// Keys and modification times for one source, so syncs only touch what changed.
     func sourceMtimes(_ source: SourceType) -> [String: Double] {
         fileMtimes(source: source)

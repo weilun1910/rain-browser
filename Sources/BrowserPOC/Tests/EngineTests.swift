@@ -239,6 +239,15 @@ enum EngineTests {
         check(GoogleDocsSource.classify(status: 200, finalURL: URL(string: "https://doc-0s.docs.googleusercontent.com/export/x"), mime: "text/plain", body: Data("Hello".utf8)) == .text("Hello"),
               "a plain-text export is read as the document's text")
         check(GoogleDocsSource.cleanTitle("Thesis outline - Google Docs") == "Thesis outline", "Google's title suffix is dropped")
+        // With no Google sign-in in the profile, a sync says so and sends nothing.
+        let store = IndexStore.shared!
+        let key = "https://docs.google.com/document/d/1ZyXwVuTsRqPoNmLkJiHgFe"
+        store.recordCapture(DocUpsert(key: key, source: .web, url: key + "/edit", title: "Plan - Google Docs", firstSeen: 1, lastSeen: 1),
+                            analysis: TextAnalysis.analyze(title: "Plan", description: "", text: ""))
+        nonisolated(unsafe) var status: String?
+        Task.detached { status = await GoogleDocsSource.sync(store: store) }
+        _ = SelfTest.spin(10) { status != nil }
+        check(status?.hasPrefix("Sign in to Google in this browser first") == true, "Google Docs sync without a Google sign-in asks for one and fetches nothing", status ?? "timed out")
         let cookie = HTTPCookie(properties: [.domain: ".google.com", .path: "/", .name: "SID", .value: "x"])!
         check(GoogleDocsSource.cookie(cookie, appliesTo: URL(string: "https://docs.google.com/document/d/1/export")!)
               && !GoogleDocsSource.cookie(cookie, appliesTo: URL(string: "https://doc-0s.docs.googleusercontent.com/x")!)

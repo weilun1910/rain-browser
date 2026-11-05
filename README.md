@@ -36,6 +36,10 @@ scripts/selftest.sh                                             # index, notes, 
 .build/debug/BrowserPOC --smoketest                             # drives the real browser headless, no window on screen
 build/BrowserPOC.app/Contents/MacOS/BrowserPOC --chrome-dry-run # what a Chrome import would do, fetches nothing
 .build/debug/BrowserPOC --extract-check <url>                   # what capture reads from one public page
+.build/debug/BrowserPOC --eval --models-dir <folder>            # resurfacing quality, old pipeline against new
+.build/debug/BrowserPOC --notion-dry-run                        # counts and field names from Notion's cache, no content
+.build/debug/BrowserPOC --granola-dry-run                       # which Granola files exist and Granola's public sign-in details
+.build/debug/BrowserPOC --download-models --data-dir <profile>  # fetch the on-device models into a profile
 ```
 
 Both tests use throwaway folders and exit non-zero if a check fails. The self test checks delete with a stand-in Trash folder inside its throwaway folder, so your real Trash is never touched. The dry run prints full URLs from your Chrome history, so keep its output to yourself.
@@ -58,7 +62,16 @@ These files may also be edited by other apps while this one is open, so the app 
 - Before every save it checks the file on disk. If something else changed it, it doesn't save, and a bar offers Load disk version or Keep mine. If you had no unsaved edits, it just reloads.
 - It watches the folders, so new, renamed and changed files show up and get indexed. Files still in iCloud are downloaded and retried.
 
-**Related panel.** The right panel shows things you've seen before that relate to what's in front of you, in two sections. Sites holds pages you read, here or in Chrome. Notes / Docs holds things you write: your notes, Notion pages, Google Docs, Sheets and Slides, sites on the "Sites you write on" list in Settings, and any page where you've typed about 200 characters. Right-click a card to move it to the other section, and that choice is remembered. Each section shows up to 3 cards and has to clear the same fairly high bar, so a section is often empty. The current item and anything opened in the last 10 minutes never show, and Related always looks across every space. Each card has the matching passage and a short reason, written by Apple's on-device model when it's available. Open, Add to research and Dismiss work as before. With a note in a split, Add to research puts the link in that note.
+**Related panel.** The right panel shows things you've seen before that relate to what's in front of you, in two sections. Sites holds pages you read, here or in Chrome. Notes / Docs holds things you write: your notes, Notion pages, Google Docs, Sheets and Slides, sites on the "Sites you write on" list in Settings, and any page where you've typed about 200 characters. Right-click a card to move it to the other section, and that choice is remembered. Each section shows up to 3 cards and has to clear the same fairly high bar, so a section is often empty. The current item and anything opened in the last 10 minutes never show, and Related always looks across every space. Each card has the matching passage and a short reason. The reason starts with when I saw it and what I was doing then, like "You read this on 12 Oct while writing Thesis outline", and then says what it covers. Open, Add to research and Dismiss work as before. With a note in a split, Add to research puts the link in that note.
+
+**How Related picks cards.** Every page and note is cut into passages, and each passage gets a vector from EmbeddingGemma 2, a small embedding model that runs on this Mac. For whatever's in front of me, four searches run at once: keyword search (SQLite's BM25) on the page's own words, keyword search on search queries that Apple's on-device model writes after reading the page, a meaning search over the vectors, and a match on shared names. Reciprocal rank fusion merges them. The top 20 in each section go to Qwen3 Reranker, a cross-encoder that reads each passage next to what I have open and scores how well it fits. Cards that clear the bar easily show within a second or two. Borderline ones only show if Apple's on-device model, asked whether the item would help with what I'm doing right now, doesn't say no. Cards already on screen stay put while they still roughly qualify, and nothing reruns for small edits while I type.
+
+**On-device models.** EmbeddingGemma 2 (310 MB) and Qwen3 Reranker 0.6B (396 MB) run through llama.cpp with Metal. Both are Apache 2.0. The first launch of a profile downloads them in the background, with a progress line in Related and details in Settings, under Models. Downloads resume after a quit and are checked against their published checksums. Until they're ready, Related uses Apple's built-in embedding and keyword scoring, and a background job re-embeds everything once the model arrives. Models are freed after five idle minutes.
+
+**More sources.** Each one has a switch in Settings, under Sources, that says what it reads. All of them are read-only.
+- Notion: reads a temp copy of the Notion app's local cache, which holds the pages I've opened in Notion on this Mac, and rebuilds each page's text from its blocks. macOS may ask once, the same way it does for Chrome.
+- Google Docs, Sheets and Slides: takes the documents in my history here and in the Chrome import, and refreshes each one's text through its own plain-text export with this browser's Google sign-in. Up to 40 a run, each at most once a day.
+- Granola: Granola encrypts its files on the Mac, so this uses Granola's official MCP connection. Connect opens Granola's sign-in in my default browser, with no key to paste, then brings in recent meetings' notes and summaries.
 
 **Capture.** Pages that stay open about five seconds go into a local index with full-text search, sentence vectors and the names in them. Google Docs draw their text on a canvas, so for those the app asks Google for the doc's own text export, from inside your tab, once per load. The typing count only stores how many characters you typed in text areas and editable regions, never what you typed, and ignores search, address and password fields.
 
@@ -69,11 +82,12 @@ These files may also be edited by other apps while this one is open, so the app 
 - No extensions, passkeys, password autofill, find in page, history view, favicons or profiles.
 - Tabs can't be reordered by hand, and folders on disk can't be renamed from the app.
 - Back and forward history isn't kept across restarts.
-- Semantic matching uses `NLEmbedding.sentenceEmbedding`.
+- The Granola sync is built against Granola's documented MCP tools but hasn't run against a real account yet.
+- The Notion sync reads only what the Notion app keeps on this Mac. Notion's hosted MCP would cover the rest.
 
 ## Where things live
 
-- App data: `~/Library/Application Support/BrowserPOC/` (state.json, settings.json, index.sqlite, and Notes/ when no notes folders are chosen).
+- App data: `~/Library/Application Support/BrowserPOC/` (state.json, settings.json, index.sqlite, and Notes/ when no notes folders are chosen). Round 3 adds Models/ (the downloaded models), sources.json (the source switches) and granola-auth.json (the Granola sign-in, readable only by my account).
 - WebKit keeps cookies and caches under `~/Library/WebKit/local.browserpoc` and `~/Library/Caches/local.browserpoc`.
 - Clearing the index removes indexed entries only. Notes stay exactly as they are.
 
@@ -81,8 +95,9 @@ These files may also be edited by other apps while this one is open, so the app 
 
 - `Sources/BrowserPOC/Browser`: tabs, notes as items, splits, spaces, WebKit delegates, writing signals.
 - `Sources/BrowserPOC/Notes`: notes folders, the note document with its disk checks, Markdown preview.
-- `Sources/BrowserPOC/Index`: SQLite wrapper, text analysis, the index, ranking and lookups.
+- `Sources/BrowserPOC/Index`: SQLite wrapper, text analysis, the index, hybrid retrieval (`Retrieval.swift`), and the read API for the graph and MCP (`IndexStore+API.swift`: `semanticNeighbours`, `entities`, `topics`, `search`).
+- `Sources/BrowserPOC/Intelligence`: llama.cpp wrapper, model downloads, embeddings, the working-context description and judgment with Foundation Models, background re-embedding and topic tagging, and an MCP client with OAuth.
 - `Sources/BrowserPOC/Resurfacing`: the Related panel's cards and reasons.
-- `Sources/BrowserPOC/Sources`: Chrome import, URL safety rules, HTML text, the notes indexer and folder watcher.
+- `Sources/BrowserPOC/Sources`: Chrome import, Notion, Google Docs and Granola sources, URL safety rules, HTML text, the notes indexer and folder watcher.
 - `Sources/BrowserPOC/UI`: SwiftUI views, including the command bar, split view and spaces.
 - `Sources/BrowserPOC/Tests`: `--selftest`, `--smoketest` and `--extract-check`.

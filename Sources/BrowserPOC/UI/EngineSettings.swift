@@ -105,16 +105,22 @@ struct NewSourcesSettings: View {
     @ObservedObject var sources = SourceSettings.shared
     @ObservedObject var sync = SourceSync.shared
 
-    func toggle(_ kp: WritableKeyPath<SourceConfig, Bool>, then: @escaping () -> Void) -> Binding<Bool> {
+    /// Turning a source on syncs it. Turning it off takes its items out of the index.
+    func toggle(_ kp: WritableKeyPath<SourceConfig, Bool>, source: SourceType, then: @escaping () -> Void) -> Binding<Bool> {
         Binding(get: { sources.published[keyPath: kp] }, set: { v in
             SourceSettings.shared.update { $0[keyPath: kp] = v }
-            if v { then() }
+            if v { then() } else {
+                Task.detached {
+                    IndexStore.shared.deleteSource(source)
+                    await MainActor.run { NotificationCenter.default.post(name: .indexChanged, object: nil) }
+                }
+            }
         })
     }
 
     var body: some View {
         Section {
-            Toggle("Read pages from the Notion app", isOn: toggle(\.notionEnabled) { sync.syncNotion() })
+            Toggle("Read pages from the Notion app", isOn: toggle(\.notionEnabled, source: .notion) { sync.syncNotion() })
             statusLine(sources.published.notionStatus, at: sources.published.notionSyncedAt, running: sync.running.contains("notion"))
             if (sources.published.notionStatus ?? "").contains("Privacy & Security") { PermissionButton() }
             if sources.published.notionEnabled {
@@ -123,11 +129,11 @@ struct NewSourcesSettings: View {
         } header: {
             Text("Notion")
         } footer: {
-            Text("Reads a copy of the Notion desktop app's local cache, which holds the pages you've opened in Notion on this Mac. The copy is deleted after reading. Nothing is sent anywhere, and Notion's files are never changed. macOS may ask once before this app can read Notion's data.")
+            Text("Reads a copy of the Notion desktop app's local cache, which holds the pages you've opened in Notion on this Mac. The copy is deleted after reading. Nothing is sent anywhere, and Notion's files are never changed. macOS may ask once before this app can read Notion's data. Turning this off takes the pages out of the index.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         Section {
-            Toggle("Refresh Google Docs I've opened", isOn: toggle(\.googleDocsEnabled) { sync.syncGoogleDocs() })
+            Toggle("Refresh Google Docs I've opened", isOn: toggle(\.googleDocsEnabled, source: .gdocs) { sync.syncGoogleDocs() })
             statusLine(sources.published.googleDocsStatus, at: sources.published.googleDocsSyncedAt, running: sync.running.contains("gdocs"))
             if sources.published.googleDocsEnabled {
                 Button("Sync now") { sync.syncGoogleDocs() }.disabled(sync.running.contains("gdocs"))
@@ -141,7 +147,7 @@ struct NewSourcesSettings: View {
         Section {
             HStack {
                 if GranolaSource.isConnected {
-                    Toggle("Bring in my Granola meeting notes", isOn: toggle(\.granolaEnabled) { sync.syncGranola() })
+                    Toggle("Bring in my Granola meeting notes", isOn: toggle(\.granolaEnabled, source: .granola) { sync.syncGranola() })
                     Button("Disconnect") {
                         GranolaSource.disconnect()
                         SourceSettings.shared.update { $0.granolaEnabled = false; $0.granolaStatus = "Disconnected." }

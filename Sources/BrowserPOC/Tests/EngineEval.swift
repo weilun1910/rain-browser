@@ -111,6 +111,7 @@ enum EngineEval {
 
         var params = RankParams.fromSettings(AppSettings())
         params.now = Date()
+        if let n = arg("--scale").flatMap(Int.init) { scaleCheck(passages: n, dir: dir, params: params); return 0 }
         var results: [(String, Tally)] = []
 
         // Round 2: sentence vectors, TF-IDF keywords, weighted score, fixed threshold.
@@ -210,6 +211,45 @@ enum EngineEval {
         }
         if verbose { print("  full  \(c.name) [\(work?.topic ?? "-")]: \(titles(shown.flatMap { $0 }))") }
         return shown
+    }
+
+    /// `--scale N`: times hybrid retrieval over N synthetic passages with 768-dimension vectors,
+    /// to see whether a flat scan is still fast enough.
+    static func scaleCheck(passages n: Int, dir: URL, params: RankParams) {
+        Intelligence.shared.forcedEmbedder = .sentence
+        let u = dir.appendingPathComponent("scale.sqlite")
+        try? FileManager.default.removeItem(at: u)
+        guard let s = try? IndexStore(url: u) else { return }
+        let words = ["browser", "webkit", "extension", "starter", "sourdough", "marathon", "thesis", "memory", "convenience", "interview",
+                     "swift", "actor", "notion", "granola", "meeting", "budget", "travel", "kyoto", "camera", "design", "graph", "model"]
+        var rng = SystemRandomNumberGenerator()
+        let perDoc = 6
+        let t0 = Date()
+        var docs: [(DocUpsert, Analysis)] = []
+        for i in 0..<(n / perDoc) {
+            let text = (0..<perDoc).map { _ in (0..<40).map { _ in words.randomElement(using: &rng)! }.joined(separator: " ") }
+            let d = DocUpsert(key: "https://scale.test/\(i)", source: .chrome, url: "https://scale.test/\(i)", title: "Page \(i)",
+                              firstSeen: 1, lastSeen: 1, visitCount: 1)
+            docs.append((d, Analysis(passages: text, vectors: Array(repeating: nil, count: perDoc), entities: [])))
+        }
+        _ = s.importChrome(docs)
+        let pending = s.passagesNeedingVectors(model: .gemma, limit: n + 10)
+        let vecs = pending.map { p -> (pid: Int64, did: Int64, vec: [Float]) in
+            (p.pid, p.did, VectorMath.normalized((0..<768).map { _ in Float.random(in: -1...1, using: &rng) })!)
+        }
+        s.setVectors(vecs, model: .gemma)
+        print("Seeded \(pending.count) passages in \(Int(Date().timeIntervalSince(t0))) s")
+        var q = Pipeline.makeQuery(ContextInput(key: "x", title: "WebKit browser extension thesis", text: "A browser on webkit with extension support and a thesis on memory.", kind: .page), work: nil, store: s)
+        q.queryVectors = [.gemma: (0..<6).map { _ in VectorMath.normalized((0..<768).map { _ in Float.random(in: -1...1, using: &rng) })! }]
+        var times: [Double] = []
+        for _ in 0..<5 {
+            let t = Date()
+            _ = s.hybridCandidates(q, params)
+            times.append(Date().timeIntervalSince(t) * 1000)
+        }
+        print(String(format: "Hybrid retrieval over %d passages, 6 query vectors: median %.0f ms (runs %@)", pending.count, times.sorted()[2],
+                     times.map { String(format: "%.0f", $0) }.joined(separator: ", ")))
+        Intelligence.shared.forcedEmbedder = nil
     }
 
     /// Runs async work from the synchronous eval and waits for it.
