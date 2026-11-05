@@ -86,12 +86,12 @@ enum TextAnalysis {
             // WKWebExtension and CRX keep their casing. Ordinary words use lowercase when it
             // appears at all, so a capitalized first word in a title doesn't stick.
             let mixed = forms.filter { f in f.key.dropFirst().contains { $0.isUppercase } }
-            if let best = mixed.max(by: { $0.value < $1.value }) {
+            if let best = mixed.max(by: { $0.value != $1.value ? $0.value < $1.value : $0.key > $1.key }) {
                 tc.display[k] = best.key
-            } else if let lower = forms.keys.first(where: { $0 == $0.lowercased() }) {
+            } else if let lower = forms.keys.sorted().first(where: { $0 == $0.lowercased() }) {
                 tc.display[k] = lower
             } else {
-                tc.display[k] = forms.max(by: { $0.value < $1.value })?.key ?? k
+                tc.display[k] = forms.max(by: { $0.value != $1.value ? $0.value < $1.value : $0.key > $1.key })?.key ?? k
             }
         }
         return tc
@@ -187,7 +187,7 @@ enum TextAnalysis {
         }
         return counts
             .map { Entity(name: $0.key, display: $0.value.display, kind: $0.value.kind, count: $0.value.n) }
-            .sorted { $0.count > $1.count }
+            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.name < $1.name }
             .prefix(limit)
             .map { $0 }
     }

@@ -134,6 +134,8 @@ struct Match {
     var itemPhrases: [String] = []
     /// Distinctive single words both share, without names, dates or title words.
     var ideaWords: [String] = []
+    /// The part of the context this item matched, for the judgment.
+    var matchedPart: String? = nil
 }
 
 struct RetrievalResult {

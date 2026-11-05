@@ -88,6 +88,9 @@ enum Reasons {
 
     static func withJudgment(_ m: Match, visits: [Visit], judgment: Judgment) -> String {
         guard judgment.helpful, !judgment.reason.isEmpty else { return template(m, visits: visits) }
+        // Two phrases both texts use say what ties them together more surely than the model's
+        // sentence, which sometimes picks another point in the passage.
+        if m.sharedPhrases.count >= 2 { return template(m, visits: visits) }
         let h = history(m.doc, visits: visits)
         let room = max(6, maxWords - h.split(separator: " ").count)
         // A sentence cut short reads badly, so a long one gives way to the plain line.
@@ -165,5 +168,11 @@ final class ActivityTracker: @unchecked Sendable {
 
     func reset() {
         lock.lock(); writing = nil; space = nil; spaceCount = 1; lock.unlock()
+    }
+
+    /// The space Felix is in, if the app told us.
+    var currentSpace: String? {
+        lock.lock(); defer { lock.unlock() }
+        return space
     }
 }

@@ -1,5 +1,12 @@
 import Foundation
 
+extension IndexStore {
+    /// An item's passages in order, for the diagnostic.
+    func passagesFor(docID: Int64) -> [String] {
+        queue.sync { (try? db.query("SELECT text FROM passages WHERE doc_id = ? ORDER BY idx", [docID]) { $0.text(0) }) ?? [] }
+    }
+}
+
 /// `--demo-diag <profile>`: for each labelled demo case, shows where every must item ends up in
 /// retrieval, fusion and the reranker, so misses can be traced to a stage. Works on a copy of
 /// the profile's index, like `--demo-eval`.
@@ -56,7 +63,40 @@ enum EngineDemoDiag {
                 let rr = Intelligence.shared.rerank(query: rq, documents: ["Title: \(cand.doc.title)\n\(cand.rawPassage)"])?.first ?? -1
                 print(String(format: "  must %@ (%@): fused rank %d, dense %.2f, meaning %.2f, rerank %.2f, by %@", m.ref, m.section ?? "-", i + 1, cand.dense, cand.meaning, rr, cand.foundBy.joined(separator: ",")))
                 print("       passage: \(cand.rawPassage.prefix(120).replacingOccurrences(of: "\n", with: " "))")
+                if args.contains("--passages") {
+                    // Every passage of the item against the part it matched, to see whether a
+                    // different passage would score higher.
+                    let ps = store.passagesFor(docID: cand.doc.id)
+                    let scores = Intelligence.shared.rerank(query: rq, documents: ps.map { "Title: \(cand.doc.title)\n\(Snippet.body($0, title: cand.doc.title))" }) ?? []
+                    for (i, p) in ps.enumerated() where i < scores.count {
+                        print(String(format: "       passage %d rerank %.2f: %@", i, scores[i], String(p.prefix(80)).replacingOccurrences(of: "\n", with: " ")))
+                    }
+                }
                 print("       query:   \(rq.prefix(140).replacingOccurrences(of: "\n", with: " "))")
+            }
+            if args.contains("--panel") {
+                // The panel itself: both passes, the judgment on borderline cards and the reasons,
+                // as Related runs them in the app.
+                let cards: [Card] = MainActor.assumeIsolated {
+                    let r = Resurfacer()
+                    r.setContext(input)
+                    let end = Date().addingTimeInterval(90)
+                    var quietSince: Date?
+                    while Date() < end {
+                        RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.2))
+                        if !r.isWorking && r.judgingIdle {
+                            if let q = quietSince, Date().timeIntervalSince(q) > 2 { break }
+                            if quietSince == nil { quietSince = Date() }
+                        } else {
+                            quietSince = nil
+                        }
+                    }
+                    return r.cards
+                }
+                for c in cards {
+                    print("  panel \(c.match.section.rawValue): \(c.match.doc.title.prefix(44))  rr \(c.match.rerank.map { String(format: "%.2f", $0) } ?? "-")  judged \(c.match.judgedHelpful.map { $0 ? "yes" : "no" } ?? "-")")
+                    print("        \(c.reason)")
+                }
             }
             if args.contains("--reasons") {
                 let r = Pipeline.rank(q, params, store: store)

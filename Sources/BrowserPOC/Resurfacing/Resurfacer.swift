@@ -22,6 +22,8 @@ final class Resurfacer: ObservableObject {
     @Published private(set) var isWorking = false
     /// The model's reading of the current context, when it ran.
     @Published private(set) var work: WorkingContextSummary?
+    /// False while the model is judging cards for the current context. Tools wait on it.
+    private(set) var judgingIdle = true
 
     weak var model: BrowserModel?
     private(set) var context: ContextInput?
@@ -44,6 +46,8 @@ final class Resurfacer: ObservableObject {
     private var judgments: [String: Judgment] = [:]
     /// Borderline cards waiting for a judgment, per section.
     private var pending: [CardSection: [Match]] = [:]
+    /// Cards that would show if a borderline card's judgment says no, per section.
+    private var reserve: [CardSection: [Match]] = [:]
     private var visits: [Int64: [Visit]] = [:]
     private var gate = Pipeline.Gate(bar: 0.5, strong: 0.85, usesReranker: true)
     /// How many retrievals have run. The self test uses it to check the cache.
@@ -268,18 +272,23 @@ final class Resurfacer: ObservableObject {
                 next.append(k)
             }
         }
+        // Fresh cards keep the order ranking gave them. A borderline card waiting for its
+        // judgment holds its slot, so a later card can't take it. Cards past the limit wait in
+        // reserve, to fill a slot if a judgment says no.
         var waiting: [Match] = []
+        var spare: [Match] = []
         for m in fresh where !next.contains(where: { $0.id == m.doc.id }) {
             let j = judgments[judgmentKey(m.doc.id, input.key)]
             let showNow = m.score >= gate.strong || !Judge.isAvailable || j != nil
-            if showNow {
-                guard Pipeline.accept(m, judgment: j, gate: gate) else { continue }
-                if next.count < params.limit { next.append(card(m, judgment: j)) }
-            } else if next.count + waiting.count < params.limit {
-                waiting.append(m)
+            if showNow && !Pipeline.accept(m, judgment: j, gate: gate) { continue }
+            if next.count + waiting.count >= params.limit {
+                if showNow { spare.append(m) }
+                continue
             }
+            if showNow { next.append(card(m, judgment: j)) } else { waiting.append(m) }
         }
         pending[sec] = waiting
+        reserve[sec] = spare
         return Array(next.prefix(params.limit))
     }
 
@@ -299,6 +308,8 @@ final class Resurfacer: ObservableObject {
     /// screen. One at a time, newest context only.
     nonisolated private func judgePending(input: ContextInput, gen: Int, work: WorkingContextSummary?) async {
         guard Judge.isAvailable else { return }
+        await MainActor.run { self.judgingIdle = false }
+        defer { Task { @MainActor in self.judgingIdle = true } }
         while true {
             let next: (Match, CardSection)? = await MainActor.run {
                 guard gen == self.generation else { return nil }
@@ -315,7 +326,7 @@ final class Resurfacer: ObservableObject {
             let cand = Candidate(doc: m.doc, section: sec, passage: m.passage, fused: m.fused, keywordWeight: 0, dense: 0,
                                  meaning: m.semantic, sharedTerms: m.sharedTerms, sharedEntities: m.sharedEntities,
                                  topicTerms: m.topicTerms, foundBy: m.foundBy, penalized: m.penalized)
-            let j = await Judge.judge(work: work, input: input, item: cand, history: history)
+            let j = await Judge.judge(work: work, input: input, item: cand, history: history, part: m.matchedPart)
                 ?? Judgment(helpful: true, confidence: 0, reason: "")
             await MainActor.run {
                 self.judgments[self.judgmentKey(m.doc.id, input.key)] = j
@@ -330,7 +341,17 @@ final class Resurfacer: ObservableObject {
         let limit = RankParams.fromSettings(Settings.shared.value).limit
         if let i = pending[sec]?.firstIndex(where: { $0.doc.id == m.doc.id }) {
             pending[sec]?.remove(at: i)
-            guard Pipeline.accept(m, judgment: j, gate: gate) else { return }
+            guard Pipeline.accept(m, judgment: j, gate: gate) else {
+                // The slot it held goes to the next card in reserve.
+                if var r = reserve[sec], !r.isEmpty {
+                    let next = r.removeFirst()
+                    reserve[sec] = r
+                    if sec == .sites, siteCards.count < limit, !siteCards.contains(where: { $0.id == next.doc.id }) { siteCards.append(card(next, judgment: nil)) }
+                    if sec == .docs, docCards.count < limit, !docCards.contains(where: { $0.id == next.doc.id }) { docCards.append(card(next, judgment: nil)) }
+                    storeCache()
+                }
+                return
+            }
             if sec == .sites, siteCards.count < limit, !siteCards.contains(where: { $0.id == m.doc.id }) { siteCards.append(card(m, judgment: j)) }
             if sec == .docs, docCards.count < limit, !docCards.contains(where: { $0.id == m.doc.id }) { docCards.append(card(m, judgment: j)) }
         } else {

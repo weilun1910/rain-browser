@@ -105,21 +105,22 @@ enum Judge {
 
     static var isAvailable: Bool { SystemLanguageModel.default.isAvailable }
 
-    static func prompt(work: WorkingContextSummary?, input: ContextInput, item: Candidate, history: String) -> String {
+    static func prompt(work: WorkingContextSummary?, input: ContextInput, item: Candidate, history: String, part: String? = nil) -> String {
         var s = "Current work: \(input.title)\n"
         if let w = work, w.fromModel {
             s += "Topic: \(w.topic)\nIntent: \(w.intent)\n"
         }
-        s += "Excerpt: \(ContextReader.window(input, limit: 700))\n\n"
+        // The part of the work the item matched, so the reason is about that part.
+        s += "Excerpt: \(part.map { String($0.prefix(700)) } ?? ContextReader.window(input, limit: 700))\n\n"
         s += "Earlier item: \(item.doc.title)\n\(history)\n\(item.passage.prefix(800))\n\nIs the earlier item helpful for the current work?"
         return s
     }
 
-    static func judge(work: WorkingContextSummary?, input: ContextInput, item: Candidate, history: String) async -> Judgment? {
+    static func judge(work: WorkingContextSummary?, input: ContextInput, item: Candidate, history: String, part: String? = nil) async -> Judgment? {
         guard isAvailable else { return nil }
         let session = LanguageModelSession(instructions: instructions)
         do {
-            let r = try await session.respond(to: prompt(work: work, input: input, item: item, history: history),
+            let r = try await session.respond(to: prompt(work: work, input: input, item: item, history: history, part: part),
                                               generating: Verdict.self, options: GenerationOptions(sampling: .greedy))
             let v = r.content
             return Judgment(helpful: v.helpful, confidence: Double(v.confidence) / 100, reason: Reasons.tidy(v.reason) ?? "")
@@ -163,6 +164,7 @@ enum Pipeline {
     /// sparse indexes, but on the demo they pulled in loosely related pages.
     static let modelQueriesForKeywords = ProcessInfo.processInfo.environment["BROWSERPOC_FMQ"] != nil
     static let modelForRetrieval = ProcessInfo.processInfo.environment["BROWSERPOC_FM_RETRIEVAL"] != nil
+    static let maxBridges = Int(ProcessInfo.processInfo.environment["BROWSERPOC_BRIDGES"] ?? "") ?? 2
     static let mmrWeight = Double(ProcessInfo.processInfo.environment["BROWSERPOC_MMR"] ?? "") ?? 1.5
     static let fusedFloor = Double(ProcessInfo.processInfo.environment["BROWSERPOC_FF"] ?? "") ?? 0.6
 
@@ -334,6 +336,16 @@ enum Pipeline {
         }
         scored.sort { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0.doc.id < $1.0.doc.id }
         out.scored = scored.map { ($0.0.doc.title, $0.1) }
+        if debugRank, ProcessInfo.processInfo.environment["BROWSERPOC_DEBUG_PARTS"] != nil {
+            for sec in CardSection.allCases {
+                for qi in 0..<q.chunkCount {
+                    let rows = scored.filter { $0.0.section == sec && $0.0.queryIndex == qi && $0.1 >= 0.3 }
+                        .sorted { $0.1 > $1.1 }.prefix(6)
+                        .map { String(format: "%.2f d%.2f f%.3f %@", $0.1, $0.0.dense, $0.0.fused, String($0.0.doc.title.prefix(26))) }
+                    FileHandle.standardError.write(Data("    part \(qi) [\(sec.rawValue)] \(rows.joined(separator: " | "))\n".utf8))
+                }
+            }
+        }
         if debugRank {
             for sec in CardSection.allCases {
                 let rows = scored.filter { $0.0.section == sec }.prefix(Int(ProcessInfo.processInfo.environment["BROWSERPOC_DEBUG_N"] ?? "14") ?? 14).map { String(format: "%.2f q%d f%.3f m%.2f %@", $0.1, $0.0.queryIndex ?? -1, $0.0.fused, $0.0.meaning, String($0.0.doc.title.prefix(30))) }
@@ -343,6 +355,8 @@ enum Pipeline {
         for (c, s, rr) in scored where p.keepIDs.contains(c.doc.id) {
             out.kept[c.doc.id] = match(c, score: s, rerank: rr, norm: cands.keywordNorm)
         }
+        let bridgeContext = BridgeContext(home: cands.contextHome ?? ActivityTracker.shared.currentSpace,
+                                          folded: TextAnalysis.fold(Substring(q.input.title + "\n" + q.input.text)), bar: g.bar)
         let contextPhrases = Phrases.extract(q.input.title + "\n" + Snippet.body(q.input.text, title: q.input.title))
         func withPhrases(_ m: Match, _ c: Candidate) -> Match {
             var m = m
@@ -350,13 +364,18 @@ enum Pipeline {
             m.sharedPhrases = Phrases.shared(contextPhrases, item, titles: [q.input.title, c.doc.title])
             m.itemPhrases = Phrases.top(item, titles: [q.input.title, c.doc.title])
             // Single words may come from the context's title ("Both mention flights"), not the item's.
+            if let i = c.queryIndex, i < q.chunkCount, i < q.queryTexts.count { m.matchedPart = q.queryTexts[i] }
+            // The card's passage starts at the idea both share, when there is one.
+            if !m.sharedPhrases.isEmpty, c.doc.hasText, !c.rawPassage.isEmpty {
+                m.passage = Snippet.make(c.rawPassage, terms: m.sharedPhrases + c.sharedTerms, title: c.doc.title, length: 600)
+            }
             m.ideaWords = Phrases.ideaWords(m.topicTerms + m.sharedTerms, titles: [c.doc.title], names: m.sharedEntities,
                                             context: q.input.text)
             return m
         }
         for sec in CardSection.allCases {
             let passing = scored.filter { $0.0.section == sec && $0.1 >= g.bar }
-            let picked = select(passing, limit: p.limit + 2, keep: p.keepIDs, reranked: g.usesReranker)
+            let picked = select(passing, limit: p.limit + 2, keep: p.keepIDs, reranked: g.usesReranker, bridge: bridgeContext)
             let ms = picked.map { withPhrases(match($0.0, score: $0.1, rerank: $0.2, norm: cands.keywordNorm), $0.0) }
             if sec == .sites { out.sites = ms } else { out.docs = ms }
         }
@@ -391,7 +410,27 @@ enum Pipeline {
     /// or, when close, the newer. Then maximal marginal relevance spreads the picks, so a
     /// handful of near-identical items from one project can't push out a strong item from
     /// elsewhere. Cards already on screen keep their place.
-    static func select(_ passing: [(Candidate, Double, Double?)], limit: Int, keep: Set<Int64>, reranked: Bool) -> [(Candidate, Double, Double?)] {
+    /// Where the context lives and what it names, for spotting bridges.
+    struct BridgeContext {
+        let home: String?
+        let folded: String
+        let bar: Double
+
+        /// An item from another space or folder, that the context doesn't name, that the reranker
+        /// rates well and that is one of the closest items to some part of the context. The
+        /// point of Related is to bring these back, and they'll always have weaker word overlap
+        /// than items from the same project.
+        func isBridge(_ c: Candidate, score: Double) -> Bool {
+            guard let h = home, let ch = c.home, score >= bar, c.meaning >= meaningFloor, c.partWinner, !c.namesContextHome else { return false }
+            let fh = TextAnalysis.fold(Substring(ch)), fc = TextAnalysis.fold(Substring(h))
+            guard fh != fc, !folded.contains(fh) else { return false }
+            let tk = titleKey(c.doc.title)
+            return tk.isEmpty || !folded.contains(tk)
+        }
+    }
+
+    static func select(_ passing: [(Candidate, Double, Double?)], limit: Int, keep: Set<Int64>, reranked: Bool,
+                       bridge: BridgeContext? = nil) -> [(Candidate, Double, Double?)] {
         guard !passing.isEmpty else { return [] }
         let maxFused = passing.map { $0.0.fused }.max() ?? 1
         // With the reranker, many items score close to 1. Retrieval's own agreement breaks the tie.
@@ -404,7 +443,12 @@ enum Pipeline {
         // Collapse near-duplicates first. With the reranker, an item the retrievers barely
         // agree on doesn't show on the cross-encoder's word alone.
         var pool: [(Candidate, Double, Double?, Double)] = []
-        let agreed = passing.filter { !reranked || maxFused <= 0 || $0.0.fused / maxFused >= fusedFloor || keep.contains($0.0.doc.id) }
+        // A bridge needs no broad agreement: it comes from elsewhere and matched one part of the
+        // context closely, so it shares fewer words with the whole of it than same-project items.
+        let agreed = passing.filter {
+            !reranked || maxFused <= 0 || $0.0.fused / maxFused >= fusedFloor || keep.contains($0.0.doc.id)
+                || (bridge?.isBridge($0.0, score: $0.1) ?? false)
+        }
         for e in agreed.sorted(by: { relevance($0) != relevance($1) ? relevance($0) > relevance($1) : $0.0.doc.id < $1.0.doc.id }) {
             let r = relevance(e)
             if let i = pool.firstIndex(where: { isNearDuplicate($0.0, e.0) }) {
@@ -420,6 +464,21 @@ enum Pipeline {
         var chosen: [(Candidate, Double, Double?, Double)] = pool.filter { keep.contains($0.0.doc.id) }
         var rest = pool.filter { !keep.contains($0.0.doc.id) }
         while chosen.count < limit, !rest.isEmpty {
+            if debugRank, reranked, let b = bridge, chosen.count == 2 {
+                let rows = rest.prefix(40).filter { $0.0.home != nil }.map { e in
+                    "\(e.0.doc.title.prefix(22)) home \(e.0.home ?? "-") win \(e.0.partWinner) rr \(String(format: "%.2f", e.1)) m \(String(format: "%.2f", e.0.meaning)) bridge \(b.isBridge(e.0, score: e.1))"
+                }
+                FileHandle.standardError.write(Data("    bridge check (context home \(b.home ?? "-")): \(rows.joined(separator: " | "))\n".utf8))
+            }
+            // After the best card, up to two bridges come next: items from another space that
+            // fit one part of the context closely. Same-project items fill whatever is left.
+            if reranked, let b = bridge, chosen.count >= 1, chosen.count < 3,
+               chosen.filter({ b.isBridge($0.0, score: $0.1) }).count < maxBridges,
+               let j = rest.indices.filter({ b.isBridge(rest[$0].0, score: rest[$0].1) })
+                   .max(by: { rest[$0].1 != rest[$1].1 ? rest[$0].1 < rest[$1].1 : rest[$0].0.dense < rest[$1].0.dense }) {
+                chosen.append(rest.remove(at: j))
+                continue
+            }
             var bestI = 0, bestV = -Double.infinity
             for (i, e) in rest.enumerated() {
                 let maxSim = chosen.map { Double(similarity($0.0, e.0)) }.max() ?? 0

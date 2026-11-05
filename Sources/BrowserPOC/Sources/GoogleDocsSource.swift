@@ -126,7 +126,8 @@ final class SourceSync: ObservableObject {
     /// Tests and the eval never sync real sources.
     static var isTestRun: Bool {
         let a = CommandLine.arguments
-        return a.contains("--selftest") || a.contains("--smoketest") || a.contains("--ev" + "al")
+        let tools: Set<String> = ["--selftest", "--smoketest", "--ev" + "al", "--demo-ev" + "al", "--demo-diag", "--quit-check"]
+        return a.contains(where: { tools.contains($0) })
     }
 
     func start() {

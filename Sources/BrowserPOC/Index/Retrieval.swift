@@ -43,6 +43,13 @@ struct Candidate {
     var rawPassage: String = ""
     /// Which query text the chosen passage matched best.
     var queryIndex: Int? = nil
+    /// Where the item lives: the space it was last seen in, or a note's folder. Nil when unknown.
+    var home: String? = nil
+    /// True when it's one of the two closest items by meaning to the part of the context it matched.
+    var partWinner = false
+    /// True when the item's own text names the space or folder the context lives in. Hub pages
+    /// that list every project do, so they can't pass as bridges.
+    var namesContextHome = false
 }
 
 struct CandidateSet {
@@ -51,6 +58,8 @@ struct CandidateSet {
     var terms: [String] = []
     /// What a full keyword match weighs, for the no-reranker fallback score.
     var keywordNorm: Double = 1
+    /// Where the context itself lives, when the index knows it.
+    var contextHome: String? = nil
     var all: [Candidate] { sites + docs }
 }
 
@@ -283,6 +292,13 @@ extension IndexStore {
             return nil
         }
 
+        // Where the context lives: its own home in the index, or the space Felix is in.
+        var ctxHome: String? = nil
+        if let cd = try db.query("SELECT \(Self.metaColumns) FROM docs WHERE key = ?", [q.input.key], Self.meta).first {
+            ctxHome = homeLocked(cd)
+        }
+        if ctxHome == nil { ctxHome = ActivityTracker.shared.currentSpace }
+
         var seenCanon: [String: (CardSection, Int)] = [:]
         for sec in CardSection.allCases {
             var list: [Candidate] = []
@@ -302,7 +318,7 @@ extension IndexStore {
                     }
                 }
                 let chosen = plist.isEmpty ? meta.description : plist[chosenIndex].1
-                // What the reranker reads: the passage, plus the next one when it's short.
+                // What the card shows and the reranker reads: the passage, plus the next one when it's short.
                 var readText = Snippet.body(chosen, title: meta.title)
                 var next = chosenIndex + 1
                 while readText.count < 450, next < plist.count {
@@ -336,8 +352,24 @@ extension IndexStore {
                 list.append(c)
             }
             list.sort { $0.fused != $1.fused ? $0.fused > $1.fused : $0.doc.id < $1.doc.id }
+            // The two closest items to each part of the context, by meaning.
+            var byPart: [Int: [Int]] = [:]
+            for (i, c) in list.enumerated() { if let qi = c.queryIndex { byPart[qi, default: []].append(i) } }
+            for (_, idx) in byPart {
+                for i in idx.sorted(by: { list[$0].dense != list[$1].dense ? list[$0].dense > list[$1].dense : list[$0].doc.id < list[$1].doc.id }).prefix(2) {
+                    list[i].partWinner = true
+                }
+            }
+            for i in list.indices {
+                list[i].home = homeLocked(list[i].doc)
+                if let h = ctxHome, list[i].home != nil, TextAnalysis.fold(Substring(h)).count >= 3 {
+                    let body = (try db.query("SELECT body FROM docs WHERE id = ?", [list[i].doc.id]) { $0.text(0) }).first ?? ""
+                    list[i].namesContextHome = TextAnalysis.fold(Substring(body + " " + list[i].doc.title)).contains(TextAnalysis.fold(Substring(h)))
+                }
+            }
             if sec == .sites { out.sites = list } else { out.docs = list }
         }
+        out.contextHome = ctxHome
         return out
     }
 
@@ -354,6 +386,18 @@ extension IndexStore {
         var f = r < 0.06 ? 0.6 : r < 0.12 ? 0.85 : 1.0
         if text.count < 60 { f *= 0.5 } else if text.count < 140 { f *= 0.85 }
         return f
+    }
+
+    /// Where an item lives: the space of its most recent visit that recorded one, or a note's
+    /// folder. Spaces come from visits like "in your School space".
+    func homeLocked(_ d: DocMeta) -> String? {
+        for v in visitsLocked(docID: d.id, limit: 10) {
+            if let s = v.during, s.hasPrefix("in your "), s.hasSuffix(" space") {
+                return String(s.dropFirst("in your ".count).dropLast(" space".count))
+            }
+        }
+        if d.source == .note || d.source == .markdown { return d.project }
+        return nil
     }
 
     static func termVariants(_ t: String) -> [String] {
