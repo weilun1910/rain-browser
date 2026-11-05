@@ -49,7 +49,8 @@
   ],
   "prompts": [
     { "name": "what_do_i_know", "description": "Everything you know about a topic, with citations", "arguments": ["topic"], "text": "What do I know about ${arguments.topic}? Use the Browser knowledge tools and cite every item." },
-    { "name": "catch_me_up", "description": "What you're working on and what you did lately", "text": "Catch me up on what I'm doing, using current_context and recent_activity." }
+    { "name": "catch_me_up", "description": "What you're working on and what you did lately", "text": "Catch me up on what I'm doing, using current_context and recent_activity." },
+    { "name": "tidy_my_notes", "description": "Notes that should link to each other, duplicates and loose ends", "arguments": ["topic"], "text": "Help me keep my notes on ${arguments.topic} in good shape. Propose changes first and only write after I say yes." }
   ],
   "keywords": ["knowledge", "notes", "browser", "personal context"],
   "compatibility": { "platforms": ["darwin"] }

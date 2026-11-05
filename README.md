@@ -32,10 +32,11 @@ build/BrowserPOC.app/Contents/MacOS/BrowserPOC --data-dir ~/Desktop/test-profile
 Tests and checks from the command line:
 
 ```
-scripts/selftest.sh                                             # index, notes, sections, split, spaces and command bar checks
+scripts/selftest.sh                                             # index, notes, sections, split, spaces, command bar and MCP checks
 .build/debug/BrowserPOC --smoketest                             # drives the real browser headless, no window on screen
 build/BrowserPOC.app/Contents/MacOS/BrowserPOC --chrome-dry-run # what a Chrome import would do, fetches nothing
 .build/debug/BrowserPOC --extract-check <url>                   # what capture reads from one public page
+scripts/mcp-e2e.sh                                              # Claude Code and Codex against a made-up profile, temporary configs only
 ```
 
 Both tests use throwaway folders and exit non-zero if a check fails. The self test checks delete with a stand-in Trash folder inside its throwaway folder, so your real Trash is never touched. The dry run prints full URLs from your Chrome history, so keep its output to yourself.
@@ -62,6 +63,15 @@ These files may also be edited by other apps while this one is open, so the app 
 
 **Capture.** Pages that stay open about five seconds go into a local index with full-text search, sentence vectors and the names in them. Google Docs draw their text on a canvas, so for those the app asks Google for the doc's own text export, from inside your tab, once per load. The typing count only stores how many characters you typed in text areas and editable regions, never what you typed, and ignores search, address and password fields.
 
+**AI clients.** Claude Code, Claude Desktop, Codex and ChatGPT for Mac can read what the browser knows, so they understand what I'm working on and can help keep my notes in shape. The app's binary runs as an MCP server with `--mcp` (add `--data-dir` for another profile). It reads the index without changing it, works while the app is open, and stops when the client closes. The tools:
+- `search`, `get_item` and `read_note` find and read my notes, pages, Google Docs and Notion pages.
+- `related` uses the Related panel's own ranking, for an item or a paragraph of text.
+- `connections` gives an item's neighbours with the type of each link and why it's there.
+- `current_context` and `recent_activity` say what I have open now and what I did lately.
+- `list_spaces`, `list_notes` and `overview` show how things are organised.
+
+With "Let AI clients edit notes" on in Settings, three more tools can create a note, add to the end of one, and add a link under its Related heading. They follow the same disk rules as the app, and refuse to write if the note changed since the client read it. Settings, under AI clients, has the install steps for each client with copy buttons, a switch for each source (past searches start off), a switch for what I'm working on now, and a log of everything that was served. Sign-in links, links with tokens and sites on the never-index list never go out. The packaging is in `integrations/`: a Claude Code plugin with a skill, a Claude Desktop extension, a Codex plugin and config snippet, and the ChatGPT routes. ChatGPT on the web can only reach the Mac through OpenAI's Secure MCP Tunnel, so that route is written up but not set up.
+
 **Chrome import.** It copies Chrome's History file, reads the copy and deletes it. The original is only opened read-only to copy it. It imports the last 90 days, up to 2,000 pages, plus your past searches, and fetches text without cookies for up to 300 of the pages you visited most, skipping anything that looks like a sign-in, token or unsubscribe link and logged-in apps. macOS asks once before this app can read Chrome's data. If the import says it needs your OK, click Allow in the macOS prompt, or open System Settings, go to Privacy & Security, then Files & Folders, find Browser POC and turn on Google Chrome. The import screen has a button for that.
 
 ## Not in this version
@@ -73,7 +83,7 @@ These files may also be edited by other apps while this one is open, so the app 
 
 ## Where things live
 
-- App data: `~/Library/Application Support/BrowserPOC/` (state.json, settings.json, index.sqlite, and Notes/ when no notes folders are chosen).
+- App data: `~/Library/Application Support/BrowserPOC/` (state.json, settings.json, index.sqlite, and Notes/ when no notes folders are chosen). The AI client settings are in mcp.json, the served log in mcp-log.jsonl, and what's on screen in current-context.json.
 - WebKit keeps cookies and caches under `~/Library/WebKit/local.browserpoc` and `~/Library/Caches/local.browserpoc`.
 - Clearing the index removes indexed entries only. Notes stay exactly as they are.
 
@@ -85,4 +95,6 @@ These files may also be edited by other apps while this one is open, so the app 
 - `Sources/BrowserPOC/Resurfacing`: the Related panel's cards and reasons.
 - `Sources/BrowserPOC/Sources`: Chrome import, URL safety rules, HTML text, the notes indexer and folder watcher.
 - `Sources/BrowserPOC/UI`: SwiftUI views, including the command bar, split view and spaces.
+- `Sources/BrowserPOC/MCP`: the `--mcp` server, its tools, privacy rules and note writer, the current-context writer and the AI clients Settings pane.
 - `Sources/BrowserPOC/Tests`: `--selftest`, `--smoketest` and `--extract-check`.
+- `integrations`: the Claude Code, Claude Desktop, Codex and ChatGPT packaging.
