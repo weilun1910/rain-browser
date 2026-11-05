@@ -36,7 +36,9 @@ enum LinkExtractor {
         return wikiName(u.deletingPathExtension().lastPathComponent)
     }
 
-    static func extract(body: String, ownKey: String, ownURL: String) -> [Ref] {
+    /// `wikilinks` is for notes only. Page text, like a Wikipedia article's, can hold [[markup]]
+    /// that isn't a link to a note.
+    static func extract(body: String, ownKey: String, ownURL: String, wikilinks: Bool = true) -> [Ref] {
         guard !body.isEmpty else { return [] }
         let ns = body as NSString
         let full = NSRange(location: 0, length: ns.length)
@@ -50,7 +52,7 @@ enum LinkExtractor {
         }
         var covered: [NSRange] = []
 
-        for m in wikiRE.matches(in: body, range: full) {
+        for m in wikilinks ? wikiRE.matches(in: body, range: full) : [] {
             covered.append(m.range)
             let raw = ns.substring(with: m.range(at: 1))
             let ext = (raw as NSString).pathExtension.lowercased()

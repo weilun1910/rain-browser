@@ -89,6 +89,13 @@ final class GraphStore: @unchecked Sendable {
                 CREATE INDEX IF NOT EXISTS g_edges_b ON g_edges(b);
                 CREATE INDEX IF NOT EXISTS g_edges_type ON g_edges(type);
                 CREATE TABLE IF NOT EXISTS g_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS g_positions(
+                  scope TEXT NOT NULL,
+                  id TEXT NOT NULL,
+                  x REAL NOT NULL,
+                  y REAL NOT NULL,
+                  PRIMARY KEY(scope, id)
+                );
                 """)
             }
         }
@@ -131,6 +138,37 @@ final class GraphStore: @unchecked Sendable {
         let w = DispatchWorkItem { NotificationCenter.default.post(name: .graphChanged, object: nil) }
         notifyWork = w
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: w)
+    }
+
+    // MARK: - Layout positions
+
+    /// Where each node sat when the layout last came to rest, so a relaunch starts there.
+    func savePositions(scope: String, _ positions: [String: SIMD2<Float>]) {
+        guard !readOnly, !positions.isEmpty else { return }
+        queue.async { [self] in
+            guard let db else { return }
+            try? db.transaction {
+                try db.run("DELETE FROM g_positions WHERE scope = ?", [scope])
+                for (id, p) in positions where p.x.isFinite && p.y.isFinite {
+                    try db.run("INSERT INTO g_positions(scope, id, x, y) VALUES(?, ?, ?, ?)", [scope, id, Double(p.x), Double(p.y)])
+                }
+            }
+        }
+    }
+
+    func savePositionsNow(scope: String, _ positions: [String: SIMD2<Float>]) {
+        savePositions(scope: scope, positions)
+        queue.sync {}
+    }
+
+    func loadPositions(scope: String) -> [String: SIMD2<Float>] {
+        queue.sync {
+            guard let db else { return [:] }
+            let rows = (try? db.query("SELECT id, x, y FROM g_positions WHERE scope = ?", [scope]) {
+                ($0.text(0), SIMD2(Float($0.double(1)), Float($0.double(2))))
+            }) ?? []
+            return Dictionary(rows, uniquingKeysWith: { a, _ in a })
+        }
     }
 
     // MARK: - Recording
@@ -182,6 +220,11 @@ final class GraphStore: @unchecked Sendable {
 
     private func syncLocked() -> Int {
         guard let db, let reader, !readOnly, reader.hasIndexTables() else { return 0 }
+        // Version 2 stopped reading [[wikilinks]] out of web pages, so links are read again once.
+        if meta("links_version") != "2" {
+            setMeta("synced_at", "0")
+            setMeta("links_version", "2")
+        }
         let watermark = Double(meta("synced_at") ?? "") ?? 0
         let sig = semantic?.signature ?? ""
         let fullSimilarity = meta("vector_sig") != sig
@@ -200,7 +243,8 @@ final class GraphStore: @unchecked Sendable {
                 for d in batch {
                     try db.run("DELETE FROM g_edges WHERE a = ? AND type = 'link'", [d.key])
                     let now = d.indexedAt
-                    for ref in LinkExtractor.extract(body: d.body, ownKey: d.key, ownURL: d.url) {
+                    let isNote = d.source == "note" || d.source == "markdown"
+                    for ref in LinkExtractor.extract(body: d.body, ownKey: d.key, ownURL: d.url, wikilinks: isNote) {
                         try db.run("""
                             INSERT OR REPLACE INTO g_edges(a, b, type, weight, count, first, last, detail) VALUES(?, ?, 'link', 1, 1, ?, ?, ?)
                             """, [d.key, ref.target, now, now, ref.detail])
