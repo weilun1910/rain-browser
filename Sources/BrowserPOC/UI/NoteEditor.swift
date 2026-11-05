@@ -169,6 +169,7 @@ struct MarkdownTextView: NSViewRepresentable {
         tv.textColor = .labelColor
         tv.isEditable = !doc.isReadOnly
         tv.isSelectable = true
+        tv.usesFindBar = true // Cmd-F in a note shows the find bar above the text
         tv.textContainerInset = NSSize(width: 36, height: 28)
         tv.textContainer?.lineFragmentPadding = 0
         tv.defaultParagraphStyle = MarkdownStyler.paragraph
