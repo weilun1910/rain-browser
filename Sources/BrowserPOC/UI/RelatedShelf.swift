@@ -71,9 +71,6 @@ struct RelatedShelfLayer: View {
         let p = presence
         let entries = ShelfLayout.entries(sites: resurfacer.siteCards, docs: resurfacer.docCards, progress: progress)
         let covers = ShelfLayout.coversPage(p, hasCards: !resurfacer.cards.isEmpty)
-        // One container, so the pills and the popover sample the page together and the popover
-        // keeps its glass as it glides from pill to pill.
-        GlassEffectContainer(spacing: Theme.GlassStyle.containerSpacing) {
         ZStack(alignment: .bottomLeading) {
             if let img = state.backdrop {
                 Image(nsImage: img).resizable().frame(width: size.width, height: size.height)
@@ -96,10 +93,15 @@ struct RelatedShelfLayer: View {
                     .allowsHitTesting(p == .shown)
                     .transition(ShelfStyle.reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 12)))
             }
-            if p == .shown, let t = state.open, let a = anchors[t] {
-                ShelfPopover(target: t, anchor: a, container: size, resurfacer: resurfacer, progress: progress, glass: glass)
+            // The popover has a container of its own, so it keeps one glass as it glides from
+            // pill to pill. The pills' container sits inside the row's scroll view, so the row's
+            // clipping and edge fade apply to their glass too.
+            GlassEffectContainer(spacing: Theme.GlassStyle.containerSpacing) {
+                if p == .shown, let t = state.open, let a = anchors[t] {
+                    ShelfPopover(target: t, anchor: a, container: size, resurfacer: resurfacer, progress: progress, glass: glass)
+                }
             }
-        }
+            .frame(width: size.width, height: size.height, alignment: .bottomLeading)
         }
         .frame(width: size.width, height: size.height, alignment: .bottomLeading)
         .coordinateSpace(name: "shelf")
@@ -169,6 +171,7 @@ struct ShelfRow: View {
     var body: some View {
         HStack(spacing: ShelfStyle.pillGap) {
             ScrollView(.horizontal) {
+                GlassEffectContainer(spacing: Theme.GlassStyle.containerSpacing) {
                 HStack(spacing: ShelfStyle.pillGap) {
                     ForEach(Array(entries.enumerated()), id: \.element.id) { i, e in
                         entry(e, index: i)
@@ -182,6 +185,7 @@ struct ShelfRow: View {
                                 // Pills leave at once, so a replaced row never overlaps the new one.
                                 removal: .identity))
                     }
+                }
                 }
                 .padding(Self.inner)
                 .coordinateSpace(name: "shelfContent")

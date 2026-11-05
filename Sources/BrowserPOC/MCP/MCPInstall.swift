@@ -22,8 +22,13 @@ enum MCPInstall {
 
     static let serverName = "browser"
 
-    static var currentBinary: String { Bundle.main.executablePath ?? "/Applications/Rain.app/Contents/MacOS/BrowserPOC" }
-    static var currentDataDir: String? { Paths.overrideRoot?.standardizedFileURL.path }
+    /// The README screenshot tour sets this, so the install steps show what a normal install in
+    /// /Applications would, instead of the build folder's paths and the demo profile's.
+    nonisolated(unsafe) static var screenshotInstall = false
+    static let applicationsBinary = "/Applications/Rain.app/Contents/MacOS/BrowserPOC"
+
+    static var currentBinary: String { screenshotInstall ? applicationsBinary : (Bundle.main.executablePath ?? applicationsBinary) }
+    static var currentDataDir: String? { screenshotInstall ? nil : Paths.overrideRoot?.standardizedFileURL.path }
 
     static func args(dataDir: String?) -> [String] {
         var a = ["--mcp"]
@@ -75,6 +80,7 @@ enum MCPInstall {
 
     /// The repo's `integrations/` folder: next to `build/Rain.app`, or found from this source file.
     static func integrationsFolder() -> URL? {
+        if screenshotInstall { return URL(fileURLWithPath: "/Users/theo/Code/rain/integrations") }
         var candidates: [URL] = []
         let bundle = Bundle.main.bundleURL
         if bundle.pathExtension == "app" {

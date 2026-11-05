@@ -152,8 +152,25 @@ final class BrowserModel: ObservableObject {
 
     // MARK: - WebKit configuration and profiles
 
+    /// Screenshot tours set this so pages keep drawing while the window is covered or the
+    /// display sleeps, which WebKit otherwise pauses.
+    nonisolated(unsafe) static var keepPaintingWhenHidden = false
+
     static func makeConfig(store: WKWebsiteDataStore) -> WKWebViewConfiguration {
         let c = WKWebViewConfiguration()
+        if keepPaintingWhenHidden {
+            c.preferences.inactiveSchedulingPolicy = .none
+            // Pages that draw themselves with script wait for the page to be visible and for
+            // animation frames, which never come while the screen is locked.
+            c.userContentController.addUserScript(WKUserScript(source: """
+            (() => { try {
+              Object.defineProperty(Document.prototype, 'visibilityState', { get() { return 'visible' }, configurable: true });
+              Object.defineProperty(Document.prototype, 'hidden', { get() { return false }, configurable: true });
+              window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now()), 16);
+              window.cancelAnimationFrame = (id) => clearTimeout(id);
+            } catch (e) {} })();
+            """, injectionTime: .atDocumentStart, forMainFrameOnly: false))
+        }
         c.websiteDataStore = store
         c.preferences.isElementFullscreenEnabled = true
         c.preferences.javaScriptCanOpenWindowsAutomatically = false

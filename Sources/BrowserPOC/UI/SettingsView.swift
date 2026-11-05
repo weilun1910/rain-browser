@@ -2,14 +2,19 @@ import AppKit
 import SwiftUI
 
 struct SettingsView: View {
+    enum Pane: Hashable { case general, browsing, sources, models, tuning, aiClients }
+    /// The tab the window opens on. The README screenshot tour opens it on AI clients.
+    nonisolated(unsafe) static var initialTab: Pane = .general
+    @State private var pane: Pane = SettingsView.initialTab
+
     var body: some View {
-        TabView {
-            GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }
-            BrowsingSettings().tabItem { Label("Browsing", systemImage: "sidebar.left") }
-            SourcesSettings().tabItem { Label("Sources", systemImage: "tray.full") }
-            ModelsSettings().tabItem { Label("Models", systemImage: "cpu") }
-            TuningSettings().tabItem { Label("Tuning", systemImage: "slider.horizontal.3") }
-            AIClientsSettings().tabItem { Label("AI clients", systemImage: "point.3.connected.trianglepath.dotted") }
+        TabView(selection: $pane) {
+            GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }.tag(Pane.general)
+            BrowsingSettings().tabItem { Label("Browsing", systemImage: "sidebar.left") }.tag(Pane.browsing)
+            SourcesSettings().tabItem { Label("Sources", systemImage: "tray.full") }.tag(Pane.sources)
+            ModelsSettings().tabItem { Label("Models", systemImage: "cpu") }.tag(Pane.models)
+            TuningSettings().tabItem { Label("Tuning", systemImage: "slider.horizontal.3") }.tag(Pane.tuning)
+            AIClientsSettings().tabItem { Label("AI clients", systemImage: "point.3.connected.trianglepath.dotted") }.tag(Pane.aiClients)
         }
         .frame(width: 580, height: 620)
     }
