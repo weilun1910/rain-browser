@@ -13,6 +13,8 @@ struct Analysis {
     var passages: [String]
     var vectors: [[Float]?]
     var entities: [Entity]
+    /// The model that made the vectors.
+    var vectorModel: EmbedderID = .sentence
 }
 
 /// Word counts for a context, with the way each word was written.
@@ -196,13 +198,17 @@ enum TextAnalysis {
             let fallback = [title, description].filter { !$0.isEmpty }.joined(separator: ". ")
             passages = fallback.isEmpty ? [] : [fallback]
         }
-        var vectors: [[Float]?] = []
-        for (i, p) in passages.enumerated() {
-            let input = i == 0 && !title.isEmpty && !p.hasPrefix(title) ? title + ". " + p : p
-            vectors.append(Embedder.shared.vector(input))
+        let backend = Intelligence.shared.documentEmbedder
+        let items: [(title: String, text: String)] = passages.enumerated().map { i, p in
+            // The sentence model has no title slot, so the first passage carries the title.
+            if backend == .sentence || backend == .contextual {
+                return (title, i == 0 && !title.isEmpty && !p.hasPrefix(title) ? title + ". " + p : p)
+            }
+            return (title, p)
         }
+        let (model, vectors) = Intelligence.shared.embedDocuments(items, using: backend)
         let ents = entities([title, description, text].joined(separator: "\n"))
-        return Analysis(passages: passages, vectors: vectors, entities: ents)
+        return Analysis(passages: passages, vectors: vectors, entities: ents, vectorModel: model)
     }
 }
 

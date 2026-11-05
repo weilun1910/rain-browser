@@ -923,7 +923,7 @@ final class BrowserModel: ObservableObject {
         let d = card.match.doc
         guard let u = URL(string: d.url) else { return }
         switch d.source {
-        case .web, .chrome: newTab(url: u, select: true)
+        case .web, .chrome, .notion, .gdocs, .granola: newTab(url: u, select: true)
         case .note, .markdown: openNote(u)
         }
         IndexStore.shared.touchOpened(key: d.key)
