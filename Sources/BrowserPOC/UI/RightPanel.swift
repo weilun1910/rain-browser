@@ -77,6 +77,8 @@ struct RightPanelContent: View {
                 }
                 .scrollIndicators(.never)
             }
+            LocalGraphSlot(resurfacer: resurfacer)
+                .padding(.bottom, 8)
         }
         .padding(.horizontal, Theme.Space.windowMargin)
     }
@@ -220,6 +222,7 @@ struct CardView: View {
             HStack(spacing: 2) {
                 IconButton(symbol: "plus", help: card.feedback ?? "Add to research", width: 22, height: 22, symbolSize: 10) {
                     let msg = model.addToResearch(card)
+                    if msg.hasPrefix("Added") { GraphRecorder.shared.researchAdded(addedKey: card.match.doc.key, model: model) }
                     model.resurfacer.setFeedback(msg, for: card)
                 }
                 .disabled(card.feedback != nil)

@@ -32,7 +32,7 @@ build/BrowserPOC.app/Contents/MacOS/BrowserPOC --data-dir ~/Desktop/test-profile
 Tests and checks from the command line:
 
 ```
-scripts/selftest.sh                                             # index, notes, sections, splits, spaces, sidebar, command bar and look checks
+scripts/selftest.sh                                             # index, notes, sections, splits, spaces, sidebar, command bar, MCP and look checks
 .build/debug/BrowserPOC --smoketest                             # drives the real browser headless, no window on screen
 build/BrowserPOC.app/Contents/MacOS/BrowserPOC --chrome-dry-run # what a Chrome import would do, fetches nothing
 .build/debug/BrowserPOC --extract-check <url>                   # what capture reads from one public page
@@ -42,6 +42,8 @@ build/BrowserPOC.app/Contents/MacOS/BrowserPOC --chrome-dry-run # what a Chrome 
 .build/debug/BrowserPOC --download-models --data-dir <profile>  # fetch the on-device models into a profile
 .build/debug/BrowserPOC --render-review <dir>                   # light and dark snapshots of every main view, offscreen
 scripts/make-icon.sh                                            # redraws the app icon from code
+scripts/mcp-e2e.sh                                              # Claude Code and Codex against a made-up profile, temporary configs only
+build/BrowserPOC.app/Contents/MacOS/BrowserPOC --graph-bench    # the graph's 5,000 node timings on a release build
 ```
 
 Both tests use throwaway folders and exit non-zero if a check fails. The self test checks delete with a stand-in Trash folder inside its throwaway folder, so your real Trash is never touched. The dry run prints full URLs from your Chrome history, so keep its output to yourself.
@@ -106,7 +108,34 @@ These files may also be edited by other apps while this one is open, so the app 
 - Google Docs, Sheets and Slides: takes the documents in my history here and in the Chrome import, and refreshes each one's text through its own plain-text export with this browser's Google sign-in. Up to 40 a run, each at most once a day.
 - Granola: Granola encrypts its files on the Mac, so this uses Granola's official MCP connection. Connect opens Granola's sign-in in my default browser, with no key to paste, then brings in recent meetings' notes and summaries.
 
+**Graph.** An Obsidian-style graph of everything in the index: notes, Google Docs, Notion pages, Granola meetings and sites. Open it with the graph button at the bottom of the sidebar, View > Graph (Cmd-Option-G), Open Graph in the command bar, or its row in the sidebar. It's an app page like History, so it can be pinned, filed, put in a split next to a note and comes back after a relaunch. Lines come in six kinds, each with its own colour and filter:
+- Links: `[[wikilinks]]`, Markdown links and URLs in a note or doc that match something indexed. A wikilink to a note that doesn't exist yet shows as a hollow node, and clicking it creates the note.
+- Navigation: a link you clicked on one page that took you to another.
+- Research: something you added to research from the Related panel.
+- Together: two items in a split, or two items you spent time on within ten minutes of each other in two separate sessions.
+- Similar meaning: each item's closest neighbours by meaning from the best embedding model it has, kept only when the match goes both ways or is very close for that model.
+- Shared topics: optional topic nodes for names, and topics the tagging model found, that several items share, like Obsidian's tag nodes.
+
+Nodes take their space's colour. Things you write are bright and sites you read are toned back. An item belongs to a space when it's open, pinned or filed there, or when it's a note in that space's notes folder. Anything else takes the space most of its connections are in, and items with no clear space stay grey. Each space keeps loosely to its own region, so the things that bridge two spaces sit between them. Colour by kind and the space pull are in the settings panel.
+
+Hover a node to light up its neighbours, dim the rest and see why it's connected in the corner. Click a node to light it up and glide to it, and click again or double-click to open it. Option-click opens it in a split, right-click gives more, and dragging moves it while its neighbours follow. Pinch, Cmd-scroll or the mouse wheel zooms around the pointer. A two-finger scroll or a background drag pans, and a flung drag coasts to a stop. `+`, `-`, `0`, Esc and the arrow keys work too. The search field takes plain words plus `type:note`, `site:github.com` and `project:Browser`. The settings panel has Obsidian's Filters, Groups, Display and Forces, plus a time range, a space and grouping pages by site (on its own above 1,500 items). Play runs a timelapse in the order things were first seen.
+
+Changing a filter or a search fades and grows nodes in and out instead of redrawing everything, and fit and focus glide. The graph draws at the display's full rate, 120 Hz on ProMotion, while anything moves, and stops drawing when nothing does. It remembers where every node came to rest, so a relaunch starts from the same picture. Two graph panes each keep their own view.
+
+The bottom of the right panel shows a local graph for whatever's focused, 1 to 3 steps out, and opens the full graph focused on it. When the item changes, the local graph shifts to it instead of starting over. With the graph focused in a split, the local graph follows the item next to it, and that item gets a ring in the big graph. The graph's own tables live in `index.sqlite` next to the index, and its settings in `graph.json`.
+
+With `BROWSERPOC_GRAPH_SCRIPT=<seconds>` set, the graph drives itself through hover, pan, zoom, drag, focus, a search and fit after that delay. It prints frame pacing for each step and quits. Use it only with `--data-dir`.
+
 **Capture.** Pages that stay open about five seconds go into a local index with full-text search, sentence vectors and the names in them. Google Docs draw their text on a canvas, so for those the app asks Google for the doc's own text export, from inside your tab, once per load. The typing count only stores how many characters you typed in text areas and editable regions, never what you typed, and ignores search, address and password fields.
+
+**AI clients.** Claude Code, Claude Desktop, Codex and ChatGPT for Mac can read what the browser knows, so they understand what I'm working on and can help keep my notes in shape. The app's binary runs as an MCP server with `--mcp` (add `--data-dir` for another profile). It reads the index without changing it, works while the app is open, and stops when the client closes. The tools:
+- `search`, `get_item` and `read_note` find and read my notes, pages, Google Docs, Notion pages and Granola meetings. Search is the same hybrid search Related uses, with the reranker once it's downloaded, and each result says when and in what context I saw it. `get_item` adds the item's topics.
+- `related` runs the Related panel's own first pass, for an item or a paragraph of text, against the panel's bar. It leaves out the Foundation Models steps, which take seconds.
+- `connections` gives an item's neighbours with the type of each link and why it's there: links in notes, Related lists, closeness in meaning, and the same people or topics.
+- `current_context` and `recent_activity` say what I have open now and what I did lately.
+- `list_spaces`, `list_notes` and `overview` show how things are organised.
+
+With "Let AI clients edit notes" on in Settings, three more tools can create a note, add to the end of one, and add a link under its Related heading. They follow the same disk rules as the app, and refuse to write if the note changed since the client read it. Settings, under AI clients, has the install steps for each client with copy buttons, a switch for each source (notes, pages, Chrome, Google Docs, Notion, Granola and past searches, which start off), a switch for what I'm working on now, and a log of everything that was served. The Google Docs and Notion switches cover those docs whether they came from their sync or from reading them in the browser. Sign-in links, links with tokens and sites on the never-index list never go out. The packaging is in `integrations/`: a Claude Code plugin with a skill, a Claude Desktop extension, a Codex plugin and config snippet, and the ChatGPT routes. ChatGPT on the web can only reach the Mac through OpenAI's Secure MCP Tunnel, so that route is written up but not set up.
 
 **Chrome import.** It copies Chrome's History file, reads the copy and deletes it. The original is only opened read-only to copy it. It imports the last 90 days, up to 2,000 pages, plus your past searches, and fetches text without cookies for up to 300 of the pages you visited most, skipping anything that looks like a sign-in, token or unsubscribe link and logged-in apps. macOS asks once before this app can read Chrome's data. If the import says it needs your OK, click Allow in the macOS prompt, or open System Settings, go to Privacy & Security, then Files & Folders, find Browser POC and turn on Google Chrome. The import screen has a button for that.
 
@@ -121,7 +150,7 @@ These files may also be edited by other apps while this one is open, so the app 
 
 ## Where things live
 
-- App data: `~/Library/Application Support/BrowserPOC/` (state.json, settings.json, index.sqlite, and Notes/ when no notes folders are chosen). Round 3 adds Models/ (the downloaded models), sources.json (the source switches) and granola-auth.json (the Granola sign-in, readable only by my account).
+- App data: `~/Library/Application Support/BrowserPOC/` (state.json, settings.json, index.sqlite, and Notes/ when no notes folders are chosen). Round 3 adds Models/ (the downloaded models), sources.json (the source switches) and granola-auth.json (the Granola sign-in, readable only by my account). The AI client settings are in mcp.json, the served log in mcp-log.jsonl, and what's on screen in current-context.json.
 - Browsing data sits next to it: browser.json (Browsing settings), history.sqlite (visits), closed.json (recently closed and the archive), sessions/ (back and forward for each tab), favicons/ and downloads.json.
 - WebKit keeps cookies and caches under `~/Library/WebKit/local.browserpoc` and `~/Library/Caches/local.browserpoc`. Each named profile has its own WebKit store there too.
 - Clearing the index removes indexed entries only. Notes stay exactly as they are.
@@ -134,7 +163,10 @@ These files may also be edited by other apps while this one is open, so the app 
 - `Sources/BrowserPOC/Intelligence`: llama.cpp wrapper, model downloads, embeddings, the working-context description and judgment with Foundation Models, background re-embedding and topic tagging, and an MCP client with OAuth.
 - `Sources/BrowserPOC/Resurfacing`: the Related panel's cards and reasons.
 - `Sources/BrowserPOC/Sources`: Chrome import, Notion, Google Docs and Granola sources, URL safety rules, HTML text, the notes indexer and folder watcher.
-- `Sources/BrowserPOC/UI`: SwiftUI views, including the command bar, split view and spaces.
+- `Sources/BrowserPOC/Graph`: the graph's edge store and sync, link extraction, similarity, the layout builder, the force simulation, the Metal renderer and its colour tokens (`GraphTheme.swift`).
+- `Sources/BrowserPOC/UI`: SwiftUI views, including the command bar, split view, spaces and the graph panes.
 - `Sources/BrowserPOC/UI/Theme`: the design system. Colours, spacing, radii, shadows, type and motion, plus the small components the views share and the window chrome.
 - `Sources/BrowserPOC/Startup`: the mark, the launch animation and the icon art.
+- `Sources/BrowserPOC/MCP`: the `--mcp` server, its tools, privacy rules and note writer, the current-context writer and the AI clients Settings pane.
 - `Sources/BrowserPOC/Tests`: `--selftest`, `--smoketest` and `--extract-check`.
+- `integrations`: the Claude Code, Claude Desktop, Codex and ChatGPT packaging.

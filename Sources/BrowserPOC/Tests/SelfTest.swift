@@ -241,6 +241,8 @@ enum SelfTest {
         ThemeTests.run()
         EngineTests.run(dir: dir)
         ArcZenTests.run(dir: dir)
+        MCPTests.run(dir: dir)
+        GraphTests.run(dir: dir)
 
         print(failures == 0 ? "\nAll checks passed." : "\n\(failures) check(s) failed.")
         return failures == 0 ? 0 : 1
