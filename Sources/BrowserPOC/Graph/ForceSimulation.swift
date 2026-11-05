@@ -1,8 +1,10 @@
 import Foundation
+import QuartzCore
 
 /// A force-directed layout in the style of d3-force: velocity Verlet with alpha cooling,
 /// Barnes-Hut repulsion, springy links whose strength falls with degree, and a pull toward
-/// the middle. Runs on its own queue and publishes positions for the renderer to copy.
+/// the middle. Runs on its own queue at 60 ticks a second and publishes positions. The renderer
+/// blends the last two ticks, so motion stays smooth at 120 Hz.
 final class ForceSimulation: @unchecked Sendable {
     struct Params: Equatable {
         /// Obsidian's sliders. Center 0 to 1, repel 0 to 20, link force 0 to 1, distance in world units.
@@ -16,6 +18,11 @@ final class ForceSimulation: @unchecked Sendable {
         var alphaDecay: Float = 1 - powf(0.001, 1 / 300)
         /// Repulsion stops past this distance, which keeps far clusters from drifting apart.
         var distanceMax: Float = 900
+        /// How warm the layout stays while a node is dragged. Low, so neighbours follow gently.
+        var dragAlpha: Float = 0.1
+        /// A gentle pull of each node toward its space's spot on a ring, so spaces read as
+        /// regions and the things that bridge them sit in between. 0 turns it off.
+        var spacePull: Float = 0.5
 
         init() {}
         init(_ s: GraphSettings) {
@@ -23,12 +30,14 @@ final class ForceSimulation: @unchecked Sendable {
             repel = Float(s.repelForce)
             linkForce = Float(s.linkForce)
             linkDistance = Float(s.linkDistance)
+            spacePull = Float(s.spacePull)
         }
     }
 
     private let queue = DispatchQueue(label: "local.browserpoc.graph.sim", qos: .userInteractive)
     private var timer: DispatchSourceTimer?
     private var timerRunning = false
+    static let tickInterval: Double = 1.0 / 60
 
     // Simulation state, touched only on `queue`.
     private(set) var count = 0
@@ -41,15 +50,19 @@ final class ForceSimulation: @unchecked Sendable {
     /// Per-node pull toward the middle. Items with no links get more, so they ring the graph
     /// instead of drifting off.
     private var pull: [Float] = []
+    /// Each node's space anchor, or NaN for none.
+    private var anchorX: [Float] = [], anchorY: [Float] = []
     private var params = Params()
     private var alpha: Float = 1
     private var alphaTarget: Float = 0
     private var tree = QuadTree()
     private var rng = SplitMix(seed: 42)
 
-    // Published positions.
+    // Published positions: the last two ticks, so frames between ticks can blend them.
     private let lock = NSLock()
     private var published: [SIMD2<Float>] = []
+    private var previous: [SIMD2<Float>] = []
+    private var publishedAt: CFTimeInterval = 0
     private var publishedVersion = 0
     private var publishedAlpha: Float = 0
 
@@ -60,15 +73,17 @@ final class ForceSimulation: @unchecked Sendable {
 
     // MARK: Commands
 
-    /// Replaces the graph. `start` gives positions for nodes that had one; the rest start near a
-    /// placed neighbour, or on a spiral.
-    func setGraph(count n: Int, links: [(Int, Int)], radii: [Float], start: [SIMD2<Float>?], params p: Params, alpha a: Float) {
+    /// Replaces the graph. `start` gives positions for nodes that had one. The rest start next to a
+    /// placed neighbour, or near their group's spot on a ring (one group per space), or near the
+    /// middle. `warmup` ticks run before anything is shown, so the first frame is already calm.
+    func setGraph(count n: Int, links: [(Int, Int)], start: [SIMD2<Float>?], groups: [Int?] = [], active mask: [Bool]? = nil,
+                  params p: Params, alpha a: Float, warmup: Int = 0) {
         queue.async { [self] in
             count = n
             params = p
             x = .init(repeating: 0, count: n); y = x; vx = x; vy = x
             pinned = .init(repeating: false, count: n); px = x; py = x
-            active = .init(repeating: true, count: n)
+            active = mask?.count == n ? mask! : .init(repeating: true, count: n)
             charge = .init(repeating: -p.repel * 6, count: n)
             var placed = [Bool](repeating: false, count: n)
             for i in 0..<n { if let s = start[i] { x[i] = s.x; y[i] = s.y; placed[i] = true } }
@@ -78,32 +93,78 @@ final class ForceSimulation: @unchecked Sendable {
             for (s, t) in links where s != t && s < n && t < n {
                 linkS.append(Int32(s)); linkT.append(Int32(t)); deg[s] += 1; deg[t] += 1
             }
-            // Unplaced nodes go next to a placed neighbour, so new items appear where they belong.
-            var neighbour = [Int](repeating: -1, count: n)
-            for k in 0..<linkS.count {
-                let s = Int(linkS[k]), t = Int(linkT[k])
-                if placed[s] && !placed[t] { neighbour[t] = s }
-                if placed[t] && !placed[s] { neighbour[s] = t }
-            }
-            let golden = Float.pi * (3 - 5.0.squareRoot().float)
-            var spiral = 0
-            for i in 0..<n where !placed[i] {
-                if neighbour[i] >= 0 {
-                    let j = neighbour[i]
-                    x[i] = x[j] + Float(rng.next(-1, 1)) * p.linkDistance * 0.5
-                    y[i] = y[j] + Float(rng.next(-1, 1)) * p.linkDistance * 0.5
-                } else {
-                    let r = 10 * (0.5 + Float(spiral)).squareRoot() * max(1, p.linkDistance / 30)
-                    let ang = Float(spiral) * golden
-                    x[i] = r * cos(ang); y[i] = r * sin(ang)
-                    spiral += 1
-                }
-            }
+            // Inactive nodes (ones fading out) hold still where they are.
+            for i in 0..<n where !active[i] { pinned[i] = true; px[i] = x[i]; py[i] = y[i] }
+            seedUnplaced(placed: placed, groups: groups)
             setupLinks(deg: deg)
             alpha = a
             alphaTarget = 0
-            publish()
+            for _ in 0..<warmup { tick() }
+            publish(snap: true)
             startTimer()
+        }
+    }
+
+    private func seedUnplaced(placed: [Bool], groups: [Int?]) {
+        let n = count
+        // Next to a placed neighbour, so new items appear where they belong.
+        var neighbour = [Int](repeating: -1, count: n)
+        for k in 0..<linkS.count {
+            let s = Int(linkS[k]), t = Int(linkT[k])
+            if placed[s] && !placed[t] { neighbour[t] = s }
+            if placed[t] && !placed[s] { neighbour[s] = t }
+        }
+        let groupIDs = Array(Set(groups.compactMap { $0 })).sorted()
+        let unplacedCount = Float(placed.filter { !$0 }.count)
+        let ring = params.linkDistance * max(2, unplacedCount.squareRoot() * 0.55)
+        var anchors: [Int: SIMD2<Float>] = [:]
+        for (k, g) in groupIDs.enumerated() {
+            let ang = Float(k) / Float(max(1, groupIDs.count)) * 2 * .pi - .pi / 2
+            anchors[g] = groupIDs.count == 1 ? .zero : SIMD2(cos(ang), sin(ang)) * ring
+        }
+        // The same spots, for the space pull. The ring is sized for the whole graph.
+        let allRing = params.linkDistance * max(2, Float(n).squareRoot() * 0.5)
+        anchorX = .init(repeating: .nan, count: n); anchorY = anchorX
+        if groupIDs.count > 1 {
+            for i in 0..<n {
+                guard i < groups.count, let g = groups[i], let k = groupIDs.firstIndex(of: g) else { continue }
+                let ang = Float(k) / Float(groupIDs.count) * 2 * .pi - .pi / 2
+                anchorX[i] = cos(ang) * allRing; anchorY[i] = sin(ang) * allRing
+            }
+        }
+        let spread = params.linkDistance * max(1.5, (unplacedCount / Float(max(1, groupIDs.count))).squareRoot() * 0.45)
+        for i in 0..<n where !placed[i] {
+            if neighbour[i] >= 0 {
+                let j = neighbour[i]
+                x[i] = x[j] + Float(rng.next(-1, 1)) * params.linkDistance * 0.5
+                y[i] = y[j] + Float(rng.next(-1, 1)) * params.linkDistance * 0.5
+            } else {
+                let g = i < groups.count ? groups[i] : nil
+                let c = g.flatMap { anchors[$0] } ?? .zero
+                let r = Float(rng.next(0, 1)).squareRoot() * (g == nil ? spread * 0.8 : spread)
+                let ang = Float(rng.next(0, 2 * Double.pi))
+                x[i] = c.x + r * cos(ang); y[i] = c.y + r * sin(ang)
+            }
+        }
+    }
+
+    /// Drops every node from `n` on, keeping the rest exactly where and how they're moving.
+    /// Used once nodes that were fading out are gone.
+    func truncate(to n: Int, links: [(Int, Int)]) {
+        queue.async { [self] in
+            guard n <= count else { return }
+            count = n
+            x = Array(x.prefix(n)); y = Array(y.prefix(n)); vx = Array(vx.prefix(n)); vy = Array(vy.prefix(n))
+            pinned = Array(pinned.prefix(n)); px = Array(px.prefix(n)); py = Array(py.prefix(n))
+            active = Array(active.prefix(n)); charge = Array(charge.prefix(n))
+            anchorX = Array(anchorX.prefix(n)); anchorY = Array(anchorY.prefix(n))
+            var deg = [Int](repeating: 0, count: n)
+            linkS = []; linkT = []
+            for (s, t) in links where s != t && s < n && t < n {
+                linkS.append(Int32(s)); linkT.append(Int32(t)); deg[s] += 1; deg[t] += 1
+            }
+            setupLinks(deg: deg)
+            publish(snap: true)
         }
     }
 
@@ -140,14 +201,15 @@ final class ForceSimulation: @unchecked Sendable {
         queue.async { [self] in alpha = max(alpha, a); startTimer() }
     }
 
-    /// Pins a node under the pointer while it's dragged. The rest keeps moving.
+    /// Pins a node under the pointer while it's dragged. The layout stays just warm enough for
+    /// neighbours to follow.
     func drag(_ i: Int, to p: SIMD2<Float>) {
         queue.async { [self] in
             guard i < count else { return }
             pinned[i] = true; px[i] = p.x; py[i] = p.y
             x[i] = p.x; y[i] = p.y
-            alphaTarget = 0.3
-            alpha = max(alpha, 0.3)
+            alphaTarget = params.dragAlpha
+            alpha = max(alpha, params.dragAlpha)
             startTimer()
         }
     }
@@ -155,7 +217,7 @@ final class ForceSimulation: @unchecked Sendable {
     func release(_ i: Int) {
         queue.async { [self] in
             guard i < count else { return }
-            pinned[i] = false
+            if active[i] { pinned[i] = false }
             alphaTarget = 0
         }
     }
@@ -178,6 +240,7 @@ final class ForceSimulation: @unchecked Sendable {
                 }
                 if !placedNear { x[i] = Float(rng.next(-1, 1)) * 20; y[i] = Float(rng.next(-1, 1)) * 20 }
                 vx[i] = 0; vy[i] = 0
+                pinned[i] = false
             }
             active = mask
             alpha = max(alpha, 0.25)
@@ -189,7 +252,7 @@ final class ForceSimulation: @unchecked Sendable {
     func run(ticks: Int) {
         queue.sync { [self] in
             for _ in 0..<ticks { tick() }
-            publish()
+            publish(snap: true)
         }
     }
 
@@ -204,21 +267,44 @@ final class ForceSimulation: @unchecked Sendable {
 
     // MARK: Reading
 
-    /// Copies the latest positions. Returns the version so callers can skip unchanged frames.
     func withPositions<R>(_ body: (UnsafeBufferPointer<SIMD2<Float>>, Int) -> R) -> R {
         lock.lock(); defer { lock.unlock() }
         return published.withUnsafeBufferPointer { body($0, publishedVersion) }
     }
 
+    /// The latest tick's positions.
     func positions() -> [SIMD2<Float>] {
         lock.lock(); defer { lock.unlock() }
         return published
     }
 
+    /// Positions blended between the last two ticks for a frame drawn at `now`, so a 120 Hz
+    /// display sees motion every frame, not every other one. Writes `count` positions into `dst`
+    /// and returns how many it wrote.
+    func copyBlended(into dst: UnsafeMutablePointer<SIMD2<Float>>, count want: Int, now: CFTimeInterval) -> Int {
+        lock.lock(); defer { lock.unlock() }
+        let n = published.count
+        guard n >= want else { return 0 }
+        let f = Float(min(1, max(0, (now - publishedAt) / Self.tickInterval)))
+        if previous.count != n || f >= 1 {
+            published.withUnsafeBufferPointer { dst.update(from: $0.baseAddress!, count: want) }
+        } else {
+            for i in 0..<want { dst[i] = previous[i] + (published[i] - previous[i]) * f }
+        }
+        return want
+    }
+
+    func blended(now: CFTimeInterval) -> [SIMD2<Float>] {
+        let n = positions().count
+        var out = [SIMD2<Float>](repeating: .zero, count: n)
+        _ = out.withUnsafeMutableBufferPointer { copyBlended(into: $0.baseAddress!, count: n, now: now) }
+        return out
+    }
+
     /// True while the layout is still moving.
     var isMoving: Bool {
         lock.lock(); defer { lock.unlock() }
-        return publishedAlpha >= params.alphaMin
+        return publishedAlpha >= params.alphaMin || CACurrentMediaTime() - publishedAt < Self.tickInterval
     }
 
     var currentAlpha: Float {
@@ -231,7 +317,7 @@ final class ForceSimulation: @unchecked Sendable {
     private func startTimer() {
         if timer == nil {
             let t = DispatchSource.makeTimerSource(queue: queue)
-            t.schedule(deadline: .now(), repeating: .milliseconds(16), leeway: .milliseconds(2))
+            t.schedule(deadline: .now(), repeating: Self.tickInterval, leeway: .milliseconds(1))
             t.setEventHandler { [weak self] in self?.step() }
             timer = t
             t.resume()
@@ -245,18 +331,26 @@ final class ForceSimulation: @unchecked Sendable {
     private func step() {
         if alpha < params.alphaMin && alphaTarget == 0 {
             if timerRunning { timer?.suspend(); timerRunning = false }
-            publish()
+            publish(snap: true)
             return
         }
         tick()
-        publish()
+        publish(snap: false)
         onTick?()
     }
 
-    private func publish() {
+    /// `snap` makes both published buffers the same, for jumps that shouldn't be blended.
+    private func publish(snap: Bool) {
         lock.lock()
-        if published.count != count { published = .init(repeating: .zero, count: count) }
-        for i in 0..<count { published[i] = SIMD2(x[i], y[i]) }
+        if published.count != count || snap {
+            if published.count != count { published = .init(repeating: .zero, count: count) }
+            for i in 0..<count { published[i] = SIMD2(x[i], y[i]) }
+            previous = published
+        } else {
+            swap(&previous, &published)
+            for i in 0..<count { published[i] = SIMD2(x[i], y[i]) }
+        }
+        publishedAt = CACurrentMediaTime()
         publishedVersion &+= 1
         publishedAlpha = (alpha < params.alphaMin && alphaTarget == 0) ? 0 : alpha
         lock.unlock()
@@ -305,24 +399,31 @@ final class ForceSimulation: @unchecked Sendable {
 
             // A pull toward the middle: Obsidian's center force makes the graph rounder and tighter.
             let k = params.center * 0.04
-            var sx: Float = 0, sy: Float = 0, m: Float = 0
             for i in 0..<n where active[i] {
                 let pk = i < pull.count ? pull[i] : 1
                 VX[i] -= X[i] * k * a * pk
                 VY[i] -= Y[i] * k * a * pk
-                sx += X[i]; sy += Y[i]; m += 1
+            }
+            // The space pull.
+            let kg = params.spacePull * 0.1
+            if kg > 0 && anchorX.count == n {
+                for i in 0..<n where active[i] && !anchorX[i].isNaN {
+                    VX[i] += (anchorX[i] - X[i]) * kg * a
+                    VY[i] += (anchorY[i] - Y[i]) * kg * a
+                }
             }
 
-            // Move, then keep the mean at the origin like d3's center force.
-            let keep = params.velocityKeep
-            let mx = m > 0 ? sx / m : 0, my = m > 0 ? sy / m : 0
+            // Move. The pull above keeps the graph centred, so there's no whole-graph shift each
+            // tick (d3's mean centring), which reads as drift while dragging. Damping grows a little
+            // as the layout cools, so the last moves settle instead of shimmering.
+            let keep = params.velocityKeep * (0.8 + 0.2 * min(1, a / 0.05))
             for i in 0..<n {
                 if !active[i] { continue }
                 if pinned[i] {
                     X[i] = px[i]; Y[i] = py[i]; VX[i] = 0; VY[i] = 0
                 } else {
                     VX[i] *= keep; VY[i] *= keep
-                    X[i] += VX[i] - mx; Y[i] += VY[i] - my
+                    X[i] += VX[i]; Y[i] += VY[i]
                 }
             }
         }
