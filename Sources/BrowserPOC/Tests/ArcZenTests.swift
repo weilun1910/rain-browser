@@ -25,6 +25,8 @@ enum ArcZenTests {
             switcherAndRows()
             peekAndLittleArc()
             downloadsAndSessions(dir: dir)
+            favicons()
+            foldersAndKeyboard()
             try? FileManager.default.removeItem(at: Paths.stateFile)
         }
     }
@@ -612,6 +614,88 @@ enum ArcZenTests {
         check(!m.tabs.contains { $0 === t } && LittleArc.shared.tabs.contains { $0 === t } && lwv != nil, "a link from another app opens in a small window")
         LittleArc.shared.moveToMain(t, model: m)
         check(m.currentTab === t && t.webView === lwv && !LittleArc.shared.tabs.contains { $0 === t }, "Cmd-O moves it into the main window without reloading")
+        m.prepareForQuit()
+    }
+
+    // MARK: Favicons
+
+    @MainActor static func png(_ px: Int) -> Data {
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: px, pixelsHigh: px, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                   isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        return rep.representation(using: .png, properties: [:])!
+    }
+
+    @MainActor static func favicons() {
+        let page = URL(string: "https://www.example.com/a/b")!
+        func link(_ href: String, _ rel: String, _ sizes: String = "", _ type: String = "") -> Favicons.Candidate? {
+            Favicons.candidate(["href": href, "rel": rel, "sizes": sizes, "type": type])
+        }
+        let ranked = Favicons.rank([
+            link("https://www.example.com/logo.svg", "icon", "any", "image/svg+xml"),
+            link("https://www.example.com/16.png", "icon", "16x16"),
+            link("https://www.example.com/180.png", "apple-touch-icon", "180x180"),
+            link("https://www.example.com/32.png", "icon", "32x32"),
+            link("https://www.example.com/96.png", "icon", "96x96"),
+            link("https://www.example.com/mask.svg", "mask-icon"),
+        ], page: page).map { $0.url.lastPathComponent }
+        check(ranked.first == "32.png" && ranked.firstIndex(of: "96.png")! < ranked.firstIndex(of: "16.png")!
+              && ranked.firstIndex(of: "180.png")! < ranked.firstIndex(of: "logo.svg")! && ranked.last == "favicon.ico" && ranked.dropLast().last == "mask.svg",
+              "icons rank by a crisp 32 px first, touch icons before SVG, and /favicon.ico last", ranked.joined(separator: " "))
+        check(Favicons.candidate(["href": "https://x.example/i.png", "rel": "icon", "sizes": "16x16 48x48"])?.px == 48, "an icon listing several sizes counts its largest")
+        let small = Favicons.normalized(png(16)).flatMap { NSBitmapImageRep(data: $0) }
+        let big = Favicons.normalized(png(400)).flatMap { NSBitmapImageRep(data: $0) }
+        check(small?.pixelsWide == 32 && big?.pixelsWide == 128, "icons are stored at their own size, from 32 to 128 px", "\(small?.pixelsWide ?? 0), \(big?.pixelsWide ?? 0)")
+        check(Favicons.monogram(URL(string: "https://docs.google.com/document/d/1")) == "G" && Favicons.monogram(URL(string: "https://www.bbc.co.uk/news")) == "B"
+              && Favicons.monogram(URL(string: "https://localhost:3000/")) == "L" && Favicons.monogram(nil) == "",
+              "sites without an icon get a monogram from their name")
+        // Icons on disk show at once after a relaunch.
+        Paths.ensure(Favicons.dir)
+        try? Favicons.normalized(png(64))?.write(to: Favicons.file("cached.example"))
+        check(Favicons.shared.hasIcon(for: URL(string: "https://www.cached.example/page")), "a cached icon is there straight away, by host")
+    }
+
+    // MARK: Folders and the keyboard
+
+    @MainActor static func foldersAndKeyboard() {
+        let m = freshModel()
+        let pin = page(m, "https://pin.example/", "Pin")
+        m.togglePin(pin)
+        let f = m.createFolder(named: "Reading")
+        let inFolder = page(m, "https://read.example/1", "Read 1")
+        let inFolder2 = page(m, "https://read.example/2", "Read 2")
+        m.move(inFolder, to: f.id)
+        m.move(inFolder2, to: f.id)
+        let loose = page(m, "https://loose.example/", "Loose", select: true)
+        check(m.sidebarStops == [.row(.tab(pin.id)), .folder(f.id), .row(.tab(inFolder.id)), .row(.tab(inFolder2.id)), .row(.tab(loose.id))],
+              "the keyboard walks the sidebar top to bottom, folders included")
+        m.setFolder(f.id, open: false)
+        check(!m.isFolderOpen(f.id) && m.sidebarStops == [.row(.tab(pin.id)), .folder(f.id), .row(.tab(loose.id))], "a closed folder hides its items")
+        m.saveNow()
+        check(BrowserModel().folders.first { $0.id == f.id }?.isExpanded == false, "each folder keeps its open state after a relaunch")
+        m.select(inFolder)
+        check(m.shownInClosedFolder(f) == [.tab(inFolder.id)] && m.sidebarStops.contains(.row(.tab(inFolder.id))) && !m.sidebarStops.contains(.row(.tab(inFolder2.id))),
+              "a closed folder still shows the tab on screen")
+        m.select(loose)
+        m.toggleSidebarKeyboard()
+        check(m.sidebarCursor == .row(.tab(loose.id)), "Cmd-. starts the keyboard on the row on screen")
+        m.moveSidebarCursor(-1)
+        check(m.sidebarCursor == .folder(f.id), "Up moves to the folder above")
+        m.sidebarCursorRight()
+        check(m.isFolderOpen(f.id) && m.sidebarCursor == .folder(f.id), "Right opens the folder")
+        m.sidebarCursorRight()
+        check(m.sidebarCursor == .row(.tab(inFolder.id)), "Right again goes into it")
+        m.sidebarCursorLeft()
+        check(m.sidebarCursor == .folder(f.id), "Left from an item goes up to its folder")
+        m.sidebarCursorLeft()
+        check(!m.isFolderOpen(f.id), "Left on the folder closes it")
+        m.activateSidebarCursor()
+        check(m.isFolderOpen(f.id) && m.sidebarCursor == .folder(f.id), "Return toggles a folder")
+        m.moveSidebarCursor(1)
+        m.activateSidebarCursor()
+        check(m.currentTab?.id == inFolder.id && m.sidebarCursor == nil, "Return on a tab opens it and gives the keys back")
+        m.toggleSidebarKeyboard()
+        m.toggleSidebarKeyboard()
+        check(m.sidebarCursor == nil, "Cmd-. again leaves the sidebar")
         m.prepareForQuit()
     }
 

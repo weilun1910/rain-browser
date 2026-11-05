@@ -13,12 +13,12 @@ enum ArcZenSmoke {
     }
 
     /// A tiny PNG as a data URL, so the favicon path runs without the network.
-    static func iconDataURL() -> String {
+    static func iconDataURL(red: Bool = false) -> String {
         let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 32, pixelsHigh: 32, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
                                    isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-        NSColor(calibratedRed: 0.3, green: 0.55, blue: 0.95, alpha: 1).setFill()
+        (red ? NSColor(calibratedRed: 0.85, green: 0.35, blue: 0.35, alpha: 1) : NSColor(calibratedRed: 0.3, green: 0.55, blue: 0.95, alpha: 1)).setFill()
         NSBezierPath(roundedRect: NSRect(x: 2, y: 2, width: 28, height: 28), xRadius: 7, yRadius: 7).fill()
         NSGraphicsContext.restoreGraphicsState()
         return "data:image/png;base64," + (rep.representation(using: .png, properties: [:])?.base64EncodedString() ?? "")
@@ -60,6 +60,11 @@ enum ArcZenSmoke {
         load(iconPage, html("Icon page", "<p>A page with its own icon.</p>", head: "<link rel=\"icon\" sizes=\"32x32\" href=\"\(iconDataURL())\">"), "https://icons.smoke.test/home")
         let gotIcon = wait(10) { Favicons.shared.hasIcon(for: URL(string: "https://icons.smoke.test/")) }
         check(gotIcon && FileManager.default.fileExists(atPath: Favicons.file("icons.smoke.test").path), "the site's icon is read from the page and cached")
+        // A page that swaps its icon, like an unread count, gets the new one.
+        let before = Favicons.shared.generation
+        let newIcon = iconDataURL(red: true)
+        iconPage.webView?.evaluateJavaScript("document.querySelector('link[rel=icon]').href = '\(newIcon)'") { _, _ in }
+        check(wait(8) { Favicons.shared.generation > before }, "a page that changes its icon gets the new one")
         model.addToEssentials(iconPage)
         let pinPage = model.newTab(url: nil, select: true)
         load(pinPage, html("Pinned mail", "<p>Inbox</p>", head: "<link rel=\"icon\" href=\"\(iconDataURL())\">"), "https://mail.smoke.test/inbox")
