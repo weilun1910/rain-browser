@@ -16,6 +16,8 @@ extension Theme {
         /// Rows in the sidebar and most UI text.
         static let row = SwiftUI.Font.system(size: 13)
         static let rowEmphasis = SwiftUI.Font.system(size: 13, weight: .medium)
+        /// The current space's name at the top of the sidebar.
+        static let spaceTitle = SwiftUI.Font.system(size: 12, weight: .semibold)
         /// Titles on right panel cards.
         static let cardTitle = SwiftUI.Font.system(size: 13, weight: .semibold)
         /// Small action labels, like Open on a card.

@@ -46,11 +46,11 @@ extension Theme {
         static let cardDark = RGB(white: 0.118)     // #1E1E1E
         /// Floating sheets like the command bar and the first run panel.
         static let sheetLight = RGB(white: 0.995)
-        static let sheetDark = RGB(white: 0.110)    // #1C1C1C
+        static let sheetDark = RGB(white: 0.145)    // #252525, lighter than the card so it lifts off it
 
         /// How strongly the space colour washes the sidebar side of the frame.
         static func tintAlpha(dark: Bool, active: Bool = true) -> Double {
-            (dark ? 0.10 : 0.14) * (active ? 1 : 0.55)
+            (dark ? 0.085 : 0.14) * (active ? 1 : 0.55)
         }
         /// The wash fades to this share of its strength at the window's trailing edge.
         static let tintTrailingShare = 0.2

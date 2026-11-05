@@ -71,11 +71,12 @@ enum Motion {
             if Motion.reduceMotion { return .opacity }
             return .opacity.combined(with: .offset(y: -4))
         }
-        /// A Related card arriving.
-        static var card: AnyTransition {
-            if Motion.reduceMotion { return .opacity }
-            return .asymmetric(insertion: .opacity.combined(with: .offset(y: 6)),
-                               removal: .opacity.animation(Motion.remove))
+        /// A Related card arriving, `index` places in the list, so cards come in one after another.
+        /// Cards leave at once, so a replaced list never overlaps the new one.
+        static func card(index: Int) -> AnyTransition {
+            if Motion.reduceMotion { return .asymmetric(insertion: .opacity.animation(Motion.reducedFade), removal: .identity) }
+            return .asymmetric(insertion: .opacity.combined(with: .offset(y: 6)).animation(Motion.card(index: index)),
+                               removal: .identity)
         }
         /// The command bar.
         static var commandBar: AnyTransition {
@@ -96,6 +97,47 @@ enum Motion {
             if Motion.reduceMotion { return .opacity }
             return .move(edge: edge).combined(with: .opacity)
         }
+    }
+}
+
+/// `.appearEffect`: the view eases in from a slight scale and offset the first time it shows.
+/// For things that appear inside an overlay that only fades, like the command bar's card.
+struct AppearEffect: ViewModifier {
+    let scale: CGFloat
+    let y: CGFloat
+    let animation: Animation
+    @State private var shown = false
+
+    func body(content: Content) -> some View {
+        let still = shown || Motion.reduceMotion
+        return content
+            .scaleEffect(still ? 1 : scale, anchor: .top)
+            .offset(y: still ? 0 : y)
+            .opacity(still ? 1 : 0)
+            .onAppear {
+                guard !shown else { return }
+                if Motion.reduceMotion { shown = true } else { withAnimation(animation) { shown = true } }
+            }
+    }
+}
+
+extension View {
+    func appearEffect(scale: CGFloat = 0.98, y: CGFloat = -6, animation: Animation = Motion.barIn) -> some View {
+        modifier(AppearEffect(scale: scale, y: y, animation: animation))
+    }
+}
+
+/// Remembers the last index it saw, so a view can tell which way a change went (for example,
+/// which way to slide when you move to another space). Hold it in `@State`.
+final class StepTracker {
+    private var last: Int?
+    private var lastStep = 1
+    /// +1 if `index` is after the last one seen, -1 if before. Repeats the last answer when unchanged.
+    func step(for index: Int?) -> Int {
+        guard let index else { return lastStep }
+        if let l = last, l != index { lastStep = index > l ? 1 : -1 }
+        last = index
+        return lastStep
     }
 }
 

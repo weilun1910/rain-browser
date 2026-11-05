@@ -5,32 +5,47 @@ struct LeftSidebar: View {
     @EnvironmentObject var model: BrowserModel
     @ObservedObject var settings = Settings.shared
 
+    @State private var addressHover = false
+    @State private var spaceSteps = StepTracker()
+    @Environment(\.spaceAccent) private var accent
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        // Which way the list slides when the space changes.
+        let step = spaceSteps.step(for: model.spaces.firstIndex { $0.id == model.currentSpaceID })
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
             topBar
             addressField
-            if let sp = model.currentSpace {
-                HStack(spacing: 6) {
-                    SpaceIcon(icon: sp.icon, size: 11).foregroundStyle(Color(hex: sp.color))
-                    Text(sp.name).font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+            ZStack(alignment: .leading) {
+                if let sp = model.currentSpace {
+                    HStack(spacing: Theme.Space.s) {
+                        SpaceIcon(icon: sp.icon, size: 11).foregroundStyle(accent)
+                        Text(sp.name).font(Theme.Font.spaceTitle).foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, Theme.Space.rowInset)
+                    .padding(.top, Theme.Space.xxs)
+                    .id(sp.id)
+                    .transition(Motion.Transitions.spaceSlide(step))
                 }
-                .padding(.horizontal, 8)
-                .padding(.top, 2)
             }
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    pinnedSection
-                    foldersSection
-                    tabsSection
+                // The list is keyed by space, so moving between spaces slides the new list in.
+                ZStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: Theme.Space.l) {
+                        pinnedSection
+                        foldersSection
+                        tabsSection
+                    }
+                    .padding(.bottom, Theme.Space.l)
+                    .id(model.currentSpaceID)
+                    .transition(Motion.Transitions.spaceSlide(step))
                 }
-                .padding(.bottom, 12)
             }
             .scrollIndicators(.never)
             bottomBar
         }
-        .padding(.horizontal, 10)
+        .motion(Motion.spaceSwitch, value: model.currentSpaceID)
+        .padding(.horizontal, Theme.Space.sidebarInset)
         .background(SpaceSwipeCatcher { step in model.switchSpace(by: step) })
-        .background((model.currentSpace.map { Color(hex: $0.color) } ?? .clear).opacity(0.07).ignoresSafeArea())
     }
 
     // MARK: Top
@@ -49,26 +64,28 @@ struct LeftSidebar: View {
                 Settings.shared.update { $0.rightPanelOpen.toggle() }
             }
         }
-        .frame(height: 30)
-        .padding(.top, 4)
+        // Matches the title bar, so these buttons share a row with the traffic lights.
+        .frame(height: Theme.Space.titleBarHeight)
     }
 
     /// Shows the focused page's address. Clicking it opens the command bar, like Cmd-L.
     private var addressField: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(.tertiary)
+        HStack(spacing: Theme.Space.m) {
+            Image(systemName: "magnifyingglass").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
             Text(model.addressText.isEmpty ? "Search or enter address" : Snippet.prettyURL(model.addressText))
-                .font(.system(size: 13))
-                .foregroundStyle(model.addressText.isEmpty ? .tertiary : .secondary)
+                .font(Theme.Font.row)
+                .foregroundStyle(model.addressText.isEmpty ? .secondary : .primary)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 10)
-        .frame(height: 30)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.055)))
+        .padding(.horizontal, Theme.Space.l - 2)
+        .frame(height: 32)
+        .background(Theme.Radius.shape(Theme.Radius.row).fill(addressHover ? Theme.Palette.fieldHover : Theme.Palette.field))
         .contentShape(Rectangle())
         .onTapGesture { model.focusAddress() }
+        .onHover { addressHover = $0 }
+        .motion(Motion.hover, value: addressHover, fadeOnly: true)
         .help(model.addressText)
     }
 
@@ -78,65 +95,74 @@ struct LeftSidebar: View {
         let pinned = model.pinnedTabs
         if !pinned.isEmpty {
             SectionBox(title: "Pinned", onDrop: { ids in model.moveTabs(ids: ids, to: nil, pin: true) }) {
-                ForEach(pinned) { TabRow(tab: $0) }
+                ForEach(pinned) { TabRow(tab: $0).transition(Motion.Transitions.tabRow) }
             }
+            .motion(Motion.insert, value: pinned.map { $0.id })
         }
     }
 
     private var foldersSection: some View {
         SectionBox(title: "Folders", trailing: AnyView(SmallIconButton(symbol: "plus", help: "New folder") { model.promptNewFolder() })) {
             if model.spaceFolders.isEmpty {
-                Text("No folders yet").font(.system(size: 12)).foregroundStyle(.tertiary).padding(.leading, 8)
+                Text("No folders yet")
+                    .font(Theme.Font.secondary).foregroundStyle(.secondary)
+                    .padding(.leading, Theme.Space.rowInset).frame(height: 24)
             }
             ForEach(model.spaceFolders) { f in
                 FolderRow(folder: f)
                 if f.isExpanded {
-                    VStack(spacing: 1) {
-                        ForEach(model.tabs(in: f)) { TabRow(tab: $0) }
+                    VStack(spacing: Theme.Space.rowGap) {
+                        ForEach(model.tabs(in: f)) { TabRow(tab: $0).transition(Motion.Transitions.tabRow) }
                         if model.tabs(in: f).isEmpty {
-                            Text("Empty").font(.system(size: 12)).foregroundStyle(.tertiary).padding(.leading, 8).frame(height: 22)
+                            Text("Empty")
+                                .font(Theme.Font.secondary).foregroundStyle(.secondary)
+                                .padding(.leading, Theme.Space.rowInset).frame(height: 24)
                         }
                     }
-                    .padding(.leading, 14)
+                    // Child icons line up under the folder's icon.
+                    .padding(.leading, Theme.Space.xl)
+                    .transition(Motion.Transitions.folderContents)
                 }
             }
         }
+        .motion(Motion.expand, value: model.spaceFolders)
+        .motion(Motion.insert, value: model.spaceFolders.map { model.tabs(in: $0).map { $0.id } })
     }
 
     private var tabsSection: some View {
         SectionBox(title: "Tabs", trailing: AnyView(SmallIconButton(symbol: "square.and.pencil", help: "New note") { model.newNote() }),
                    onDrop: { ids in model.moveTabs(ids: ids, to: nil) }) {
             Button { model.newTabCommand() } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "plus").frame(width: 16)
+                HStack(spacing: Theme.Space.m) {
+                    Image(systemName: "plus").font(.system(size: 12, weight: .medium)).frame(width: Theme.Space.rowIcon)
                     Text("New tab")
-                    Spacer()
+                    Spacer(minLength: 0)
                 }
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-                .frame(height: 28)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            ForEach(model.spaceSplits.reversed()) { SplitRow(split: $0) }
-            ForEach(model.looseTabs) { TabRow(tab: $0) }
+            .buttonStyle(SidebarActionRowStyle())
+            ForEach(model.spaceSplits.reversed()) { SplitRow(split: $0).transition(Motion.Transitions.tabRow) }
+            ForEach(model.looseTabs) { TabRow(tab: $0).transition(Motion.Transitions.tabRow) }
         }
+        .motion(Motion.insert, value: model.looseTabs.map { $0.id } + model.spaceSplits.map { $0.id })
     }
 
     private var bottomBar: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
             if let msg = model.flashMessage {
-                Text(msg).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).padding(.horizontal, 8)
+                Text(msg)
+                    .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .padding(.horizontal, Theme.Space.rowInset)
+                    .transition(.opacity)
             }
-            HStack {
+            HStack(spacing: 0) {
                 SmallIconButton(symbol: "gearshape", help: "Settings") { AppDelegate.shared?.openSettings() }
-                Spacer()
+                Spacer(minLength: Theme.Space.m)
                 SpaceBar()
             }
-            .frame(height: 30)
+            .frame(height: 32)
         }
-        .padding(.bottom, 6)
+        .motion(Motion.hover, value: model.flashMessage, fadeOnly: true)
+        .padding(.bottom, Theme.Space.m)
     }
 }
 
@@ -148,18 +174,9 @@ struct SectionBox<Content: View>: View {
     @State private var targeted = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text(title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                trailing
-            }
-            .padding(.horizontal, 8)
-            .frame(height: 22)
-            .background(RoundedRectangle(cornerRadius: 6).fill(targeted ? Color.accentColor.opacity(0.15) : .clear))
-            .modifier(DropModifier(onDrop: onDrop, targeted: $targeted))
+        VStack(alignment: .leading, spacing: Theme.Space.rowGap) {
+            SectionHeader(title: title, highlighted: targeted) { trailing ?? AnyView(EmptyView()) }
+                .modifier(DropModifier(onDrop: onDrop, targeted: $targeted))
             content()
         }
     }
@@ -196,17 +213,8 @@ struct NavButton: View {
     let symbol: String
     let help: String
     let action: () -> Void
-    @Environment(\.isEnabled) private var enabled
     var body: some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .medium))
-                .frame(width: 26, height: 24)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(enabled ? .secondary : .quaternary)
-        .help(help)
+        IconButton(symbol: symbol, help: help, action: action)
     }
 }
 
@@ -215,15 +223,7 @@ struct SmallIconButton: View {
     let help: String
     let action: () -> Void
     var body: some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 12))
-                .frame(width: 22, height: 20)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
-        .help(help)
+        IconButton(symbol: symbol, help: help, width: 24, height: 22, symbolSize: 12, action: action)
     }
 }
 
@@ -231,11 +231,7 @@ struct RowBackground: ViewModifier {
     let selected: Bool
     let hovering: Bool
     func body(content: Content) -> some View {
-        content
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(selected ? Color.primary.opacity(0.11) : (hovering ? Color.primary.opacity(0.05) : .clear))
-            )
+        content.sidebarRow(selected: selected, hovering: hovering)
     }
 }
 
@@ -252,36 +248,37 @@ struct TabRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.Space.m) {
             ZStack {
                 if tab.isLoading {
                     ProgressView().controlSize(.mini)
                 } else {
-                    Image(systemName: icon).font(.system(size: 11)).foregroundStyle(.secondary)
+                    RowIcon(symbol: icon)
                 }
             }
-            .frame(width: 16)
+            .frame(width: Theme.Space.rowIcon)
             Text(tab.displayTitle)
-                .font(.system(size: 13))
+                .font(Theme.Font.row)
                 .lineLimit(1)
                 .strikethrough(tab.isMissing, color: .secondary)
                 .foregroundStyle(tab.isMissing ? .secondary : (tab.isLoaded || tab.kind != .web || model.isSelected(tab) ? .primary : .secondary))
             if tab.isMissing && hovering {
                 Button("Locate") { model.locateNote(tab) }
-                    .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(Color.accentColor)
+                    .buttonStyle(QuietActionStyle())
             }
             Spacer(minLength: 0)
-            if hovering {
-                Button { tab.kind == .web ? model.close(tab) : model.remove(tab) } label: {
-                    Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)).frame(width: 16, height: 16)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help(tab.isPinned || tab.folderID != nil ? "Unload" : "Close")
+            // Always laid out, so the title doesn't jump when the close button appears on hover.
+            IconButton(symbol: "xmark", help: tab.isPinned || tab.folderID != nil ? "Unload" : "Close",
+                       width: 20, height: 20, symbolSize: 9) {
+                tab.kind == .web ? model.close(tab) : model.remove(tab)
             }
+            .opacity(hovering ? 1 : 0)
+            .allowsHitTesting(hovering)
+            .motion(Motion.hover, value: hovering, fadeOnly: true)
         }
-        .padding(.horizontal, 8)
-        .frame(height: 28)
+        .padding(.leading, Theme.Space.rowInset)
+        .padding(.trailing, Theme.Space.xs)
+        .frame(height: Theme.Space.rowHeight)
         .modifier(RowBackground(selected: model.isSelected(tab), hovering: hovering))
         .contentShape(Rectangle())
         .onTapGesture { model.select(tab) }
@@ -361,23 +358,22 @@ struct FolderRow: View {
     @State private var targeted = false
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Space.s) {
             Image(systemName: "chevron.right")
-                .font(.system(size: 9, weight: .semibold))
+                .font(.system(size: 8, weight: .bold))
                 .rotationEffect(.degrees(folder.isExpanded ? 90 : 0))
+                .motion(Motion.expand, value: folder.isExpanded)
                 .foregroundStyle(.tertiary)
                 .frame(width: 10)
-            Image(systemName: folder.isExpanded ? "folder" : "folder.fill")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-            Text(folder.name).font(.system(size: 13)).lineLimit(1)
+            RowIcon(symbol: folder.isExpanded ? "folder" : "folder.fill")
+            Text(folder.name).font(Theme.Font.row).lineLimit(1)
             Spacer(minLength: 0)
             Text("\(model.tabs(in: folder).count)")
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
+                .font(Theme.Font.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 8)
-        .frame(height: 28)
+        .padding(.horizontal, Theme.Space.rowInset)
+        .frame(height: Theme.Space.rowHeight)
         .modifier(RowBackground(selected: targeted, hovering: hovering))
         .contentShape(Rectangle())
         .onTapGesture { model.toggleFolder(folder) }

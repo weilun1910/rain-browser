@@ -144,6 +144,27 @@ private struct IconButtonBody: View {
     }
 }
 
+/// A full-width action row in the sidebar, like New tab: quiet text, a faint fill on hover.
+struct SidebarActionRowStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { SidebarActionRowBody(configuration: configuration) }
+}
+
+private struct SidebarActionRowBody: View {
+    let configuration: ButtonStyleConfiguration
+    @State private var hovering = false
+    var body: some View {
+        configuration.label
+            .font(Theme.Font.row)
+            .foregroundStyle(hovering ? .primary : .secondary)
+            .padding(.horizontal, Theme.Space.rowInset)
+            .frame(height: Theme.Space.rowHeight)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .sidebarRow(selected: false, hovering: hovering, pressed: configuration.isPressed)
+            .onHover { hovering = $0 }
+    }
+}
+
 /// A small text action, like Open or Add to research on a card.
 struct QuietActionStyle: ButtonStyle {
     var accent: Color = .accentColor
