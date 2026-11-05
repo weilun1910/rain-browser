@@ -28,6 +28,18 @@ if args.contains("--chrome-dry-run") {
     exit(ChromeHistory.dryRun())
 }
 
+// --render-art <dir>: the app icon in every size, plus mark and startup previews.
+if let i = args.firstIndex(of: "--render-art"), i + 1 < args.count {
+    let dir = URL(fileURLWithPath: (args[i + 1] as NSString).expandingTildeInPath, isDirectory: true)
+    exit(MainActor.assumeIsolated { ArtRenderer.run(dir) })
+}
+
+// --render-review <dir>: light and dark snapshots of every main view, offscreen.
+if let i = args.firstIndex(of: "--render-review"), i + 1 < args.count {
+    let dir = URL(fileURLWithPath: (args[i + 1] as NSString).expandingTildeInPath, isDirectory: true)
+    exit(MainActor.assumeIsolated { LookRenders.run(out: dir) })
+}
+
 // --data-dir <dir> runs the app on its own support folder and its own WebKit store, so test
 // and demo runs never read or write the real profile.
 if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
@@ -37,7 +49,8 @@ if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
     MainActor.assumeIsolated { BrowserModel.dataStoreID = Paths.storeID(for: dir) }
 }
 
-let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--workdir", "--extract-check", "--data-dir"]
+let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--workdir", "--extract-check", "--data-dir",
+                          "--render-art", "--render-review"]
 if let unknown = args.dropFirst().first(where: { $0.hasPrefix("--") && !known.contains($0) }) {
     print("Unknown flag \(unknown). Flags: --selftest, --smoketest, --chrome-dry-run, each with optional --workdir <dir> for the tests, and --data-dir <dir> to run the app on a separate profile.")
     exit(2)
