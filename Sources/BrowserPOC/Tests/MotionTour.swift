@@ -59,6 +59,7 @@ enum MotionTour {
             return
         }
         if CommandLine.arguments.contains("bar") { startBar(model); return }
+        if let name = MotionTours.requested { MotionTours.start(name, model); return }
         let steps = Steps()
         func step(_ gap: Double, _ label: String, _ f: @escaping @MainActor () -> Void) { steps.step(gap, label, f) }
         let firstFolder = { model.spaceFolders.first }
