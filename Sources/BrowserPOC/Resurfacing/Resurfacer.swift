@@ -17,7 +17,8 @@ struct Card: Identifiable {
 ///
 /// In the real app both passes wait for the item to stay in front for a while (first and second
 /// dwell), and nothing runs while `RelatedGate` says Related is paused: the power setting, the
-/// shelf or panel hidden, or the window out of sight.
+/// shelf or panel hidden, or the window out of sight. The shelf writes a card's model reason
+/// only when its popover opens.
 @MainActor
 final class Resurfacer: ObservableObject {
     @Published private(set) var siteCards: [Card] = []
@@ -49,6 +50,8 @@ final class Resurfacer: ObservableObject {
     /// The item waiting for its dwell or for the gate to open.
     private var waitingKey: String?
     private var dwellWork: DispatchWorkItem?
+    /// Cards whose reason was asked for by opening their popover in the shelf.
+    private var wantedReasons = Set<Int64>()
 
     /// Cards per context, so switching focus back to a pane doesn't refetch.
     private struct Cached { let sites: [Card]; let docs: [Card]; let terms: [String]; let at: Date }
@@ -167,6 +170,7 @@ final class Resurfacer: ObservableObject {
         hasContext = true
         lastWords = words
         contextSince = Date()
+        wantedReasons = []
         let powerPaused = RelatedGate.shared.pause?.isPower == true
         if !powerPaused, input.key != lastKey, let c = cache[input.key], Date().timeIntervalSince(c.at) < 180 {
             siteCards = c.sites
@@ -237,6 +241,26 @@ final class Resurfacer: ObservableObject {
         generation += 1
         schedule(c, replace: false)
     }
+
+    /// The shelf asks for a card's reason when its popover opens. The sidebar shows reasons on
+    /// its cards, so it gets them up front.
+    func wantReason(_ id: Int64) {
+        guard let c = context, let card = cards.first(where: { $0.id == id }), !card.reasonFromModel,
+              judgments[judgmentKey(id, c.key)] == nil else { return }
+        wantedReasons.insert(id)
+        guard judgingIdle, Judge.isAvailable, RelatedGate.shared.canRun else { return }
+        judgingIdle = false
+        let gen = generation
+        let w = work
+        Task.detached(priority: .userInitiated) { await self.judgePending(input: c, gen: gen, work: w) }
+    }
+
+    /// Whether a card on screen gets its model reason without being asked.
+    private func reasonUpFront(_ id: Int64) -> Bool {
+        Self.reasonUpFront(mode: RelatedPrefs.shared.mode, asked: wantedReasons.contains(id))
+    }
+
+    static func reasonUpFront(mode: RelatedMode, asked: Bool) -> Bool { mode == .sidebar || asked }
 
     private var indexWork: DispatchWorkItem?
 
@@ -412,7 +436,8 @@ final class Resurfacer: ObservableObject {
     }
 
     /// Judges borderline cards (which then appear or don't) and writes reasons for the cards on
-    /// screen. One at a time, newest context only.
+    /// screen: all of them in the sidebar, the ones whose popover opened in the shelf. One at a
+    /// time, newest context only.
     nonisolated private func judgePending(input: ContextInput, gen: Int, work: WorkingContextSummary?) async {
         guard Judge.isAvailable else { return }
         await MainActor.run { self.judgingIdle = false }
@@ -423,7 +448,7 @@ final class Resurfacer: ObservableObject {
                 for sec in CardSection.allCases {
                     if let m = self.pending[sec]?.first(where: { self.judgments[self.judgmentKey($0.doc.id, input.key)] == nil }) { return (m, sec) }
                 }
-                for c in self.cards where !c.reasonFromModel && self.judgments[self.judgmentKey(c.id, input.key)] == nil {
+                for c in self.cards where !c.reasonFromModel && self.judgments[self.judgmentKey(c.id, input.key)] == nil && self.reasonUpFront(c.id) {
                     return (c.match, c.match.section)
                 }
                 return nil

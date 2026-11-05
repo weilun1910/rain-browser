@@ -95,8 +95,10 @@ enum SmokeTest {
         let doc = IndexStore.shared.doc(key: key)
         check(captured && doc?.source == .web, "page is captured after it stays open", doc.map { "\($0.title), visits \($0.visitCount)" } ?? "missing")
 
-        // 3. The on-device model rewrites reasons when it's available.
+        // 3. The on-device model rewrites reasons when it's available. In the shelf it writes one
+        // when the card's popover opens, so ask the way the popover does.
         if ReasonWriter.isAvailable {
+            if RelatedPrefs.shared.mode == .shelf, let c = model.resurfacer.cards.first { model.resurfacer.wantReason(c.id) }
             let got = wait(45) { model.resurfacer.cards.contains { $0.reasonFromModel } }
             let r = model.resurfacer.cards.first { $0.reasonFromModel }?.reason ?? ""
             check(got, "Foundation Models wrote a reason", r)

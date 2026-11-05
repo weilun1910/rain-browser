@@ -679,6 +679,8 @@ struct ShelfCardDetail: View {
             .padding(.top, 1)
         }
         .padding(ShelfStyle.popoverPadding)
+        // The model writes a card's reason only once its popover opens.
+        .task(id: card.id) { model.resurfacer.wantReason(card.id) }
     }
 }
 

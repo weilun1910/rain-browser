@@ -65,6 +65,9 @@ enum RelatedPowerTests {
               "the setting's pause wins over the others, so the panel says why")
         check(RelatedPause.battery.isPower && RelatedPause.off.isPower && !RelatedPause.hidden.isPower && !RelatedPause.windowHidden.isPower,
               "only the setting's pauses clear the cards")
+        check(Resurfacer.reasonUpFront(mode: .sidebar, asked: false) && !Resurfacer.reasonUpFront(mode: .shelf, asked: false)
+              && Resurfacer.reasonUpFront(mode: .shelf, asked: true),
+              "the shelf writes a card's model reason only when its popover asks, the sidebar writes them all")
     }
 
     // MARK: The live gate
