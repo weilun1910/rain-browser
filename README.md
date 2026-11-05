@@ -43,6 +43,7 @@ build/BrowserPOC.app/Contents/MacOS/BrowserPOC --chrome-dry-run # what a Chrome 
 .build/debug/BrowserPOC --render-review <dir>                   # light and dark snapshots of every main view, offscreen
 scripts/make-icon.sh                                            # redraws the app icon from code
 .build/debug/BrowserPOC --shelf-demo --data-dir <folder>        # plays the Related shelf's motion in a window, on a throwaway profile
+.build/debug/BrowserPOC --data-dir <folder> --motion-tour spaces # plays one area's motion in a window for recording, then quits (also rows, peek, split, compact, toasts)
 scripts/mcp-e2e.sh                                              # Claude Code and Codex against a made-up profile, temporary configs only
 build/BrowserPOC.app/Contents/MacOS/BrowserPOC --graph-bench    # the graph's 5,000 node timings on a release build
 ```
@@ -54,6 +55,15 @@ Both tests use throwaway folders and exit non-zero if a check fails. The self te
 **Look and feel.** It follows Zen's layout. The page sits in a rounded card 8 points in from the window, and the sidebar runs straight into the window around it with no title bar. The traffic lights rest as grey dots in the sidebar's top row and show their colour when you hover them. Backgrounds are neutral grey with a fine grain. The only colour in the chrome is the space's, which tints the sidebar and fades toward the right. Every space colour gets the same calm strength in light and dark mode, and it dims when the window isn't in front. The UI text is SF Pro, with New York for the few headings where the app talks to you. Animations are short and don't bounce: tabs fade in, folders open like a drawer, a new space's list slides in, Cmd-T rises in and Cmd-L grows out of the address field, the selection glides between results, splits slide open and Related cards arrive one after another. With Reduce Motion on, movement turns into short fades or nothing.
 
 **Startup and icon.** The app is called Rain. Every launch draws its mark in the middle of the window for about a second while the window restores behind it: an open loop drawn like a brush stroke, a dot that lands last like a drop, then the name. It never blocks a click and it's skipped with Reduce Motion on. The loop comes back around to the dot, for things you've seen coming back. The mark and the app icon are drawn in code, so they're crisp at every size. The icon is an Icon Composer icon, so macOS shows its light, dark, clear and tinted looks. It's still placeholder art.
+
+**Motion.** Swiping two fingers sideways on the sidebar drags the spaces under my fingers, like Arc. The next space's tabs slide in from the side, its colour fades into the sidebar as far as I've pulled, and the highlight on the space icons moves with it. Past the first or last space the sidebar gives a little and springs back. Letting go finishes at the speed I was moving: a slow drag past about a third of the way goes to the next space, and a flick goes from much less. The page changes the moment I lift my fingers, and only the sidebar keeps moving. Clicking a space icon, Ctrl-1 to 9 and the command bar slide the same strip, so a swipe or another shortcut picks it up mid-way. A jump of several spaces slides one page, without running through the ones in between. A mouse wheel steps one space at a time. Elsewhere:
+- Pinning, unpinning and moving a tab into a folder glide the row to its new place.
+- Dragging a row opens a gap where it would land, and the rows below move down to make room.
+- Peek grows out of the link I clicked, shrinks back into it when it closes, and fills the pane before it becomes a tab.
+- In compact mode the sidebar comes back after the pointer rests at the edge for a moment, and goes soon after the pointer leaves.
+- Split panes move to their new places when the split changes.
+- Toasts update in place, and Clear Today sweeps the tabs out top to bottom.
+Everything settles without bouncing and can be interrupted. With Reduce Motion on, the swipe still follows my fingers, and everything else fades or cuts. The plan is in `notes/plans/2026-11-05-motion.md` in the project folder.
 
 The Arc and Zen parts below are built from how those browsers actually behave. The research, with every source and the files I read in Zen's code, is in `notes/research/2026-11-04-arc-zen-features.md` in the project folder.
 
@@ -170,6 +180,7 @@ With "Let AI clients edit notes" on in Settings, three more tools can create a n
 - `Sources/BrowserPOC/Sources`: Chrome import, Notion, Google Docs and Granola sources, URL safety rules, HTML text, the notes indexer and folder watcher.
 - `Sources/BrowserPOC/Graph`: the graph's edge store and sync, link extraction, similarity, the layout builder, the force simulation, the Metal renderer and its colour tokens (`GraphTheme.swift`).
 - `Sources/BrowserPOC/UI`: SwiftUI views, including the command bar, split view, spaces, the graph panes and the Related shelf (`RelatedShelf`, its state and rules in `RelatedShelfState`, and every visual value in `ShelfStyle`).
+- Motion: the space strip and its swipe (`UI/SpacePager.swift`, the rules in `UI/SwipePhysics.swift`), Peek's choreography (`UI/PeekMotion.swift`), drag gaps (`UI/SidebarDrag.swift`), compact mode's reveal (`UI/CompactReveal.swift`) and the smaller pieces (`UI/MotionDetails.swift`).
 - `Sources/BrowserPOC/UI/Theme`: the design system. Colours, spacing, radii, shadows, type and motion, plus the small components the views share and the window chrome.
 - `Sources/BrowserPOC/Startup`: the mark, the launch animation and the icon art.
 - `Sources/BrowserPOC/MCP`: the `--mcp` server, its tools, privacy rules and note writer, the current-context writer and the AI clients Settings pane.

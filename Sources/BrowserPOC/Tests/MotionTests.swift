@@ -226,7 +226,8 @@ enum MotionTests {
 
     static func punctuation() {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        let files = ["UI/SpacePager.swift", "UI/SwipePhysics.swift", "Tests/MotionTests.swift", "Tests/MotionTours.swift"]
+        let files = ["UI/SpacePager.swift", "UI/SwipePhysics.swift", "UI/PeekMotion.swift", "UI/SidebarDrag.swift",
+                     "UI/CompactReveal.swift", "UI/MotionDetails.swift", "Tests/MotionTests.swift", "Tests/MotionTours.swift"]
         let bad = files.filter { f in
             guard let s = try? String(contentsOf: root.appendingPathComponent(f), encoding: .utf8) else { return false }
             return s.unicodeScalars.contains { [0x2013, 0x2014, 0x00B7, 0x2011, 0x2012, 0x2015].contains($0.value) }
