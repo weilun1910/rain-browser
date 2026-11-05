@@ -111,8 +111,12 @@ enum BarActions {
         BarAction(id: "view.sidebarSide", title: "Move sidebar to the other side", icon: "sidebar.right", keywords: ["tabs on the right", "left", "right"]) { _ in
             BrowserPrefs.shared.update { $0.sidebarOnRight.toggle() }
         },
-        BarAction(id: "view.related", title: "Toggle Related panel", icon: "sidebar.right", shortcut: "⇧⌘R", keywords: ["cards", "resurfacing"]) { _ in
-            Settings.shared.update { $0.rightPanelOpen.toggle() }
+        BarAction(id: "view.related", title: "Show or hide Related", icon: "sidebar.right", shortcut: "⇧⌘R", keywords: ["cards", "resurfacing", "shelf", "panel"]) { _ in
+            RelatedPrefs.shared.toggleVisible()
+        },
+        BarAction(id: "view.relatedMode", title: "Switch Related between shelf and sidebar", icon: "rectangle.bottomthird.inset.filled", shortcut: "⌃⌘R",
+                  keywords: ["cards", "resurfacing", "bottom", "panel", "layout"]) { _ in
+            RelatedPrefs.shared.toggleMode()
         },
         BarAction(id: "note.new", title: "New note", icon: "square.and.pencil", shortcut: "⇧⌘N") { $0.newNote() },
         BarAction(id: "littleArc.new", title: "New Little Arc window", icon: "macwindow", shortcut: "⌥⌘N", keywords: ["quick", "window"]) { m in

@@ -196,6 +196,7 @@ struct MarkdownTextView: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let tv = scroll.documentView as? NSTextView else { return }
+        RelatedShelf.setNoteClearance(scroll, context.environment.relatedShelfClearance)
         // Only push text in when it changed outside the editor, so typing isn't disturbed.
         if context.coordinator.lastRevision != doc.externalRevision {
             context.coordinator.lastRevision = doc.externalRevision

@@ -32,7 +32,7 @@ build/BrowserPOC.app/Contents/MacOS/BrowserPOC --data-dir ~/Desktop/test-profile
 Tests and checks from the command line:
 
 ```
-scripts/selftest.sh                                             # index, notes, sections, splits, spaces, sidebar, command bar, MCP and look checks
+scripts/selftest.sh                                             # index, notes, sections, splits, spaces, sidebar, command bar, Related shelf, MCP and look checks
 .build/debug/BrowserPOC --smoketest                             # drives the real browser headless, no window on screen
 build/BrowserPOC.app/Contents/MacOS/BrowserPOC --chrome-dry-run # what a Chrome import would do, fetches nothing
 .build/debug/BrowserPOC --extract-check <url>                   # what capture reads from one public page
@@ -42,6 +42,7 @@ build/BrowserPOC.app/Contents/MacOS/BrowserPOC --chrome-dry-run # what a Chrome 
 .build/debug/BrowserPOC --download-models --data-dir <profile>  # fetch the on-device models into a profile
 .build/debug/BrowserPOC --render-review <dir>                   # light and dark snapshots of every main view, offscreen
 scripts/make-icon.sh                                            # redraws the app icon from code
+.build/debug/BrowserPOC --shelf-demo --data-dir <folder>        # plays the Related shelf's motion in a window, on a throwaway profile
 scripts/mcp-e2e.sh                                              # Claude Code and Codex against a made-up profile, temporary configs only
 build/BrowserPOC.app/Contents/MacOS/BrowserPOC --graph-bench    # the graph's 5,000 node timings on a release build
 ```
@@ -79,7 +80,7 @@ Enter opens. Option-Enter opens in split view, Shift-Enter in Peek and Cmd-Enter
 - Pick two to four tabs with Cmd-click and choose Open in split view.
 - Ctrl-Shift-=, or Option-Enter in the command bar.
 
-Hover a pane for its controls: a handle to drag it to another pane's edge, Unsplit (Shift-click to stay in the split) and Close. Ctrl-Shift-1 to 4 focus a pane, Ctrl-Shift-[ and ] step through them, and Ctrl-Shift-- unsplits. Every divider drags, and double-clicking one evens it out. A split shows as one joined row in the sidebar, and right-click has Separate, Swap or Rotate, Layout, Pin and Move to space. A split made from a pinned tab stays pinned. The address, back and forward, find, Cmd-L, Cmd-W and the Related panel follow the focused pane. Splits come back after a restart.
+Hover a pane for its controls: a handle to drag it to another pane's edge, Unsplit (Shift-click to stay in the split) and Close. Ctrl-Shift-1 to 4 focus a pane, Ctrl-Shift-[ and ] step through them, and Ctrl-Shift-- unsplits. Every divider drags, and double-clicking one evens it out. A split shows as one joined row in the sidebar, and right-click has Separate, Swap or Rotate, Layout, Pin and Move to space. A split made from a pinned tab stays pinned. The address, back and forward, find, Cmd-L, Cmd-W and Related follow the focused pane. Splits come back after a restart.
 
 **Peek.** Shift-click a link, Shift-Enter in the bar, or click a link to another site from a pinned tab, and the page floats over the one you're on. Cmd-O or the expand button makes it a tab without reloading. The split button puts it next to the page. Esc, a click outside or Cmd-W closes it, and Cmd-Shift-T brings it back.
 
@@ -97,7 +98,11 @@ These files may also be edited by other apps while this one is open, so the app 
 - Before every save it checks the file on disk. If something else changed it, it doesn't save, and a bar offers Load disk version or Keep mine. If you had no unsaved edits, it just reloads.
 - It watches the folders, so new, renamed and changed files show up and get indexed. Files still in iCloud are downloaded and retried.
 
-**Related panel.** The right panel shows things you've seen before that relate to what's in front of you, in two sections. Sites holds pages you read, here or in Chrome. Notes / Docs holds things you write: your notes, Notion pages, Google Docs, Sheets and Slides, sites on the "Sites you write on" list in Settings, and any page where you've typed about 200 characters. Right-click a card to move it to the other section, and that choice is remembered. Each section shows up to 3 cards and has to clear the same fairly high bar, so a section is often empty. The current item and anything opened in the last 10 minutes never show, and Related always looks across every space. Each card has the matching passage and a short reason. The reason starts with when I saw it and what I was doing then, like "You read this on 12 Oct while writing Thesis outline", and then says what it covers. Open, Add to research and Dismiss work as before. With a note in a split, Add to research puts the link in that note.
+**Related.** Things I've seen before that relate to what's in front of me float along the bottom of the page or note, as a row of small cards with the site's icon and the title. Hovering one, or reaching it with the keyboard, opens a card above it with the matching passage, a short reason, and Open, Add to research and Dismiss. Moving along the row keeps that card open and slides it across. Clicking a small card opens the item, and right-click has the rest. The row scrolls sideways when there are more, with a trackpad or a mouse wheel.
+
+A soft fade sits behind the row so it reads over any page, toward black in dark mode and toward light grey in light mode. The page is told its bottom is covered, so cookie bars, chat boxes and other fixed footers sit above the row, and the end of the page scrolls clear of it. With nothing related there's no row at all. It sinks out of the way while I type in a note and comes back when I pause. In a split it sits under the pane I'm in. While the on-device models download, a small pill at the end of the row shows how far along they are. The button at the very end opens the local graph above the row. Cmd-Shift-R hides or shows Related. Related can also show as a panel on the right: pick Sidebar in Settings, under General, or press Ctrl-Cmd-R to switch.
+
+Sites come first in the row, then a thin line, then Notes / Docs. Sites holds pages you read, here or in Chrome. Notes / Docs holds things you write: your notes, Notion pages, Google Docs, Sheets and Slides, sites on the "Sites you write on" list in Settings, and any page where you've typed about 200 characters. Right-click a card to move it to the other section, and that choice is remembered. Each section shows up to 3 cards and has to clear the same fairly high bar, so a section is often empty. The current item and anything opened in the last 10 minutes never show, and Related always looks across every space. The reason starts with when I saw it and what I was doing then, like "You read this on 12 Oct while writing Thesis outline", and then says what it covers. With a note in a split, Add to research puts the link in that note.
 
 **How Related picks cards.** Every page and note is cut into passages, and each passage gets a vector from EmbeddingGemma 2, a small embedding model that runs on this Mac. For whatever's in front of me, four searches run at once: keyword search (SQLite's BM25) on the page's own words, keyword search on search queries that Apple's on-device model writes after reading the page, a meaning search over the vectors, and a match on shared names. Reciprocal rank fusion merges them. The top 20 in each section go to Qwen3 Reranker, a cross-encoder that reads each passage next to what I have open and scores how well it fits. Cards that clear the bar easily show within a second or two. Borderline ones only show if Apple's on-device model, asked whether the item would help with what I'm doing right now, doesn't say no. Cards already on screen stay put while they still roughly qualify, and nothing reruns for small edits while I type.
 
@@ -111,7 +116,7 @@ These files may also be edited by other apps while this one is open, so the app 
 **Graph.** An Obsidian-style graph of everything in the index: notes, Google Docs, Notion pages, Granola meetings and sites. Open it with the graph button at the bottom of the sidebar, View > Graph (Cmd-Option-G), Open Graph in the command bar, or its row in the sidebar. It's an app page like History, so it can be pinned, filed, put in a split next to a note and comes back after a relaunch. Lines come in six kinds, each with its own colour and filter:
 - Links: `[[wikilinks]]`, Markdown links and URLs in a note or doc that match something indexed. A wikilink to a note that doesn't exist yet shows as a hollow node, and clicking it creates the note.
 - Navigation: a link you clicked on one page that took you to another.
-- Research: something you added to research from the Related panel.
+- Research: something you added to research from Related.
 - Together: two items in a split, or two items you spent time on within ten minutes of each other in two separate sessions.
 - Similar meaning: each item's closest neighbours by meaning from the best embedding model it has, kept only when the match goes both ways or is very close for that model.
 - Shared topics: optional topic nodes for names, and topics the tagging model found, that several items share, like Obsidian's tag nodes.
@@ -122,7 +127,7 @@ Hover a node to light up its neighbours, dim the rest and see why it's connected
 
 Changing a filter or a search fades and grows nodes in and out instead of redrawing everything, and fit and focus glide. The graph draws at the display's full rate, 120 Hz on ProMotion, while anything moves, and stops drawing when nothing does. It remembers where every node came to rest, so a relaunch starts from the same picture. Two graph panes each keep their own view.
 
-The bottom of the right panel shows a local graph for whatever's focused, 1 to 3 steps out, and opens the full graph focused on it. When the item changes, the local graph shifts to it instead of starting over. With the graph focused in a split, the local graph follows the item next to it, and that item gets a ring in the big graph. The graph's own tables live in `index.sqlite` next to the index, and its settings in `graph.json`.
+The graph button at the end of the Related shelf opens a local graph for whatever's focused, 1 to 3 steps out, and from there the full graph focused on it. With Related as a sidebar, the local graph sits at the bottom of the right panel instead. When the item changes, the local graph shifts to it instead of starting over. With the graph focused in a split, the local graph follows the item next to it, and that item gets a ring in the big graph. The graph's own tables live in `index.sqlite` next to the index, and its settings in `graph.json`.
 
 With `BROWSERPOC_GRAPH_SCRIPT=<seconds>` set, the graph drives itself through hover, pan, zoom, drag, focus, a search and fit after that delay. It prints frame pacing for each step and quits. Use it only with `--data-dir`.
 
@@ -150,7 +155,7 @@ With "Let AI clients edit notes" on in Settings, three more tools can create a n
 
 ## Where things live
 
-- App data: `~/Library/Application Support/BrowserPOC/` (state.json, settings.json, index.sqlite, and Notes/ when no notes folders are chosen). Round 3 adds Models/ (the downloaded models), sources.json (the source switches) and granola-auth.json (the Granola sign-in, readable only by my account). The AI client settings are in mcp.json, the served log in mcp-log.jsonl, and what's on screen in current-context.json.
+- App data: `~/Library/Application Support/BrowserPOC/` (state.json, settings.json, index.sqlite, and Notes/ when no notes folders are chosen). Round 3 adds Models/ (the downloaded models), sources.json (the source switches), related.json (Related as a shelf or a sidebar) and granola-auth.json (the Granola sign-in, readable only by my account). The AI client settings are in mcp.json, the served log in mcp-log.jsonl, and what's on screen in current-context.json.
 - Browsing data sits next to it: browser.json (Browsing settings), history.sqlite (visits), closed.json (recently closed and the archive), sessions/ (back and forward for each tab), favicons/ and downloads.json.
 - WebKit keeps cookies and caches under `~/Library/WebKit/local.browserpoc` and `~/Library/Caches/local.browserpoc`. Each named profile has its own WebKit store there too.
 - Clearing the index removes indexed entries only. Notes stay exactly as they are.
@@ -161,10 +166,10 @@ With "Let AI clients edit notes" on in Settings, three more tools can create a n
 - `Sources/BrowserPOC/Notes`: notes folders, the note document with its disk checks, Markdown preview.
 - `Sources/BrowserPOC/Index`: SQLite wrapper, text analysis, the index, hybrid retrieval (`Retrieval.swift`), and the read API for the graph and MCP (`IndexStore+API.swift`: `semanticNeighbours`, `entities`, `topics`, `search`).
 - `Sources/BrowserPOC/Intelligence`: llama.cpp wrapper, model downloads, embeddings, the working-context description and judgment with Foundation Models, background re-embedding and topic tagging, and an MCP client with OAuth.
-- `Sources/BrowserPOC/Resurfacing`: the Related panel's cards and reasons.
+- `Sources/BrowserPOC/Resurfacing`: Related's cards and reasons.
 - `Sources/BrowserPOC/Sources`: Chrome import, Notion, Google Docs and Granola sources, URL safety rules, HTML text, the notes indexer and folder watcher.
 - `Sources/BrowserPOC/Graph`: the graph's edge store and sync, link extraction, similarity, the layout builder, the force simulation, the Metal renderer and its colour tokens (`GraphTheme.swift`).
-- `Sources/BrowserPOC/UI`: SwiftUI views, including the command bar, split view, spaces and the graph panes.
+- `Sources/BrowserPOC/UI`: SwiftUI views, including the command bar, split view, spaces, the graph panes and the Related shelf (`RelatedShelf`, its state and rules in `RelatedShelfState`, and every visual value in `ShelfStyle`).
 - `Sources/BrowserPOC/UI/Theme`: the design system. Colours, spacing, radii, shadows, type and motion, plus the small components the views share and the window chrome.
 - `Sources/BrowserPOC/Startup`: the mark, the launch animation and the icon art.
 - `Sources/BrowserPOC/MCP`: the `--mcp` server, its tools, privacy rules and note writer, the current-context writer and the AI clients Settings pane.

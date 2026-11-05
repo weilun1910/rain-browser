@@ -172,6 +172,7 @@ struct ContentArea: View {
                         PaneView(tab: model.currentTab).paneCard()
                     }
                 }
+                .relatedShelf(frame: RelatedShelf.paneFrame(model, frames: frames, size: g.size))
                 // Under Peek the page settles back a touch and dims, like Zen's Glance.
                 .scaleEffect(model.peek == nil || Motion.reduceMotion ? 1 : 0.985)
                 .opacity(model.peek == nil ? 1 : 0.7)
@@ -197,7 +198,7 @@ struct ContentArea: View {
                 if let t = model.toastState {
                     ToastView(toast: t)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                        .padding(.bottom, 18)
+                        .padding(.bottom, 18 + RelatedShelf.toastLift(model))
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .id(t.id)
                 }
