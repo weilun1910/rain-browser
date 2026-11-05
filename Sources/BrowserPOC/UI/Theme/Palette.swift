@@ -34,6 +34,34 @@ extension Theme {
                 let la = a.luminance, lb = b.luminance
                 return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
             }
+
+            // OKLab, Björn Ottosson's perceptual colour space, so every space colour can be set to
+            // the same perceived lightness and strength.
+            private static func lin(_ c: Double) -> Double { c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
+            private static func gam(_ c: Double) -> Double { c <= 0.0031308 ? 12.92 * c : 1.055 * pow(c, 1 / 2.4) - 0.055 }
+
+            /// Lightness, chroma and hue in OKLCH.
+            var oklch: (l: Double, c: Double, h: Double) {
+                let lr = Self.lin(r), lg = Self.lin(g), lb = Self.lin(b)
+                let l = cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb)
+                let m = cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb)
+                let s = cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb)
+                let L = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s
+                let A = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s
+                let B = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+                return (L, hypot(A, B), atan2(B, A))
+            }
+
+            init(oklch L: Double, _ C: Double, _ h: Double) {
+                let A = C * cos(h), B = C * sin(h)
+                let l = pow(L + 0.3963377774 * A + 0.2158037573 * B, 3)
+                let m = pow(L - 0.1055613458 * A - 0.0638541728 * B, 3)
+                let s = pow(L - 0.0894841775 * A - 1.2914855480 * B, 3)
+                let r = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s
+                let g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s
+                let b = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
+                self.init(min(1, max(0, Self.gam(r))), min(1, max(0, Self.gam(g))), min(1, max(0, Self.gam(b))))
+            }
         }
 
         // MARK: Raw values, light then dark
@@ -48,18 +76,24 @@ extension Theme {
         static let sheetLight = RGB(white: 0.995)
         static let sheetDark = RGB(white: 0.161)    // #292929, lighter than the card so it lifts off it
 
-        /// How strongly the space colour washes the sidebar side of the frame.
-        static func tintAlpha(dark: Bool, active: Bool = true) -> Double {
-            0.14 * (active ? 1 : 0.55)
+        /// The sidebar's colour for a space: the space's hue at a fixed perceived lightness and
+        /// strength, so every space colour reads equally calm. A shade darker than the frame in
+        /// light mode and a shade lighter in dark mode, always darker than the card.
+        /// Dims to half strength when the window isn't key.
+        static let sidebarLightness = (light: 0.918, dark: 0.218)
+        static let sidebarChroma = (light: 0.030, dark: 0.032)
+        static func sidebar(_ hex: String?, dark: Bool, active: Bool = true) -> RGB {
+            let c = RGB(hex: hex ?? defaultTintHex).oklch
+            let strength = min(1, c.c / 0.09) * (active ? 1 : 0.5)
+            return RGB(oklch: dark ? sidebarLightness.dark : sidebarLightness.light,
+                       (dark ? sidebarChroma.dark : sidebarChroma.light) * strength, c.h)
         }
-        /// The wash colour. In dark mode it's the space colour mixed half with black, the way Zen
-        /// darkens its accent there, so the hue shows without making the sidebar brighter than the card.
-        static func wash(_ hex: String?, dark: Bool) -> RGB {
-            let c = RGB(hex: hex ?? defaultTintHex)
-            return dark ? c.under(RGB(white: 0), alpha: 0.5) : c
-        }
-        /// The wash fades to this share of its strength at the window's trailing edge.
-        static let tintTrailingShare = 0.2
+        /// How much of the sidebar colour reaches the trailing edge of the window.
+        static let tintTrailingShare = 0.18
+        /// Kept for callers that blend a colour over the frame themselves: the sidebar colour is
+        /// laid on at full strength.
+        static func tintAlpha(dark: Bool, active: Bool = true) -> Double { 1 }
+        static func wash(_ hex: String?, dark: Bool) -> RGB { sidebar(hex, dark: dark) }
 
         /// The approximate text colours macOS uses for labels, flattened onto a background.
         static func label(on bg: RGB, dark: Bool, level: Int = 0) -> RGB {
@@ -84,7 +118,7 @@ extension Theme {
         /// A thin line where an edge needs one.
         static let hairline = Color(nsColor: dynamic(NSColor(white: 0, alpha: 0.07), NSColor(white: 1, alpha: 0.09)))
         /// The selected sidebar row: a near-white chip, like Arc and Zen.
-        static let rowSelected = Color(nsColor: dynamic(NSColor(white: 1, alpha: 0.85), NSColor(white: 1, alpha: 0.10)))
+        static let rowSelected = Color(nsColor: dynamic(NSColor(white: 1, alpha: 1), NSColor(white: 1, alpha: 0.115)))
         static let rowHover = Color(nsColor: dynamic(NSColor(white: 0, alpha: 0.045), NSColor(white: 1, alpha: 0.055)))
         static let rowPressed = Color(nsColor: dynamic(NSColor(white: 0, alpha: 0.08), NSColor(white: 1, alpha: 0.09)))
         /// Behind the command bar.
@@ -98,7 +132,12 @@ extension Theme {
 
         /// The space colour as a wash, for backgrounds. Darkened in dark mode, see `wash`.
         static func tint(_ hex: String?) -> Color {
-            Color(nsColor: dynamic(wash(hex, dark: false), wash(hex, dark: true)))
+            let c = RGB(hex: hex ?? defaultTintHex)
+            return Color(nsColor: dynamic(c, c.under(RGB(white: 0), alpha: 0.25)))
+        }
+        /// The sidebar colour for a space, as a SwiftUI colour that follows light and dark.
+        static func sidebarColor(_ hex: String?, active: Bool = true) -> Color {
+            Color(nsColor: dynamic(sidebar(hex, dark: false, active: active), sidebar(hex, dark: true, active: active)))
         }
 
         /// The space colour toned for small marks (icons, rings, progress) so it holds up on both

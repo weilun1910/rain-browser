@@ -44,17 +44,24 @@ enum ThemeTests {
         check(worst.primary >= 7 && worst.secondary >= 3.5, "sidebar text stays readable on every space colour",
               String(format: "worst primary %.1f, secondary %.1f (%@)", worst.primary, worst.secondary, worst.name))
 
-        // The tint is a wash, not a colour block.
-        var biggest = 0.0
-        for (_, hex) in Space.palette {
+        // The tint is noticeable but calm: every saturated space colour gives the sidebar a visible
+        // hue, no space colour pushes it past a soft wash, and all of them sit at the same lightness.
+        var chromas: [Double] = [], lights: [Double] = []
+        for (name, hex) in Space.palette where name != "Slate" {
             for dark in [false, true] {
-                let base = dark ? P.frameDark : P.frameLight
-                let t = base.under(P.wash(hex, dark: dark), alpha: P.tintAlpha(dark: dark))
-                biggest = max(biggest, abs(t.r - base.r), abs(t.g - base.g), abs(t.b - base.b))
+                let c = P.sidebar(hex, dark: dark).oklch
+                chromas.append(c.c)
+                lights.append(c.l)
             }
         }
-        check(biggest < 0.12, "the space tint stays a light wash", String(format: "largest channel shift %.3f", biggest))
-        check(P.tintAlpha(dark: false, active: false) < P.tintAlpha(dark: false), "the tint dims when the window isn't key")
+        let cMin = chromas.min() ?? 0, cMax = chromas.max() ?? 0
+        check(cMin > 0.018 && cMax < 0.045, "the sidebar tint is noticeable but calm in both modes",
+              String(format: "OKLCH chroma %.3f to %.3f", cMin, cMax))
+        let lightSpread = (0..<lights.count).filter { $0 % 2 == 0 }.map { lights[$0] }
+        check((lightSpread.max() ?? 0) - (lightSpread.min() ?? 0) < 0.02,
+              "every space colour gives the sidebar the same lightness")
+        check(P.sidebar("#4C8DF6", dark: false, active: false).oklch.c < P.sidebar("#4C8DF6", dark: false).oklch.c,
+              "the tint dims when the window isn't key")
 
         // In dark mode the tinted sidebar must stay darker than the card, or the card loses its edge.
         let brightest = Space.palette.map { P.frameDark.under(P.wash($0.1, dark: true), alpha: P.tintAlpha(dark: true)).luminance }.max() ?? 0

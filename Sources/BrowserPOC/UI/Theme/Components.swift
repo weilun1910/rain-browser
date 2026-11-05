@@ -204,11 +204,15 @@ struct IconButton: View {
 
 // MARK: Labels
 
-/// The quiet header above a sidebar or panel section.
+/// The quiet header above a sidebar or panel section. Its buttons, like New folder, show when
+/// you hover the header, the way Zen keeps the sidebar clear until you reach for something.
 struct SectionHeader<Trailing: View>: View {
     let title: String
     var highlighted = false
+    /// Keep the trailing buttons visible all the time.
+    var alwaysShowTrailing = false
     @ViewBuilder var trailing: () -> Trailing
+    @State private var hovering = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -217,12 +221,27 @@ struct SectionHeader<Trailing: View>: View {
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
             trailing()
+                .opacity(hovering || highlighted || alwaysShowTrailing ? 1 : 0)
+                .motion(Motion.hover, value: hovering, fadeOnly: true)
         }
         .padding(.leading, Theme.Space.rowInset)
         .padding(.trailing, 2)
         .frame(height: 24)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
         .background(Theme.Radius.shape(Theme.Radius.button).fill(highlighted ? Theme.Palette.rowHover : .clear))
         .motion(Motion.hover, value: highlighted, fadeOnly: true)
+    }
+}
+
+/// A hairline between groups of rows, inset to the row text.
+struct SectionDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(Theme.Palette.hairline)
+            .frame(height: 1)
+            .padding(.horizontal, Theme.Space.rowInset)
+            .padding(.vertical, Theme.Space.s)
     }
 }
 
@@ -260,18 +279,20 @@ struct SpaceTintBackground: View {
     var body: some View {
         GeometryReader { g in
             let active = Self.forceActive || activeState == .key || activeState == .active
-            let a = Theme.Palette.tintAlpha(dark: scheme == .dark, active: active)
             let edge = min(0.95, max(0.05, sidebarWidth / max(g.size.width, 1)))
-            let tint = Theme.Palette.tint(hex)
+            let tint = Theme.Palette.sidebarColor(hex, active: active)
             ZStack {
                 Theme.Palette.frame
+                // Full strength under the sidebar, holding past its edge, then easing toward neutral.
                 LinearGradient(stops: [
-                    .init(color: tint.opacity(a), location: 0),
-                    .init(color: tint.opacity(a * 0.85), location: edge),
-                    .init(color: tint.opacity(a * Theme.Palette.tintTrailingShare), location: 1),
+                    .init(color: tint, location: 0),
+                    .init(color: tint.opacity(0.92), location: edge),
+                    .init(color: tint.opacity(0.55), location: min(1, edge + 0.25)),
+                    .init(color: tint.opacity(Theme.Palette.tintTrailingShare), location: 1),
                 ], startPoint: .leading, endPoint: .trailing)
-                .id(hex ?? "")
+                .id((hex ?? "") + (active ? "" : "-inactive"))
                 .transition(.opacity)
+                GrainOverlay()
             }
             .motion(Motion.spaceSwitch, value: hex, fadeOnly: true)
             .motion(Motion.hover, value: active, fadeOnly: true)

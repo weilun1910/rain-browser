@@ -26,13 +26,20 @@ extension Theme {
         static let titleBarHeight: CGFloat = 40
         /// Leaves room for the traffic lights at the start of the sidebar's top row.
         static let trafficLightsWidth: CGFloat = 76
-        /// Sidebar rows: tabs, notes, folders, splits.
-        static let rowHeight: CGFloat = 30
+        /// Sidebar rows: tabs, notes, folders, splits. Zen's are 36 and Arc's about 34; 32 holds
+        /// real titles without crowding while keeping the list dense enough to scan.
+        static let rowHeight: CGFloat = 32
         static let rowGap: CGFloat = 2
         /// Leading inset of a row's icon and of a section label, so both line up.
         static let rowInset: CGFloat = 8
         /// The icon column in a row.
         static let rowIcon: CGFloat = 16
+        /// Between a row's icon and its title.
+        static let rowIconGap: CGFloat = 8
+        /// How far a folder's children sit in, so their icons line up under the folder's name.
+        static let folderIndent: CGFloat = rowIcon + rowIconGap
+        /// Between sidebar sections.
+        static let sectionGap: CGFloat = 14
     }
 
     /// Corner radii. All corners are continuous (squircle) curves.
@@ -57,8 +64,8 @@ extension Theme {
         func layers(dark: Bool) -> [Layer] {
             let k = dark ? 2.2 : 1.0
             switch self {
-            case .card: return [Layer(opacity: 0.06 * k, radius: 0.5, y: 0.5), Layer(opacity: 0.06 * k, radius: 8, y: 2)]
-            case .row: return [Layer(opacity: 0.06 * k, radius: 0.5, y: 0.5), Layer(opacity: 0.04 * k, radius: 2, y: 1)]
+            case .card: return [Layer(opacity: 0.09 * k, radius: 0.5, y: 0.5), Layer(opacity: 0.11 * min(k, 1.6), radius: 10, y: 3)]
+            case .row: return [Layer(opacity: 0.09 * k, radius: 0.5, y: 0.5), Layer(opacity: 0.06 * k, radius: 2.5, y: 1)]
             case .panelCard: return [Layer(opacity: 0.035 * k, radius: 0.5, y: 0.5), Layer(opacity: 0.04 * k, radius: 6, y: 2)]
             case .sheet: return [Layer(opacity: 0.10 * k, radius: 1, y: 0.5), Layer(opacity: 0.22 * min(k, 1.6), radius: 40, y: 18)]
             case .mark: return [Layer(opacity: 0.0, radius: 0, y: 0)]
