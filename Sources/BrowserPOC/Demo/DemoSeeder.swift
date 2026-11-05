@@ -105,7 +105,10 @@ enum DemoSeeder {
         if let why = refusal(o.target) { throw Failure(description: why) }
         let c = try DemoContent.load(o.content)
         var sum = Summary()
-        let shift = o.shiftDates ? o.now.timeIntervalSince(c.anchor) : 0
+        // Times move forward in whole weeks, and only once a week has passed since the demo
+        // moment. Weekdays then still match the notes, and dates written in the text only drift
+        // when the demo is old enough that "three weeks ago" would otherwise go stale.
+        let shift = o.shiftDates ? (o.now.timeIntervalSince(c.anchor) / (7 * 86400)).rounded(.down) * 7 * 86400 : 0
         func at(_ d: Date) -> Date { d.addingTimeInterval(shift) }
         func at(_ s: String) -> Date? { DemoContent.parseDate(s).map(at) }
 
@@ -145,9 +148,11 @@ enum DemoSeeder {
             let folder = notesRoot.appendingPathComponent(n.folder, isDirectory: true)
             Paths.ensure(folder)
             let u = folder.appendingPathComponent(n.title + ".md")
-            // Only what a person keeps in a note's front matter. The ids are demo bookkeeping.
-            let head = n.tags.isEmpty ? "" : "---\ntags: [\(n.tags.joined(separator: ", "))]\n---\n"
-            try Data((head + n.body).utf8).write(to: u)
+            // The note starts with its heading, and its tags sit on the last line the way people
+            // write inline tags. The front matter ids are demo bookkeeping and stay out.
+            var text = n.body.trimmingCharacters(in: .whitespacesAndNewlines) + "\n"
+            if !n.tags.isEmpty { text += "\n" + n.tags.map { "#" + $0 }.joined(separator: " ") + "\n" }
+            try Data(text.utf8).write(to: u)
             try fm.setAttributes([.creationDate: at(n.created), .modificationDate: at(n.updated)], ofItemAtPath: u.path)
             noteURL[n.id] = u.standardizedFileURL
         }

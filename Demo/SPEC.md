@@ -102,12 +102,12 @@ Built as `BrowserPOC --seed-demo <folder>` (`Sources/BrowserPOC/Demo/DemoSeeder.
 
 1. The folder must be missing, empty, or a demo profile with the `.rain-demo-profile` marker. It's never the app's real support folder, the home folder or anything under `~/Library/Application Support`, `WebKit`, `Caches`, `Containers` or `Preferences`. A reseed clears the folder but keeps `Models/`.
 2. `--models-from <folder>` clones verified model files into `Models/`. Without them the app downloads them on first launch, and Related uses Apple's embedding until then.
-3. Notes go to `Notes/<Space folder>/<title>.md` with only their tags in front matter, and their file dates set from `created` and `updated`. Docs and meetings go to `demo-items/<id>.md` for the `demo://` pages.
+3. Notes go to `Notes/<Space folder>/<title>.md` starting with their heading and with their tags as `#tags` on the last line, and their file dates set from `created` and `updated`. Docs and meetings go to `demo-items/<id>.md` for the `demo://` pages.
 4. `settings.json` points at the notes folder and marks first run done. `sources.json` keeps Notion, Google Docs and Granola off, so Felix's real accounts are never read into the demo. `browser.json` turns auto-archive off, so the layout stays put.
 5. Notes go through the normal indexer. Docs go in as `gdocs` or `notion` and meetings as `granola`, keyed by their `demo_url`. Pages go in as visited pages, with their text read cookie-free through the Chrome importer's session and redirect rules, falling back to `excerpt`. Every visit is recorded in the index's visits table and in the browser's own history, with "in your <space> space" as its context. Searches seed past searches.
 6. Passages are embedded with the best ready model, then Apple's content tagging model tags topics (`--no-topics` skips it). The graph store records the splits as together edges and syncs links and similarity.
 7. `state.json` comes from `spaces.json`, with UUIDs derived from the ids. The demo docs open as web tabs at their `demo_url`. Essentials are pinned and shared. Each space keeps its selection, and School opens on its split with the draft focused.
-8. Every timestamp moves by seed time minus `anchor`, so the demo's "now" is the moment it was seeded. Dates written inside the text don't move. `last_opened` comes from each item's own last date, never from now.
+8. Seeded within a week of `anchor`, times stay as written. After that every timestamp moves forward by whole weeks, so weekdays still match the text and "three weeks ago" stays roughly true. Dates written inside the text never move. `last_opened` comes from each item's own last date, never from now.
 9. Site icons are fetched cookie-free into `favicons/`, and the demo sources get drawn icons under their demo hosts.
 
 `--offline` skips the page text and icon fetches, for tests and quick seeds.

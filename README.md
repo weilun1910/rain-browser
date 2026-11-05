@@ -59,7 +59,7 @@ scripts/demo.sh --reset             # starts the profile over; changes made in i
 scripts/demo.sh --models <folder>   # copies verified model files in instead of downloading them
 ```
 
-The profile lives in `demo-profile.nosync` in the project folder. The script only writes to an empty folder or to a demo profile it made before, and never to my real support folder. Seeding copies the notes in as real Markdown files, indexes the demo Google Docs, Notion pages and Granola meetings as those sources, records six weeks of visits and searches, reads each page's text without cookies, embeds and tags everything, builds the graph and lays out four spaces with Essentials, pins, folders, tabs and splits. Times move so the demo's "now" is the moment it was seeded. Outside sources stay off in the demo profile, and auto-archive is off so the layout stays put.
+The profile lives in `demo-profile.nosync` in the project folder. The script only writes to an empty folder or to a demo profile it made before, and never to my real support folder. Seeding copies the notes in as real Markdown files, indexes the demo Google Docs, Notion pages and Granola meetings as those sources, records six weeks of visits and searches, reads each page's text without cookies, embeds and tags everything, builds the graph and lays out four spaces with Essentials, pins, folders, tabs and splits. Seeded more than a week after the demo moment, times move forward by whole weeks. Outside sources stay off in the demo profile, and auto-archive is off so the layout stays put.
 
 The demo docs and meetings open at `demo://` addresses as read-only pages drawn by the app, so nothing ever loads a real Google or Notion page.
 

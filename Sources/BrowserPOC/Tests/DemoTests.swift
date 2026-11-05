@@ -94,8 +94,8 @@ enum DemoTests {
         // Notes on disk, the index and the graph.
         let tokyo = target.appendingPathComponent("Notes/Personal/Tokyo food list.md")
         let tokyoText = (try? String(contentsOf: tokyo, encoding: .utf8)) ?? ""
-        check(tokyoText.hasPrefix("---\ntags: [japan, food]\n---\n\n# Tokyo food list") && !tokyoText.contains("id: note-"),
-              "demo notes are real files with only their tags in front matter")
+        check(tokyoText.hasPrefix("# Tokyo food list") && tokyoText.hasSuffix("\n#japan #food\n") && !tokyoText.contains("id: note-"),
+              "demo notes are real files that open on their heading, with their tags on the last line")
         if let s = IndexStore.shared {
             let bySource = Dictionary(uniqueKeysWithValues: s.counts().map { ($0.source, $0.total) })
             check(bySource[.note] == c.notes.count && bySource[.granola] == meetings && (bySource[.gdocs] ?? 0) + (bySource[.notion] ?? 0) == docs && bySource[.web] == c.pages.count,

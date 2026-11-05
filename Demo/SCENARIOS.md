@@ -4,7 +4,7 @@ The demo profile belongs to Theo Park, a made-up Yale '28 student. He's writing 
 
 Run `scripts/demo.sh` from the app folder. It makes the profile the first time and opens a separate copy of the app on it, so your own profile isn't touched. `scripts/demo.sh --reset` starts it over.
 
-It's set on Wednesday 4 November in the afternoon. Times shift when the profile is seeded, so "three weeks ago" stays true whenever you run it.
+It's set on Wednesday 4 November in the afternoon. If you seed it more than a week later, every time moves forward by whole weeks, so "three weeks ago" stays roughly true.
 
 Spaces are on Ctrl-1 to Ctrl-4: School, Swapshelf, Job hunt, Personal. The Google Docs, Notion pages and Granola meetings open as read-only copies inside the browser. The notes are real files in the demo profile, so you can type in them.
 
