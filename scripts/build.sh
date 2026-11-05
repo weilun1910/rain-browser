@@ -30,6 +30,8 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 # permissions like reading Chrome's data. Set SIGN_IDENTITY to a code signing identity
 # from your keychain (for example an "Apple Development" certificate) to keep them.
 IDENTITY="${SIGN_IDENTITY:--}"
+# Copied files can carry extended attributes, which codesign refuses.
+xattr -cr "$APP"
 if [ -d "$APP/Contents/Frameworks/llama.framework" ]; then
   codesign --force --sign "$IDENTITY" --timestamp=none "$APP/Contents/Frameworks/llama.framework"
 fi
