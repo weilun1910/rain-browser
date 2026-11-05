@@ -8,6 +8,8 @@ Rain is a Mac browser I'm building, and this repo is its proof of concept.
 
 Pages, notes, docs and meetings I've already seen come back on their own when what I'm working on makes them relevant. I don't have to file or pin anything first, and it all runs on my Mac.
 
+![An article on two-sided marketplaces next to a paper draft, with a coffee chat note from another space resurfacing at the bottom](docs/screenshots/hero.jpg)
+
 ## Why I'm building it
 
 - Useful pages I've read disappear from my head. My history still has them, but that only helps if I remember they exist.
