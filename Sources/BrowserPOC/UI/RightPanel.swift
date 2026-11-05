@@ -56,6 +56,8 @@ struct RightPanelContent: View {
                 }
                 .scrollIndicators(.never)
             }
+            LocalGraphSlot(resurfacer: resurfacer)
+                .padding(.bottom, 8)
         }
         .padding(.horizontal, 10)
         .transaction { $0.animation = nil }
@@ -144,6 +146,7 @@ struct CardView: View {
                 Button("Open") { model.open(card) }
                 Button(card.feedback ?? "Add to research") {
                     let msg = model.addToResearch(card)
+                    if msg.hasPrefix("Added") { GraphRecorder.shared.researchAdded(addedKey: card.match.doc.key, model: model) }
                     model.resurfacer.setFeedback(msg, for: card)
                 }
                 .disabled(card.feedback != nil)
