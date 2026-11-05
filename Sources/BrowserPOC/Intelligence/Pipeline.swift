@@ -87,7 +87,7 @@ struct Judgment: Equatable, Sendable {
 enum Judge {
     @Generable
     struct Verdict {
-        @Guide(description: "One sentence, at most 22 words, naming what the earlier item covers that bears on the current work. Use only facts from the earlier item.")
+        @Guide(description: "One short sentence, at most 12 words, naming what the earlier item covers that bears on the current work. Use only facts from the earlier item. Start with It covers or a similar plain opening.")
         var reason: String
         @Guide(description: "True if the earlier item would help with the current work, even partly or as background")
         var helpful: Bool

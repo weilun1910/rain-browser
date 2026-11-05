@@ -49,7 +49,7 @@ enum Reasons {
             if d.visitCount > 1 { s += ", \(d.visitCount) visits" }
             return s + "."
         case .note, .markdown:
-            let where_ = d.project.map { " in \($0)" } ?? ""
+            let where_ = d.project.flatMap { $0 == "Notes" ? nil : " in \($0)" } ?? ""
             return "Your note\(where_), last edited \(Fmt.day(Date(timeIntervalSince1970: d.mtime)))."
         case .notion:
             return "Your Notion page, last opened \(Fmt.day(Date(timeIntervalSince1970: d.lastSeen)))\(ctx)."
@@ -76,13 +76,19 @@ enum Reasons {
         Fmt.clean(history(m.doc, visits: visits) + " " + coverage(m))
     }
 
+    /// A card shows two lines, so the whole reason stays within about 20 words.
+    static let maxWords = 17
+
     static func withJudgment(_ m: Match, visits: [Visit], judgment: Judgment) -> String {
         guard judgment.helpful, !judgment.reason.isEmpty else { return template(m, visits: visits) }
-        return Fmt.clean(history(m.doc, visits: visits) + " " + judgment.reason)
+        let h = history(m.doc, visits: visits)
+        let room = max(6, maxWords - h.split(separator: " ").count)
+        guard let covers = tidy(judgment.reason, maxWords: room) else { return template(m, visits: visits) }
+        return Fmt.clean(h + " " + covers)
     }
 
     /// Keeps a model-written line short and within Felix's punctuation rules.
-    static func tidy(_ raw: String) -> String? {
+    static func tidy(_ raw: String, maxWords: Int = 24) -> String? {
         var t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if let nl = t.firstIndex(of: "\n") { t = String(t[..<nl]) }
         for prefix in ["Reason:", "reason:", "Line:", "Card:"] where t.hasPrefix(prefix) {
@@ -92,8 +98,8 @@ enum Reasons {
         t = Fmt.clean(t)
         t = t.replacingOccurrences(of: " - ", with: ", ")
         var words = t.split(separator: " ").map(String.init)
-        if words.count > 24 {
-            words = Array(words.prefix(24))
+        if words.count > maxWords {
+            words = Array(words.prefix(maxWords))
             t = words.joined(separator: " ").trimmingCharacters(in: CharacterSet(charactersIn: ",;:"))
             if !t.hasSuffix(".") { t += "." }
         }
@@ -126,9 +132,12 @@ final class ActivityTracker: @unchecked Sendable {
     private var spaceCount = 1
 
     func noteWriting(title: String, key: String) {
-        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        var t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
-        lock.lock(); writing = (String(t.prefix(80)), key, Date()); lock.unlock()
+        // Long titles would crowd the card's reason line.
+        let words = t.split(separator: " ")
+        if words.count > 5 { t = words.prefix(5).joined(separator: " ") }
+        lock.lock(); writing = (String(t.prefix(60)), key, Date()); lock.unlock()
     }
 
     func noteSpace(_ name: String?, count: Int) {
