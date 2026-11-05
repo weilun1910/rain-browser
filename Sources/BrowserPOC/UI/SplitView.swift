@@ -33,14 +33,7 @@ enum ItemDrag {
 extension View {
     /// Rounded card for a page or note pane. A split's focused pane gets a quiet ring.
     func paneCard(focusRing: Bool = false) -> some View {
-        self
-            .background(Color(nsColor: .textBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .strokeBorder(focusRing ? Color.accentColor.opacity(0.55) : Color.primary.opacity(0.08), lineWidth: focusRing ? 1.5 : 1)
-            )
-            .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+        contentCard(focused: focusRing)
     }
 }
 
@@ -65,14 +58,18 @@ struct SplitPanes: View {
     let width: CGFloat
     @EnvironmentObject var model: BrowserModel
     @State private var dragStart: Double?
+    /// Runs from 0 to 1 when the split first shows, so the second pane slides in.
+    @State private var opened: CGFloat = Motion.reduceMotion ? 1 : 0
 
-    static let gap: CGFloat = 8
+    static let gap: CGFloat = Theme.Space.windowMargin
     static let minPane: CGFloat = 320
 
     var leftWidth: CGFloat {
         let avail = max(0, width - Self.gap)
         let lo = min(Self.minPane, avail / 2), hi = max(avail - Self.minPane, avail / 2)
-        return min(hi, max(lo, avail * split.ratio))
+        let target = min(hi, max(lo, avail * split.ratio))
+        // While opening, the left pane starts at full width and eases to its share.
+        return width + (target - width) * opened
     }
 
     var body: some View {
@@ -85,6 +82,11 @@ struct SplitPanes: View {
             PaneView(tab: right)
                 .paneCard(focusRing: split.focusRight)
                 .background(PaneClickCatcher { model.focusPane(.right) })
+                .opacity(Double(opened))
+        }
+        .onAppear {
+            guard opened < 1 else { return }
+            Motion.run(Motion.split) { opened = 1 }
         }
     }
 
@@ -104,7 +106,7 @@ struct SplitPanes: View {
                     }
                     .onEnded { _ in dragStart = nil; model.setSplitRatio(split.ratio, save: true) }
             )
-            .simultaneousGesture(TapGesture(count: 2).onEnded { model.setSplitRatio(0.5, save: true) })
+            .simultaneousGesture(TapGesture(count: 2).onEnded { Motion.run(Motion.split) { model.setSplitRatio(0.5, save: true) } })
             .help("Drag to resize. Double-click for half and half.")
     }
 }
@@ -175,10 +177,10 @@ struct SplitRow: View {
     var body: some View {
         HStack(spacing: 0) {
             half(model.tab(split.left), focused: selected && !split.focusRight)
-            Rectangle().fill(Color.primary.opacity(0.15)).frame(width: 1, height: 16)
+            Rectangle().fill(Theme.Palette.hairline).frame(width: 1, height: 16)
             half(model.tab(split.right), focused: selected && split.focusRight)
         }
-        .frame(height: 28)
+        .frame(height: Theme.Space.rowHeight)
         .modifier(RowBackground(selected: selected, hovering: hovering))
         .contentShape(Rectangle())
         .onTapGesture { model.selectSplit(split) }
@@ -191,14 +193,15 @@ struct SplitRow: View {
     }
 
     func half(_ t: Tab?, focused: Bool) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Space.s) {
             Image(systemName: t?.kind == .web ? "globe" : "note.text")
-                .font(.system(size: 10)).foregroundStyle(.secondary)
+                .font(.system(size: 11)).foregroundStyle(.secondary)
             Text(t?.displayTitle ?? "")
-                .font(.system(size: 12, weight: focused ? .medium : .regular))
+                .font(focused ? Theme.Font.rowEmphasis : Theme.Font.row)
+                .foregroundStyle(focused || !selected ? .primary : .secondary)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, Theme.Space.rowInset)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
