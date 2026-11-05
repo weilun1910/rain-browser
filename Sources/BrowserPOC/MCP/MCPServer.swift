@@ -36,15 +36,16 @@ enum MCPProtocol {
     /// The first 512 characters stand on their own (OpenAI's guidance); the whole text stays under 4,096 (Claude Code's cap).
     static let instructions = """
     This server is the user's personal knowledge base from their Browser POC app, kept on their Mac: web pages they read, \
-    their Markdown notes, Google Docs and Notion pages, and how these connect. Use it to understand what the user knows, \
-    is working on and has read before. Call search first for a topic, get_item to read one item, related and connections \
-    for what links to it, and current_context or recent_activity for what they're doing now. Cite every item you use by \
-    its title and link.
+    their Markdown notes, Google Docs, Notion pages, Granola meeting notes, and how these connect. Use it to understand \
+    what the user knows, is working on and has read before. Call search first for a topic, get_item to read one item, \
+    related and connections for what links to it, and current_context or recent_activity for what they're doing now. \
+    Cite every item you use by its title and link.
 
     Good habits:
     - Search before answering questions about the user's own projects, notes, reading or past research, and when they say \
     "I read something about", "my notes", "what do I know about".
-    - Prefer the user's own notes and docs over general knowledge when they disagree, and say so.
+    - Prefer the user's own notes, docs and meetings over general knowledge when they disagree, and say so.
+    - Results say when and in what context the user saw each item ("history"). Use it to tell old reading from current work.
     - Results carry a ready "cite" string. Use it. For notes, the link is a file path on their Mac.
     - get_item and read_note page long text with offset and max_chars. Read the passage you need, not everything.
     - Items the user hid from AI clients never appear. Don't guess at them.
