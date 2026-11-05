@@ -243,7 +243,7 @@ enum Pipeline {
             scored.append((i, hits * IndexStore.proseFactor(c) + recency))
         }
         let picked = scored.sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0 < $1.0 }.prefix(2).map { $0.0 }.sorted()
-        var q = input.title
+        var q = "Title: " + input.title
         if summary.fromModel {
             q += "\nTopic: \(summary.topic)"
             if !summary.intent.isEmpty { q += "\nIntent: \(summary.intent)" }
@@ -282,13 +282,14 @@ enum Pipeline {
         return Double(VectorMath.dot(x, y))
     }
 
-    /// The query one candidate is judged against: the part of the context its passage matched,
-    /// with the title and the model's reading. Falls back to the whole-context query.
-    static func rerankQuery(for c: Candidate, _ q: HybridQuery) -> String {
+    /// The query one candidate is judged against: the title and the part of the context its
+    /// passage matched. Falls back to the whole-context query. Written the way documents are
+    /// ("Title: ..."), which the cross-encoder reads more steadily than a bare title line; the
+    /// bare form is a second reading.
+    static func rerankQuery(for c: Candidate, _ q: HybridQuery, plainTitle: Bool = false) -> String {
         guard let i = c.queryIndex, i < q.chunkCount, i < q.queryTexts.count else { return q.rerankQuery }
-        // The title and the matched part only. The model's topic line made scores swing between
-        // runs without making them better.
-        return String((q.input.title + "\n" + q.queryTexts[i].prefix(700)).prefix(1000))
+        let head = plainTitle ? q.input.title : "Title: " + q.input.title
+        return String((head + "\n" + q.queryTexts[i].prefix(700)).prefix(1000))
     }
 
     /// Retrieves, reranks and gates. Synchronous; run it off the main thread.
@@ -316,7 +317,17 @@ enum Pipeline {
                 pool += extra.sorted { $0.dense != $1.dense ? $0.dense > $1.dense : $0.doc.id < $1.doc.id }.prefix(14)
                 for c in list.dropFirst(20) where p.keepIDs.contains(c.doc.id) && !inPool.contains(c.doc.id) { pool.append(c); inPool.insert(c.doc.id) }
                 let docs = pool.map { "Title: \($0.doc.title)\n\($0.rawPassage.isEmpty ? $0.passage : $0.rawPassage)" }
-                if let scores = Intelligence.shared.rerank(queries: pool.map { rerankQuery(for: $0, q) }, documents: docs) {
+                if var scores = Intelligence.shared.rerank(queries: pool.map { rerankQuery(for: $0, q) }, documents: docs) {
+                    // The cross-encoder's score swings with small changes in how the query is
+                    // written. Items that are close by meaning but land under the bar get a
+                    // second reading with the title written plainly, and keep the higher score.
+                    let retry = pool.indices.filter { i in
+                        Double(scores[i]) < g.bar && pool[i].meaning >= meaningFloor && pool[i].queryIndex != nil
+                    }
+                    if !retry.isEmpty, let again = Intelligence.shared.rerank(
+                        queries: retry.map { rerankQuery(for: pool[$0], q, plainTitle: true) }, documents: retry.map { docs[$0] }) {
+                        for (k, i) in retry.enumerated() where again[k] > scores[i] { scores[i] = again[k] }
+                    }
                     for (i, c) in pool.enumerated() {
                         var s = Double(scores[i])
                         if c.penalized { s *= 0.7 }
@@ -356,7 +367,8 @@ enum Pipeline {
             out.kept[c.doc.id] = match(c, score: s, rerank: rr, norm: cands.keywordNorm)
         }
         let bridgeContext = BridgeContext(home: cands.contextHome ?? ActivityTracker.shared.currentSpace,
-                                          folded: TextAnalysis.fold(Substring(q.input.title + "\n" + q.input.text)), bar: g.bar)
+                                          folded: TextAnalysis.fold(Substring(q.input.title + "\n" + q.input.text)), bar: g.bar,
+                                          centrality: chunkCentrality(q))
         let contextPhrases = Phrases.extract(q.input.title + "\n" + Snippet.body(q.input.text, title: q.input.title))
         func withPhrases(_ m: Match, _ c: Candidate) -> Match {
             var m = m
@@ -415,13 +427,31 @@ enum Pipeline {
         let home: String?
         let folded: String
         let bar: Double
+        /// How central each part of the context is, from `chunkCentrality`.
+        let centrality: [Double]
+
+        /// A bridge skips the agreement check, so the meaning match has to be a little firmer
+        /// than the general floor.
+        static let meaningFloor = 0.85
+
+        /// True when the part is at least as central as the median part of the context. A bridge
+        /// that only fits an aside, like the last lines of a transcript, is about the aside.
+        func isCentral(_ part: Int?) -> Bool {
+            guard centrality.count > 2 else { return true }
+            guard let i = part, i < centrality.count else { return false }
+            let sorted = centrality.sorted()
+            let n = sorted.count
+            let median = n % 2 == 1 ? sorted[n / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2
+            return centrality[i] >= median - 1e-9
+        }
 
         /// An item from another space or folder, that the context doesn't name, that the reranker
-        /// rates well and that is one of the closest items to some part of the context. The
+        /// rates well and that is one of the closest items to a central part of the context. The
         /// point of Related is to bring these back, and they'll always have weaker word overlap
         /// than items from the same project.
         func isBridge(_ c: Candidate, score: Double) -> Bool {
-            guard let h = home, let ch = c.home, score >= bar, c.meaning >= meaningFloor, c.partWinner, !c.namesContextHome else { return false }
+            guard let h = home, let ch = c.home, score >= bar, c.meaning >= Self.meaningFloor, c.partWinner,
+                  !c.namesContextHome, isCentral(c.queryIndex) else { return false }
             let fh = TextAnalysis.fold(Substring(ch)), fc = TextAnalysis.fold(Substring(h))
             guard fh != fc, !folded.contains(fh) else { return false }
             let tk = titleKey(c.doc.title)
@@ -464,9 +494,9 @@ enum Pipeline {
         var chosen: [(Candidate, Double, Double?, Double)] = pool.filter { keep.contains($0.0.doc.id) }
         var rest = pool.filter { !keep.contains($0.0.doc.id) }
         while chosen.count < limit, !rest.isEmpty {
-            if debugRank, reranked, let b = bridge, chosen.count == 2 {
+            if debugRank, reranked, let b = bridge, chosen.count <= 1 {
                 let rows = rest.prefix(40).filter { $0.0.home != nil }.map { e in
-                    "\(e.0.doc.title.prefix(22)) home \(e.0.home ?? "-") win \(e.0.partWinner) rr \(String(format: "%.2f", e.1)) m \(String(format: "%.2f", e.0.meaning)) bridge \(b.isBridge(e.0, score: e.1))"
+                    "\(e.0.doc.title.prefix(22)) home \(e.0.home ?? "-") win \(e.0.partWinner) rr \(String(format: "%.2f", e.1)) m \(String(format: "%.2f", e.0.meaning)) d \(String(format: "%.2f", e.0.dense)) f \(String(format: "%.3f", e.0.fused)) q \(e.0.queryIndex ?? -1) central \(b.isCentral(e.0.queryIndex)) bridge \(b.isBridge(e.0, score: e.1))"
                 }
                 FileHandle.standardError.write(Data("    bridge check (context home \(b.home ?? "-")): \(rows.joined(separator: " | "))\n".utf8))
             }

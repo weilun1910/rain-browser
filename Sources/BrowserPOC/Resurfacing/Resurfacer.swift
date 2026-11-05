@@ -100,6 +100,13 @@ final class Resurfacer: ObservableObject {
     }
 
     func setContext(_ input: ContextInput?) {
+        if let input, ProcessInfo.processInfo.environment["BROWSERPOC_DUMP_CONTEXT"] != nil {
+            // Debugging aid: what the panel was given, in the profile's own folder.
+            var h: UInt64 = 0xcbf29ce484222325
+            for b in input.key.utf8 { h = (h ^ UInt64(b)) &* 0x100000001b3 }
+            let name = "context-" + String(h, radix: 16) + ".txt"
+            try? (input.key + "\n" + input.title + "\n---\n" + input.text).write(to: Paths.root.appendingPathComponent(name), atomically: true, encoding: .utf8)
+        }
         guard let input, (input.title.count + input.text.count) >= 40 else {
             generation += 1
             context = input
@@ -182,7 +189,8 @@ final class Resurfacer: ObservableObject {
     private func run(_ input: ContextInput, replace: Bool) {
         let gen = generation
         var params = RankParams.fromSettings(Settings.shared.value)
-        params.keepIDs = replace ? [] : Set(cards.map { $0.id })
+        // Only cards shown for this same item get to stay. A new item starts from its own ranking.
+        params.keepIDs = (replace || input.key != lastKey) ? [] : Set(cards.map { $0.id })
         isWorking = true
         retrievalCount += 1
         let words = Self.words(input)

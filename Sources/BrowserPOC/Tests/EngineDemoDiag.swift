@@ -13,6 +13,17 @@ extension IndexStore {
 enum EngineDemoDiag {
     static func run(_ args: [String]) -> Int32 {
         func arg(_ n: String) -> String? { args.firstIndex(of: n).flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil } }
+        // --rr <queries file> <document file> --models-dir <dir>: reranks each query (blocks split
+        // by a line of three dashes) against the document.
+        if let qf = arg("--rr"), let i = args.firstIndex(of: "--rr"), i + 2 < args.count, let m = arg("--models-dir") {
+            ModelFiles.overrideDir = URL(fileURLWithPath: m, isDirectory: true)
+            let qs = ((try? String(contentsOfFile: qf, encoding: .utf8)) ?? "").components(separatedBy: "\n---\n")
+            let doc = (try? String(contentsOfFile: args[i + 2], encoding: .utf8)) ?? ""
+            let sc = Intelligence.shared.rerank(queries: qs, documents: qs.map { _ in doc }) ?? []
+            for (k, v) in sc.enumerated() { print(String(format: "query %d: %.3f  %@", k, v, String(qs[k].prefix(70)).replacingOccurrences(of: "\n", with: " "))) }
+            Intelligence.shared.shutdown()
+            return 0
+        }
         guard let p = arg("--demo-diag"), let dir = DemoContent.locate(arg("--demo-content")), let c = try? DemoContent.load(dir),
               let expected = c.expected else { print("Usage: --demo-diag <demo profile>"); return 2 }
         let profile = URL(fileURLWithPath: (p as NSString).expandingTildeInPath, isDirectory: true)
@@ -45,7 +56,11 @@ enum EngineDemoDiag {
                 let b = store.storedBody(key: ck); title = b?.title ?? ""; text = b?.body ?? ""; kind = .page
             }
             for k in cs.onScreen.compactMap(key) { store.touchOpened(key: k, at: Date()) }
-            let input = ContextInput(key: ck, title: title, text: text, kind: kind)
+            // --context-file replaces the text with a dump of what the app's panel was given.
+            var ctxText = text
+            if let f = arg("--context-file"), let dumped = try? String(contentsOfFile: f, encoding: .utf8),
+               let r = dumped.range(of: "\n---\n") { ctxText = String(dumped[r.upperBound...]) }
+            let input = ContextInput(key: ck, title: title, text: ctxText, kind: kind)
             let q = Pipeline.makeQuery(input, work: nil, store: store)
             let cands = store.hybridCandidates(q, params, perSection: 40)
             print("\n\(cs.id)  [\(title)]")
@@ -63,6 +78,12 @@ enum EngineDemoDiag {
                 let rr = Intelligence.shared.rerank(query: rq, documents: ["Title: \(cand.doc.title)\n\(cand.rawPassage)"])?.first ?? -1
                 print(String(format: "  must %@ (%@): fused rank %d, dense %.2f, meaning %.2f, rerank %.2f, by %@", m.ref, m.section ?? "-", i + 1, cand.dense, cand.meaning, rr, cand.foundBy.joined(separator: ",")))
                 print("       passage: \(cand.rawPassage.prefix(120).replacingOccurrences(of: "\n", with: " "))")
+                if args.contains("--parts") {
+                    // The chosen passage against every part of the context.
+                    let qs = (0..<q.chunkCount).map { "Title: " + q.input.title + "\n" + q.queryTexts[$0].prefix(700) }
+                    let sc = Intelligence.shared.rerank(queries: qs, documents: qs.map { _ in "Title: \(cand.doc.title)\n\(cand.rawPassage)" }) ?? []
+                    print("       by part: " + sc.enumerated().map { String(format: "q%d %.2f", $0.offset, $0.element) }.joined(separator: "  ") + "  (matched q\(cand.queryIndex ?? -1))")
+                }
                 if args.contains("--passages") {
                     // Every passage of the item against the part it matched, to see whether a
                     // different passage would score higher.
@@ -108,7 +129,8 @@ enum EngineDemoDiag {
             }
             if Pipeline.debugRank {
                 let cent = Pipeline.chunkCentrality(q)
-                for (i, t) in q.queryTexts.enumerated() { print("  q\(i) c\(String(format: "%.2f", i < cent.count ? cent[i] : -1)): \(t.prefix(110).replacingOccurrences(of: "\n", with: " "))") }
+                let qn = Int(ProcessInfo.processInfo.environment["BROWSERPOC_DEBUG_QLEN"] ?? "110") ?? 110
+                for (i, t) in q.queryTexts.enumerated() { print("  q\(i) c\(String(format: "%.2f", i < cent.count ? cent[i] : -1)): \(t.prefix(qn).replacingOccurrences(of: "\n", with: " "))") }
                 _ = Pipeline.rank(q, params, store: store)
                 // Local (matched part) against global (whole context) reranker scores, with labels.
                 var label: [String: String] = [:]
