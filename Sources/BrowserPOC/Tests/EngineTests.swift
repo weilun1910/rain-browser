@@ -39,11 +39,11 @@ enum EngineTests {
     }
 
     /// Quits a child process mid-re-embed with both models loaded, the app's way and with a bare
-    /// exit, and checks it ends cleanly. Needs the models: set BROWSERPOC_MODELS_DIR.
+    /// exit, and checks it ends cleanly. Needs the models: set BROWSERPOC_QUIT_CHECK_MODELS.
     static func quitTests() {
-        guard let dirPath = ProcessInfo.processInfo.environment["BROWSERPOC_MODELS_DIR"], !dirPath.isEmpty,
+        guard let dirPath = ProcessInfo.processInfo.environment["BROWSERPOC_QUIT_CHECK_MODELS"], !dirPath.isEmpty,
               ModelCatalog.all.allSatisfy({ FileManager.default.fileExists(atPath: URL(fileURLWithPath: dirPath).appendingPathComponent($0.file + ".verified").path) }) else {
-            print("      quit check skipped: set BROWSERPOC_MODELS_DIR to a folder with both models")
+            print("      quit check skipped: set BROWSERPOC_QUIT_CHECK_MODELS to a folder with both models")
             return
         }
         guard let exe = Bundle.main.executablePath else { return }
