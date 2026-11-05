@@ -50,8 +50,14 @@ struct SpaceButton: View {
             .onHover { hovering = $0 }
             .help(index < 9 ? "\(space.name)  (Ctrl-\(index + 1))" : space.name)
             .onDrop(of: [ItemDrag.type], isTargeted: nil) { providers in
-                ItemDrag.load(providers) { ids in
-                    for id in ids { if let t = model.tab(id) { model.move(t, toSpace: space.id) } }
+                ItemDrag.loadItems(providers) { items in
+                    for item in items {
+                        switch item {
+                        case .tab(let id): if let t = model.tab(id) { model.move(t, toSpace: space.id) }
+                        case .split(let id): if let s = model.split(id) { model.move(split: s, toSpace: space.id) }
+                        case .folder: break
+                        }
+                    }
                 }
             }
             .contextMenu {
@@ -73,6 +79,15 @@ struct SpaceButton: View {
                         model.updateSpace(space.id) { $0.newNotesFolder = nil }
                     }
                     Button("Choose folder...") { SpaceActions.pickNotesFolder(for: space, model: model) }
+                }
+                // Each profile keeps its own cookies and logins, like Arc's profiles.
+                Menu("Profile") {
+                    Button(space.profile == nil ? "Default (current)" : "Default") { model.updateSpace(space.id) { $0.profile = nil } }
+                    ForEach(model.profiles, id: \.self) { p in
+                        Button(space.profile == p ? "\(p) (current)" : p) { model.updateSpace(space.id) { $0.profile = p } }
+                    }
+                    Divider()
+                    Button("New profile...") { model.promptNewProfile(for: space) }
                 }
                 Divider()
                 Button("Move left") { model.moveSpace(space.id, by: -1) }.disabled(index == 0)

@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import WebKit
 
@@ -12,6 +13,8 @@ struct Space: Codable, Identifiable, Equatable {
     var newNotesFolder: String?
     var selectedTab: UUID?
     var selectedSplit: UUID?
+    /// The profile whose cookies and logins this space uses. Nil is the default profile.
+    var profile: String?
 
     static let palette: [(String, String)] = [
         ("Slate", "#7A8CA8"), ("Blue", "#4C8DF6"), ("Teal", "#2FA8A0"), ("Green", "#5DA55A"),
@@ -27,6 +30,8 @@ struct Folder: Codable, Identifiable, Equatable {
     var name: String
     var isExpanded: Bool = true
     var createdAt: Date = Date()
+    /// Sort key in the Folders section. Filled in on load for older files.
+    var order: Double?
 }
 
 struct TabRecord: Codable {
@@ -38,26 +43,19 @@ struct TabRecord: Codable {
     var folderID: UUID?
     var createdAt: Date
     var spaceID: UUID?
-}
-
-/// Two items side by side. Either side can be a page or a note.
-struct SplitRecord: Codable, Identifiable, Equatable {
-    var id: UUID = UUID()
-    var left: UUID
-    var right: UUID
-    var ratio: Double = 0.5
-    var focusRight: Bool = false
-    var createdAt: Date = Date()
-    var spaceID: UUID?
-
-    var focused: UUID { focusRight ? right : left }
-    var other: UUID { focusRight ? left : right }
-    func contains(_ id: UUID) -> Bool { left == id || right == id }
+    // Added in version 3. Optional so older files still load.
+    var isEssential: Bool?
+    var pinnedURL: String?
+    var customTitle: String?
+    var order: Double?
+    var lastActiveAt: Date?
+    var isMuted: Bool?
 }
 
 struct SavedState: Codable {
-    /// 2 adds spaces. Version 1 files have none and move into "Home".
-    var version: Int? = 2
+    /// 2 adds spaces. 3 adds Essentials, pinned addresses, ordering and split trees.
+    /// Version 1 files have no spaces and move into "Home".
+    var version: Int? = 3
     var spaces: [Space]? = nil
     var currentSpace: UUID? = nil
     var tabs: [TabRecord] = []
@@ -74,8 +72,6 @@ enum Selection: Hashable {
     case split(UUID)
 }
 
-enum PaneSide { case left, right }
-
 @MainActor
 final class BrowserModel: ObservableObject {
     @Published var spaces: [Space] = []
@@ -91,30 +87,51 @@ final class BrowserModel: ObservableObject {
             }
         }
     }
-    @Published private(set) var splits: [SplitRecord] = [] {
+    @Published var splits: [SplitRecord] = [] {
         didSet {
             if splits.contains(where: { $0.spaceID == nil }) {
                 for i in splits.indices where splits[i].spaceID == nil { splits[i].spaceID = currentSpaceID }
             }
         }
     }
-    @Published private(set) var selection: Selection?
+    @Published var selection: Selection?
     /// The note shown in the focused pane, if it's a note.
     @Published private(set) var document: NoteDocument?
     @Published var addressText = ""
     @Published var addressFocusToken = 0
     @Published var flashMessage: String?
+    /// A short message at the bottom of the content area, sometimes with an Undo.
+    @Published var toastState: ToastState?
+    /// A page floating over the current one. See BrowserModel+Peek.
+    @Published var peek: PeekState?
+    /// Sidebar items picked with Cmd-click or Shift-click.
+    @Published var multiSelection: Set<UUID> = []
+    /// -1 when the last space switch went left, 1 when it went right. For the slide animation.
+    @Published private(set) var spaceSwitchDirection = 0
+    /// Find in page for the focused pane.
+    @Published var find = FindState()
+    /// The Ctrl-Tab switcher while Ctrl is held.
+    @Published var switcher: SwitcherState?
 
     var addressEditing = false
     let webConfig: WKWebViewConfiguration
     let notes = NotesStore()
     let resurfacer = Resurfacer()
     let bar = CommandBar()
+    let closed = ClosedStore()
     /// Open note documents, by file path.
     private(set) var docs: [String: NoteDocument] = [:]
-    private var history: [Selection] = []
+    /// Selections in the order they were left, newest last. Used to go back after a close and for Ctrl-Tab.
+    var selectionHistory: [Selection] = []
     private var saveWork: DispatchWorkItem?
     private var flashWork: DispatchWorkItem?
+    var toastWork: DispatchWorkItem?
+    var toastAction: (() -> Void)?
+    /// Where a Shift-click range starts.
+    var multiAnchor: UUID?
+    private var profileConfigs: [String: WKWebViewConfiguration] = [:]
+    private var upkeepTimer: Timer?
+    private var closedSink: AnyCancellable?
 
     /// The smoke test uses a throwaway WebKit store so it leaves no cookies or site data behind.
     static var useEphemeralStore = false
@@ -122,25 +139,65 @@ final class BrowserModel: ObservableObject {
     static var dataStoreID: UUID?
 
     init() {
+        webConfig = Self.makeConfig(store: Self.store(forProfile: nil))
+        resurfacer.model = self
+        bar.model = self
+        notes.onScan = { [weak self] in self?.checkNotesOnDisk() }
+        MediaWatch.shared.model = self
+        closedSink = closed.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+        load()
+    }
+
+    // MARK: - WebKit configuration and profiles
+
+    static func makeConfig(store: WKWebsiteDataStore) -> WKWebViewConfiguration {
         let c = WKWebViewConfiguration()
-        if Self.useEphemeralStore {
-            c.websiteDataStore = .nonPersistent()
-        } else if let id = Self.dataStoreID {
-            c.websiteDataStore = WKWebsiteDataStore(forIdentifier: id)
-        } else {
-            c.websiteDataStore = .default()
-        }
+        c.websiteDataStore = store
         c.preferences.isElementFullscreenEnabled = true
         c.preferences.javaScriptCanOpenWindowsAutomatically = false
         let major = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
         c.applicationNameForUserAgent = "Version/\(major).0 Safari/605.1.15"
+        c.allowsAirPlayForMediaPlayback = true
         TypingCounter.install(on: c.userContentController)
-        webConfig = c
-        resurfacer.model = self
-        bar.model = self
-        notes.onScan = { [weak self] in self?.checkNotesOnDisk() }
-        load()
+        MediaWatch.install(on: c.userContentController)
+        return c
     }
+
+    /// The WebKit store for a profile. The default profile keeps the store it always had.
+    /// Named profiles get their own persistent store, derived from the data folder and the name.
+    static func store(forProfile name: String?) -> WKWebsiteDataStore {
+        if useEphemeralStore { return .nonPersistent() }
+        guard let name, !name.isEmpty else {
+            if let id = dataStoreID { return WKWebsiteDataStore(forIdentifier: id) }
+            return .default()
+        }
+        return WKWebsiteDataStore(forIdentifier: profileStoreID(name))
+    }
+
+    static func profileStoreID(_ name: String) -> UUID {
+        Paths.storeID(for: Paths.root.appendingPathComponent("profiles", isDirectory: true).appendingPathComponent(name.lowercased(), isDirectory: true))
+    }
+
+    func configuration(forProfile name: String?) -> WKWebViewConfiguration {
+        guard let name, !name.isEmpty else { return webConfig }
+        if let c = profileConfigs[name] { return c }
+        let c = Self.makeConfig(store: Self.store(forProfile: name))
+        profileConfigs[name] = c
+        return c
+    }
+
+    /// Essentials use the default profile. Everything else uses its space's profile.
+    func configuration(for tab: Tab) -> WKWebViewConfiguration {
+        if tab.isEssential { return webConfig }
+        return configuration(forProfile: spaces.first { $0.id == tab.spaceID }?.profile)
+    }
+
+    func profile(of tab: Tab) -> String? {
+        tab.isEssential ? nil : spaces.first { $0.id == tab.spaceID }?.profile
+    }
+
+    /// Profile names in use, plus the default (nil).
+    var profiles: [String] { Array(Set(spaces.compactMap { $0.profile })).sorted() }
 
     // MARK: - Derived
 
@@ -161,24 +218,32 @@ final class BrowserModel: ObservableObject {
     }
 
     func split(containing id: UUID) -> SplitRecord? { splits.first { $0.contains(id) } }
+    func split(_ id: UUID) -> SplitRecord? { splits.first { $0.id == id } }
 
-    private var splitTabIDs: Set<UUID> { Set(splits.flatMap { [$0.left, $0.right] }) }
+    var splitTabIDs: Set<UUID> { Set(splits.flatMap { $0.items }) }
 
     /// The focused web tab, for the address bar and navigation.
     var currentWebTab: Tab? { currentTab.flatMap { $0.kind == .web ? $0 : nil } }
 
     var currentSpace: Space? { spaces.first { $0.id == currentSpaceID } }
-    var spaceTabs: [Tab] { tabs.filter { $0.spaceID == currentSpaceID } }
-    var spaceFolders: [Folder] { folders.filter { $0.spaceID == currentSpaceID } }
-    var spaceSplits: [SplitRecord] { splits.filter { $0.spaceID == currentSpaceID } }
+    /// Items that belong to this space. Essentials aren't in any one space.
+    var spaceTabs: [Tab] { tabs.filter { $0.spaceID == currentSpaceID && !$0.isEssential } }
+    var spaceFolders: [Folder] { folders.filter { $0.spaceID == currentSpaceID }.sorted { ($0.order ?? 0) < ($1.order ?? 0) } }
+    var spaceSplits: [SplitRecord] { splits.filter { $0.spaceID == currentSpaceID }.sorted { $0.order < $1.order } }
+
+    /// The Essentials grid, shared by every space.
+    var essentials: [Tab] { tabs.filter { $0.isEssential }.sorted { $0.order < $1.order } }
 
     // Items in a split show as the split's joined row, not on their own.
-    var pinnedTabs: [Tab] { let s = splitTabIDs; return spaceTabs.filter { $0.isPinned && !s.contains($0.id) } }
+    var pinnedTabs: [Tab] { let s = splitTabIDs; return spaceTabs.filter { $0.isPinned && !s.contains($0.id) }.sorted { $0.order < $1.order } }
     var looseTabs: [Tab] {
         let s = splitTabIDs
-        return spaceTabs.filter { !$0.isPinned && $0.folderID == nil && !s.contains($0.id) }.sorted { $0.createdAt > $1.createdAt }
+        return spaceTabs.filter { !$0.isPinned && $0.folderID == nil && !s.contains($0.id) }.sorted { $0.order < $1.order }
     }
-    func tabs(in folder: Folder) -> [Tab] { let s = splitTabIDs; return tabs.filter { $0.folderID == folder.id && !$0.isPinned && !s.contains($0.id) } }
+    func tabs(in folder: Folder) -> [Tab] {
+        let s = splitTabIDs
+        return tabs.filter { $0.folderID == folder.id && !$0.isPinned && !$0.isEssential && !s.contains($0.id) }.sorted { $0.order < $1.order }
+    }
 
     /// True for the focused item (a selected tab, or the focused pane of the selected split).
     func isSelected(_ tab: Tab) -> Bool { currentTab?.id == tab.id }
@@ -203,26 +268,49 @@ final class BrowserModel: ObservableObject {
         spaces = sp
         let home = sp[0].id
         currentSpaceID = s.currentSpace.flatMap { id in sp.contains { $0.id == id } ? id : nil } ?? home
-        folders = s.folders.map { var f = $0; if f.spaceID == nil || !sp.contains(where: { $0.id == f.spaceID }) { f.spaceID = home }; return f }
-        tabs = s.tabs.map { r in
+        folders = s.folders.enumerated().map { i, f0 in
+            var f = f0
+            if f.spaceID == nil || !sp.contains(where: { $0.id == f.spaceID }) { f.spaceID = home }
+            if f.order == nil { f.order = Double(i) }
+            return f
+        }
+        // Older files had no order: Today was newest first, the rest in file order.
+        let byNewest = s.tabs.sorted { $0.createdAt > $1.createdAt }.map { $0.id }
+        tabs = s.tabs.enumerated().map { i, r in
             let kind: TabKind = r.kind == .file ? .note : r.kind
             let t = Tab(id: r.id, kind: kind, url: r.url.flatMap(URL.init(string:)), title: r.title,
                         isPinned: r.isPinned, folderID: r.folderID, createdAt: r.createdAt)
             t.model = self
             t.spaceID = r.spaceID.flatMap { id in sp.contains { $0.id == id } ? id : nil } ?? home
+            t.isEssential = r.isEssential ?? false
+            t.pinnedURL = r.pinnedURL.flatMap(URL.init(string:))
+            if t.keepsPinnedURL && t.pinnedURL == nil { t.pinnedURL = t.url }
+            t.customTitle = r.customTitle
+            t.order = r.order ?? (r.isPinned || r.folderID != nil ? Double(i) : Double(byNewest.firstIndex(of: r.id) ?? i))
+            t.lastActiveAt = r.lastActiveAt ?? r.createdAt
+            t.isMuted = r.isMuted ?? false
             return t
         }
         let ids = Set(tabs.map { $0.id })
-        splits = (s.splits ?? []).filter { ids.contains($0.left) && ids.contains($0.right) && $0.left != $0.right }.map { r in
+        let byNewestSplit = (s.splits ?? []).sorted { $0.createdAt > $1.createdAt }.map { $0.id }
+        var seen = Set<UUID>()
+        splits = (s.splits ?? []).compactMap { r in
             var x = r
-            if x.spaceID == nil || !sp.contains(where: { $0.id == x.spaceID }) { x.spaceID = tab(r.left)?.spaceID ?? home }
+            // Drop items that are gone, and anything already in an earlier split.
+            for id in x.items where !ids.contains(id) || seen.contains(id) { if let n = x.root.removing(id) { x.root = n } }
+            guard x.items.count >= 2, Set(x.items).count == x.items.count else { return nil }
+            seen.formUnion(x.items)
+            if !x.contains(x.focused) { x.focused = x.items[0] }
+            if x.spaceID == nil || !sp.contains(where: { $0.id == x.spaceID }) { x.spaceID = tab(x.items[0])?.spaceID ?? home }
+            if s.version ?? 1 < 3 { x.order = Double(byNewestSplit.firstIndex(of: r.id) ?? 0) - 1000 }
             return x
         }
         checkNotesOnDisk()
+        SessionFiles.prune(keeping: ids.union(closed.items.map { $0.id }))
         let cur = currentSpace
         if let sid = cur?.selectedSplit ?? s.selectedSplit, let sp = splits.first(where: { $0.id == sid && $0.spaceID == currentSpaceID }) {
             selectSplit(sp)
-        } else if let id = cur?.selectedTab ?? s.selectedTab, let t = tab(id), t.spaceID == currentSpaceID {
+        } else if let id = cur?.selectedTab ?? s.selectedTab, let t = tab(id), t.spaceID == currentSpaceID || t.isEssential {
             select(t)
         } else if let p = s.selectedDocument, FileManager.default.fileExists(atPath: p) {
             openNote(URL(fileURLWithPath: p))
@@ -244,7 +332,9 @@ final class BrowserModel: ObservableObject {
         s.folders = folders
         s.tabs = tabs.filter { !$0.isBlank }.map {
             TabRecord(id: $0.id, kind: $0.kind, url: $0.url?.absoluteString, title: $0.title,
-                      isPinned: $0.isPinned, folderID: $0.folderID, createdAt: $0.createdAt, spaceID: $0.spaceID)
+                      isPinned: $0.isPinned, folderID: $0.folderID, createdAt: $0.createdAt, spaceID: $0.spaceID,
+                      isEssential: $0.isEssential ? true : nil, pinnedURL: $0.pinnedURL?.absoluteString,
+                      customTitle: $0.customTitle, order: $0.order, lastActiveAt: $0.lastActiveAt, isMuted: $0.isMuted ? true : nil)
         }
         s.splits = splits
         switch selection {
@@ -256,33 +346,53 @@ final class BrowserModel: ObservableObject {
         if let data = try? JSONEncoder.pretty.encode(s) {
             try? data.write(to: Paths.stateFile, options: .atomic)
         }
+        for t in tabs where t.isLoaded { t.saveSession() }
     }
 
     func prepareForQuit() {
         if let t = currentTab { endDwell(t) }
+        for t in visibleTabs { t.lastActiveAt = Date() }
         for d in docs.values { d.saveNow() }
         saveNow()
+    }
+
+    /// Auto-archive on a timer. The app calls this once at launch. Tests drive it by hand.
+    func startUpkeep() {
+        archiveIdleTabs()
+        upkeepTimer?.invalidate()
+        upkeepTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { _ = self?.archiveIdleTabs() }
+        }
     }
 
     // MARK: - Selection
 
     /// Items on screen right now. Notes not on screen get saved and let go.
     var visibleTabs: [Tab] {
-        if let sp = currentSplit { return [tab(sp.left), tab(sp.right)].compactMap { $0 } }
+        if let sp = currentSplit { return sp.items.compactMap { tab($0) } }
         return currentTab.map { [$0] } ?? []
     }
 
-    private func setSelection(_ new: Selection?) {
+    func setSelection(_ new: Selection?) {
         let old = selection
         guard old != new else { return }
-        if let old { history.removeAll { $0 == old }; history.append(old) }
-        if history.count > 50 { history.removeFirst(history.count - 50) }
+        let leaving = visibleTabs
+        if let old { selectionHistory.removeAll { $0 == old }; selectionHistory.append(old) }
+        if selectionHistory.count > 50 { selectionHistory.removeFirst(selectionHistory.count - 50) }
         if case .tab(let id) = old, let t = tab(id) {
             endDwell(t)
-            if t.isBlank && split(containing: t.id) == nil { tabs.removeAll { $0.id == t.id }; history.removeAll { $0 == .tab(t.id) } }
+            if t.isBlank && split(containing: t.id) == nil { tabs.removeAll { $0.id == t.id }; selectionHistory.removeAll { $0 == .tab(t.id) } }
         }
         if case .split(let sid) = old, let sp = splits.first(where: { $0.id == sid }), let t = tab(sp.focused) { endDwell(t) }
+        if peek != nil { closePeek() }
+        if find.visible { closeFind() }
+        multiSelection = []
         selection = new
+        let now = Date()
+        for t in leaving { t.lastActiveAt = now }
+        for t in visibleTabs { t.lastActiveAt = now }
+        if bar.isOpen, case .navigate = bar.mode { bar.close() }
+        mediaSelectionChanged(leaving: leaving)
         refreshFocus()
         syncAddress()
         scheduleSave()
@@ -290,12 +400,12 @@ final class BrowserModel: ObservableObject {
 
     /// Recomputes the focused note and drops documents that are no longer visible.
     func refreshFocus() {
-        let visibleNotes = visibleTabs.filter { $0.kind == .note }.compactMap { $0.url?.standardizedFileURL.path }
+        let visibleNotes = visibleTabs.filter { $0.isNote }.compactMap { $0.url?.standardizedFileURL.path }
         for (path, d) in docs where !visibleNotes.contains(path) {
             d.saveNow()
             docs[path] = nil
         }
-        if let t = currentTab, t.kind == .note, let u = t.url { document = doc(for: u) } else { document = nil }
+        if let t = currentTab, t.isNote, let u = t.url { document = doc(for: u) } else { document = nil }
     }
 
     func doc(for url: URL) -> NoteDocument {
@@ -315,10 +425,10 @@ final class BrowserModel: ObservableObject {
     }
 
     func select(_ tab: Tab) {
-        if let sid = tab.spaceID, sid != currentSpaceID { switchSpace(to: sid, restore: false) }
+        if !tab.isEssential, let sid = tab.spaceID, sid != currentSpaceID { switchSpace(to: sid, restore: false) }
         if let sp = split(containing: tab.id) {
             // Picking an item that lives in a split brings the split back, focused on it.
-            selectSplit(sp, focus: sp.right == tab.id ? .right : .left)
+            selectSplit(sp, focusItem: tab.id)
             return
         }
         setSelection(.tab(tab.id))
@@ -328,12 +438,13 @@ final class BrowserModel: ObservableObject {
     /// Points the Related panel and the dwell clock at the focused item.
     func contextForFocused() {
         guard let tab = currentTab else { return }
-        if tab.kind == .note, let u = tab.url {
+        if tab.isNote, let u = tab.url {
             refreshFocus()
             IndexStore.shared.touchOpened(key: URLKey.fileKey(u))
             if let d = document { resurfacer.contextFromDocument(d) }
             return
         }
+        guard tab.isWeb else { resurfacer.setContext(nil); return }
         if tab.url != nil { _ = tab.ensureWebView() }
         startDwell(tab)
         if let u = tab.url { IndexStore.shared.touchOpened(key: URLKey.key(for: u)) }
@@ -346,7 +457,9 @@ final class BrowserModel: ObservableObject {
     }
 
     /// Cmd-L: the bar with the focused page's address selected. Enter loads in that pane.
+    /// A second Cmd-L closes it.
     func focusAddress() {
+        if bar.isOpen, case .navigate = bar.mode { bar.close(); return }
         if let t = currentWebTab, let u = t.url ?? t.webView?.url {
             bar.open(.navigate(t.id), text: u.absoluteString)
         } else if let t = currentWebTab {
@@ -356,12 +469,15 @@ final class BrowserModel: ObservableObject {
         }
     }
 
-    /// What a pick in the command bar does, for each way the bar was opened.
-    func commandPick(_ kind: Suggestion.Kind, mode: CommandBar.Mode) {
+    /// What a pick in the command bar does, for each way the bar was opened. `route` comes from
+    /// the modifier held with Enter: Option opens in split view, Shift in Peek, Cmd in a
+    /// background tab.
+    func commandPick(_ kind: Suggestion.Kind, mode: CommandBar.Mode, route: LinkRouting.Route? = nil) {
+        let mode = route == .split && currentTab != nil ? CommandBar.Mode.split : mode
         switch kind {
         case .tab(let id):
             guard let t = tab(id) else { return }
-            if mode == .split { openInSplit(t, side: .right) } else { select(t) }
+            if mode == .split { openInSplit(t, side: .right) } else if route == .peek, let u = t.url, t.isWeb { openPeek(u, from: currentTab) } else { select(t) }
         case .note(let u):
             if mode == .split { openInSplit(openNote(u, select: false), side: .right) } else { openNote(u) }
         case .newNote(let title):
@@ -372,18 +488,38 @@ final class BrowserModel: ObservableObject {
             if mode == .split { openInSplit(openNote(url, select: false), side: .right) } else { openNote(url) }
             DispatchQueue.main.async { NotificationCenter.default.post(name: .focusEditor, object: nil) }
         case .openURL(let u), .history(let u):
-            openWeb(u, mode: mode)
+            openWeb(u, mode: mode, route: route)
         case .google(let q), .pastSearch(let q):
             IndexStore.shared.addSearch(q)
-            if let u = AddressParser.search(q) { openWeb(u, mode: mode) }
+            if let u = AddressParser.search(q) { openWeb(u, mode: mode, route: route) }
+        case .action(let id):
+            bar.learner.record(id, seen: bar.shownActionIDs)
+            BarActions.run(id, model: self)
+        case .folder(let id):
+            openFolder(id)
+        case .space(let id):
+            switchSpace(to: id)
+        case .closed(let id):
+            restoreClosed([id])
         }
     }
 
-    private func openWeb(_ u: URL, mode: CommandBar.Mode) {
+    private func openWeb(_ u: URL, mode: CommandBar.Mode, route: LinkRouting.Route?) {
+        if route == .peek { openPeek(u, from: currentTab); return }
+        if route == .backgroundTab {
+            let t = newTab(url: u, select: false)
+            toast("Opened in a new tab", action: "Show") { [weak self, weak t] in if let t { self?.select(t) } }
+            return
+        }
         switch mode {
         case .navigate(let id):
             if let t = tab(id), t.kind == .web {
-                t.load(u)
+                // Enter on the same address reloads, like Arc.
+                if let cur = t.url, cur.absoluteString == u.absoluteString, t.webView != nil {
+                    reload()
+                } else {
+                    t.load(u)
+                }
                 focusWeb(t)
                 scheduleSave()
                 return
@@ -396,6 +532,7 @@ final class BrowserModel: ObservableObject {
         case .split:
             let t = Tab(url: u)
             t.model = self
+            t.order = topOrder(today: currentSpaceID)
             tabs.append(t)
             openInSplit(t, side: .right)
             _ = t.ensureWebView()
@@ -410,6 +547,7 @@ final class BrowserModel: ObservableObject {
                 configuration: WKWebViewConfiguration? = nil) -> Tab {
         let t = Tab(url: url)
         t.model = self
+        t.order = topOrder(today: currentSpaceID)
         tabs.append(t)
         if configuration != nil { _ = t.ensureWebView(configuration: configuration) }
         if doSelect { select(t) } else if url != nil {
@@ -420,106 +558,10 @@ final class BrowserModel: ObservableObject {
         return t
     }
 
-    // MARK: - Split view
-
-    func selectSplit(_ sp: SplitRecord, focus: PaneSide? = nil) {
-        if let sid = sp.spaceID, sid != currentSpaceID { switchSpace(to: sid, restore: false) }
-        if let focus, let i = splits.firstIndex(where: { $0.id == sp.id }) {
-            splits[i].focusRight = focus == .right
-        }
-        if selection == .split(sp.id) {
-            refreshFocus()
-            syncAddress()
-        } else {
-            setSelection(.split(sp.id))
-        }
-        for t in visibleTabs where t.kind == .web && t.url != nil { _ = t.ensureWebView() }
-        contextForFocused()
-        scheduleSave()
-    }
-
-    /// Pairs an item with what's on screen. In a split, it replaces the pane on that side.
-    func openInSplit(_ tab: Tab, side: PaneSide = .right) {
-        if let old = split(containing: tab.id) { splits.removeAll { $0.id == old.id } }
-        if let sp = currentSplit, let i = splits.firstIndex(where: { $0.id == sp.id }) {
-            if side == .left { splits[i].left = tab.id } else { splits[i].right = tab.id }
-            splits[i].focusRight = side == .right
-            if splits[i].left == splits[i].right { splits.remove(at: i); select(tab); return }
-            selectSplit(splits[i])
-            return
-        }
-        guard let cur = currentTab, cur.id != tab.id else { select(tab); return }
-        if let old = split(containing: cur.id) { splits.removeAll { $0.id == old.id } }
-        let sp = side == .right ? SplitRecord(left: cur.id, right: tab.id, focusRight: true)
-                                : SplitRecord(left: tab.id, right: cur.id, focusRight: false)
-        splits.append(sp)
-        selectSplit(sp)
-    }
-
-    /// Both items go back to being normal items.
-    func separate(_ sp: SplitRecord) {
-        let focused = tab(sp.focused)
-        splits.removeAll { $0.id == sp.id }
-        if selection == .split(sp.id) {
-            selection = nil
-            if let focused { select(focused) }
-        }
-        scheduleSave()
-    }
-
-    func swap(_ sp: SplitRecord) {
-        guard let i = splits.firstIndex(where: { $0.id == sp.id }) else { return }
-        let l = splits[i].left
-        splits[i].left = splits[i].right
-        splits[i].right = l
-        splits[i].focusRight.toggle()
-        scheduleSave()
-    }
-
-    func focusPane(_ side: PaneSide) {
-        guard let sp = currentSplit, let i = splits.firstIndex(where: { $0.id == sp.id }) else { return }
-        let right = side == .right
-        guard splits[i].focusRight != right else { return }
-        if let t = tab(sp.focused) { endDwell(t) }
-        splits[i].focusRight = right
-        refreshFocus()
-        syncAddress()
-        contextForFocused()
-        scheduleSave()
-    }
-
-    func setSplitRatio(_ r: Double, save: Bool) {
-        guard let sp = currentSplit, let i = splits.firstIndex(where: { $0.id == sp.id }) else { return }
-        splits[i].ratio = min(0.8, max(0.2, r))
-        if save { scheduleSave() }
-    }
-
-    /// The other pane stays, full width.
-    private func dissolveSplit(around removed: UUID) {
-        guard let sp = split(containing: removed) else { return }
-        let keep = sp.left == removed ? sp.right : sp.left
-        let wasSelected = selection == .split(sp.id)
-        splits.removeAll { $0.id == sp.id }
-        if wasSelected, let t = tab(keep) {
-            selection = nil
-            select(t)
-        }
-    }
-
-    /// A sidebar item dropped on one half of the content area.
-    func drop(tabID: UUID, side: PaneSide) {
-        guard let t = tab(tabID) else { return }
-        if currentTab == nil { select(t); return }
-        openInSplit(t, side: side)
-    }
-
-    /// Ctrl-Shift-=: the bar, and whatever's picked opens as the second pane.
-    func splitWithNewTab() {
-        bar.open(currentTab == nil ? .newTab : .split)
-    }
-
-    /// Cmd-T and New tab: the bar. Nothing is created until something is picked.
+    /// Cmd-T and New tab: the bar. Nothing is created until something is picked. A second
+    /// Cmd-T closes it.
     func newTabCommand() {
+        if bar.isOpen && bar.mode == .newTab { bar.close(); return }
         bar.open(.newTab)
     }
 
@@ -543,21 +585,28 @@ final class BrowserModel: ObservableObject {
         }
     }
 
-    /// Closing a page unloads it if it's pinned or filed and removes it otherwise.
-    /// Closing a note only takes it out of the sidebar; the file stays.
+    /// Closing a page: Today tabs go to Recently Closed. Pinned tabs and Essentials go back to their
+    /// pinned address and unload, like Zen. Filed pages unload. Closing a note only takes it out
+    /// of the sidebar; the file stays.
     func close(_ tab: Tab) {
         if split(containing: tab.id) != nil { dissolveSplit(around: tab.id) }
         let wasSelected = isSelected(tab)
-        if tab.kind == .note {
-            if let u = tab.url { docs[u.standardizedFileURL.path]?.saveNow() }
-            if !(tab.isPinned || tab.folderID != nil) { tabs.removeAll { $0.id == tab.id } }
-        } else if tab.isPinned || tab.folderID != nil {
+        if tab.isNote || tab.isApp {
+            if let u = tab.url, tab.isNote { docs[u.standardizedFileURL.path]?.saveNow() }
+            if !(tab.isPinned || tab.folderID != nil || tab.isEssential) {
+                recordClosed([tab], reason: .closed)
+                tabs.removeAll { $0.id == tab.id }
+            }
+        } else if tab.keepsPinnedURL {
+            resetPinned(tab, load: false)
+        } else if tab.folderID != nil {
             tab.unload()
         } else {
+            recordClosed([tab], reason: .closed)
             tab.unload()
             tabs.removeAll { $0.id == tab.id }
         }
-        history.removeAll { $0 == .tab(tab.id) && !tabs.contains(where: { $0.id == tab.id }) }
+        selectionHistory.removeAll { $0 == .tab(tab.id) && !tabs.contains(where: { $0.id == tab.id }) }
         if wasSelected { selectPrevious(excluding: .tab(tab.id)) } else { refreshFocus() }
         objectWillChange.send()
         scheduleSave()
@@ -567,22 +616,25 @@ final class BrowserModel: ObservableObject {
     func remove(_ tab: Tab) {
         if split(containing: tab.id) != nil { dissolveSplit(around: tab.id) }
         let wasSelected = isSelected(tab)
-        if tab.kind == .note, let u = tab.url { docs[u.standardizedFileURL.path]?.saveNow() }
+        if tab.isNote, let u = tab.url { docs[u.standardizedFileURL.path]?.saveNow() }
+        recordClosed([tab], reason: .closed)
         tab.unload()
         tabs.removeAll { $0.id == tab.id }
-        history.removeAll { $0 == .tab(tab.id) }
+        selectionHistory.removeAll { $0 == .tab(tab.id) }
+        multiSelection.remove(tab.id)
         if wasSelected { selectPrevious(excluding: .tab(tab.id)) } else { refreshFocus() }
         scheduleSave()
     }
 
-    private func selectPrevious(excluding: Selection) {
+    func selectPrevious(excluding: Selection) {
         // Earlier items in other spaces stay in the history for when you go back there.
         var skipped: [Selection] = []
-        defer { history.append(contentsOf: skipped.reversed()) }
-        while let last = history.popLast() {
+        defer { selectionHistory.append(contentsOf: skipped.reversed()) }
+        while let last = selectionHistory.popLast() {
             if last == excluding { continue }
             if case .tab(let id) = last, let t = tab(id) {
-                if t.spaceID != currentSpaceID { skipped.append(last); continue }
+                if t.spaceID != currentSpaceID && !t.isEssential { skipped.append(last); continue }
+                if t.keepsPinnedURL && !t.isLoaded { continue }
                 selection = nil; select(t); return
             }
             if case .split(let sid) = last, let sp = splits.first(where: { $0.id == sid }) {
@@ -599,11 +651,19 @@ final class BrowserModel: ObservableObject {
         }
     }
 
+    /// Cmd-W. Closes Peek first if it's open. In a split, the focused pane goes and the rest stay.
     func closeCurrent() {
+        if peek != nil { closePeek(); return }
         guard let t = currentTab else { return }
         if split(containing: t.id) != nil {
             dissolveSplit(around: t.id)
-            if t.kind == .note || !(t.isPinned || t.folderID != nil) { remove(t) } else { t.unload() }
+            if t.isNote || t.isApp || !(t.isPinned || t.folderID != nil || t.isEssential) {
+                remove(t)
+            } else if t.keepsPinnedURL {
+                resetPinned(t, load: false)
+            } else {
+                t.unload()
+            }
             refreshFocus()
             scheduleSave()
             return
@@ -617,43 +677,21 @@ final class BrowserModel: ObservableObject {
         guard let t = currentWebTab else { return }
         if let wv = t.webView { t.loadError = nil; wv.reload() } else if t.url != nil { _ = t.ensureWebView() }
     }
+    func reloadFromOrigin() {
+        guard let t = currentWebTab else { return }
+        if let wv = t.webView { t.loadError = nil; wv.reloadFromOrigin() } else if t.url != nil { _ = t.ensureWebView() }
+    }
     func zoom(_ delta: Double?) {
         guard let wv = currentWebTab?.webView else { return }
         if let delta { wv.pageZoom = max(0.5, min(3, wv.pageZoom + delta)) } else { wv.pageZoom = 1 }
-    }
-
-    func togglePin(_ tab: Tab) {
-        tab.isPinned.toggle()
-        if tab.isPinned { tab.folderID = nil }
-        objectWillChange.send()
-        scheduleSave()
-    }
-
-    func move(_ tab: Tab, to folderID: UUID?) {
-        tab.folderID = folderID
-        tab.isPinned = false
-        if let folderID, let i = folders.firstIndex(where: { $0.id == folderID }) { folders[i].isExpanded = true }
-        objectWillChange.send()
-        scheduleSave()
-    }
-
-    func moveTabs(ids: [String], to folderID: UUID?, pin: Bool = false) -> Bool {
-        var moved = false
-        for s in ids {
-            guard let id = UUID(uuidString: s), let t = tab(id) else { continue }
-            if pin { t.isPinned = true; t.folderID = nil } else { move(t, to: folderID) }
-            moved = true
-        }
-        objectWillChange.send()
-        scheduleSave()
-        return moved
     }
 
     // MARK: - Folders
 
     @discardableResult
     func createFolder(named name: String) -> Folder {
-        let f = Folder(spaceID: currentSpaceID, name: name)
+        let first = spaceFolders.first?.order ?? 0
+        let f = Folder(spaceID: currentSpaceID, name: name, order: first - 1)
         folders.append(f)
         scheduleSave()
         return f
@@ -669,7 +707,7 @@ final class BrowserModel: ObservableObject {
 
     /// Items in the folder go back to Tabs. Notes on disk are untouched.
     func deleteFolder(_ f: Folder) {
-        for t in tabs where t.folderID == f.id { t.folderID = nil }
+        for t in tabs where t.folderID == f.id { t.folderID = nil; t.order = topOrder(today: f.spaceID ?? currentSpaceID) }
         folders.removeAll { $0.id == f.id }
         objectWillChange.send()
         scheduleSave()
@@ -681,10 +719,25 @@ final class BrowserModel: ObservableObject {
         scheduleSave()
     }
 
+    func setAllFolders(expanded: Bool) {
+        for i in folders.indices where folders[i].spaceID == currentSpaceID { folders[i].isExpanded = expanded }
+        scheduleSave()
+    }
+
+    /// From the command bar: expands the folder and shows its first item.
+    func openFolder(_ id: UUID) {
+        guard let i = folders.firstIndex(where: { $0.id == id }) else { return }
+        if folders[i].spaceID != currentSpaceID, let sid = folders[i].spaceID { switchSpace(to: sid) }
+        folders[i].isExpanded = true
+        if let first = tabs(in: folders[i]).first { select(first) }
+        scheduleSave()
+    }
+
     func promptNewFolder(moving tab: Tab? = nil) {
         guard let name = Prompt.text(title: "New folder", message: "Name", defaultValue: ""), !name.isEmpty else { return }
         let f = createFolder(named: name)
         if let tab { move(tab, to: f.id) }
+        for id in multiSelection where id != tab?.id { if let t = self.tab(id) { move(t, to: f.id) } }
     }
 
     func promptRename(_ f: Folder) {
@@ -702,12 +755,13 @@ final class BrowserModel: ObservableObject {
     @discardableResult
     func openNote(_ url: URL, select doSelect: Bool = true) -> Tab {
         let path = url.standardizedFileURL.path
-        if let t = spaceTabs.first(where: { $0.kind == .note && $0.url?.standardizedFileURL.path == path }) {
+        if let t = (spaceTabs + essentials).first(where: { $0.isNote && $0.url?.standardizedFileURL.path == path }) {
             if doSelect { select(t) }
             return t
         }
         let t = Tab(kind: .note, url: url.standardizedFileURL, title: url.deletingPathExtension().lastPathComponent)
         t.model = self
+        t.order = topOrder(today: currentSpaceID)
         tabs.append(t)
         if doSelect { select(t) }
         scheduleSave()
@@ -736,7 +790,7 @@ final class BrowserModel: ObservableObject {
     }
 
     func renameNote(_ tab: Tab, to name: String) -> NotesStore.RenameResult {
-        guard tab.kind == .note, let url = tab.url else { return .failed }
+        guard tab.isNote, let url = tab.url else { return .failed }
         let d = docs[url.standardizedFileURL.path]
         d?.saveNow()
         let r = notes.rename(url, to: name)
@@ -774,13 +828,14 @@ final class BrowserModel: ObservableObject {
 
     /// Moves the note's file to the Trash and removes the item.
     func deleteNote(_ tab: Tab, completion: ((Bool) -> Void)? = nil) {
-        guard tab.kind == .note, let url = tab.url else { completion?(false); return }
+        guard tab.isNote, let url = tab.url else { completion?(false); return }
         docs[url.standardizedFileURL.path] = nil
         notes.trash(url) { [weak self] ok in
             guard let self else { return }
             if ok {
                 Indexer.removeFile(url: url)
                 self.remove(tab)
+                self.closed.take([tab.id])
             } else {
                 self.flash("Couldn't move that note to the Trash")
             }
@@ -818,7 +873,7 @@ final class BrowserModel: ObservableObject {
 
     /// Marks note items whose files are gone, and lets open notes check for outside changes.
     func checkNotesOnDisk() {
-        for t in tabs where t.kind == .note {
+        for t in tabs where t.isNote {
             let missing = t.url.map { !FileManager.default.fileExists(atPath: $0.path) } ?? true
             if t.isMissing != missing { t.isMissing = missing }
         }
@@ -847,6 +902,9 @@ final class BrowserModel: ObservableObject {
     func pageDidFinish(_ tab: Tab) {
         guard let wv = tab.webView, let url = wv.url else { return }
         if isSelected(tab) { startDwell(tab); syncAddress() }
+        HistoryStore.shared.record(url: url, title: wv.title ?? tab.title, spaceID: tab.isEssential ? nil : tab.spaceID)
+        Favicons.shared.capture(from: tab)
+        if tab.isMuted { MediaWatch.setMuted(true, in: tab) }
         tab.captureWork?.cancel()
         tab.contextWork?.cancel()
         let indexable = URLKey.isIndexableWeb(url) && !Settings.shared.value.isExcluded(host: url.host)
@@ -933,7 +991,7 @@ final class BrowserModel: ObservableObject {
     var researchNote: NoteDocument? {
         if let d = document, !d.isReadOnly, d.state == .ready { return d }
         // Reading a page next to a note: the note is where research goes.
-        for t in visibleTabs where t.kind == .note {
+        for t in visibleTabs where t.isNote {
             if let u = t.url, let d = docs[u.standardizedFileURL.path], !d.isReadOnly, d.state == .ready { return d }
         }
         return nil
@@ -957,6 +1015,7 @@ final class BrowserModel: ObservableObject {
         let isNote = d.source == .note || d.source == .markdown
         let t = Tab(kind: isNote ? .note : .web, url: u, title: isNote ? u.deletingPathExtension().lastPathComponent : d.title, folderID: folder.id)
         t.model = self
+        t.order = (tabs(in: folder).map { $0.order }.max() ?? 0) + 1
         tabs.append(t)
         if let i = folders.firstIndex(where: { $0.id == folder.id }) { folders[i].isExpanded = true }
         scheduleSave()
@@ -971,7 +1030,7 @@ final class BrowserModel: ObservableObject {
         if let here = matches.first(where: { $0.spaceID == currentSpaceID && $0.folderID != nil }) {
             return folders.first { $0.id == here.folderID }?.name
         }
-        if matches.contains(where: { $0.spaceID == currentSpaceID }) { return nil }
+        if matches.contains(where: { $0.spaceID == currentSpaceID || $0.isEssential }) { return nil }
         if let there = matches.first, let sp = spaces.first(where: { $0.id == there.spaceID }) {
             if let f = folders.first(where: { $0.id == there.folderID }) { return "\(sp.name), \(f.name)" }
             return sp.name
@@ -994,15 +1053,20 @@ final class BrowserModel: ObservableObject {
     func switchSpace(to id: UUID, restore: Bool = true) {
         guard id != currentSpaceID, spaces.contains(where: { $0.id == id }) else { return }
         if let t = currentTab { endDwell(t) }
+        if peek != nil { closePeek() }
         rememberSelection()
+        let from = spaces.firstIndex { $0.id == currentSpaceID } ?? 0
+        let to = spaces.firstIndex { $0.id == id } ?? 0
+        spaceSwitchDirection = to >= from ? 1 : -1
         currentSpaceID = id
         selection = nil
+        multiSelection = []
         refreshFocus()
         if restore {
             let sp = currentSpace
             if let sid = sp?.selectedSplit, let s = splits.first(where: { $0.id == sid && $0.spaceID == id }) {
                 selectSplit(s)
-            } else if let tid = sp?.selectedTab, let t = tab(tid), t.spaceID == id {
+            } else if let tid = sp?.selectedTab, let t = tab(tid), t.spaceID == id || t.isEssential {
                 select(t)
             } else {
                 syncAddress()
@@ -1036,7 +1100,15 @@ final class BrowserModel: ObservableObject {
 
     func updateSpace(_ id: UUID, _ change: (inout Space) -> Void) {
         guard let i = spaces.firstIndex(where: { $0.id == id }) else { return }
+        let oldProfile = spaces[i].profile
         change(&spaces[i])
+        if spaces[i].profile != oldProfile {
+            // A different profile means a different cookie store: pages reload in the new one.
+            for t in tabs where t.spaceID == id && !t.isEssential && t.isLoaded {
+                t.unload()
+                if isVisible(t) { _ = t.ensureWebView() }
+            }
+        }
         scheduleSave()
     }
 
@@ -1055,16 +1127,16 @@ final class BrowserModel: ObservableObject {
             let other = spaces[i == 0 ? 1 : i - 1].id
             switchSpace(to: other)
         }
-        for t in tabs where t.spaceID == id {
-            if t.kind == .note, let u = t.url { docs[u.standardizedFileURL.path]?.saveNow() }
-            t.unload()
+        for t in tabs where t.spaceID == id && !t.isEssential {
+            if t.isNote, let u = t.url { docs[u.standardizedFileURL.path]?.saveNow() }
+            t.unload(keepSession: false)
         }
-        let gone = Set(tabs.filter { $0.spaceID == id }.map { $0.id })
-        tabs.removeAll { $0.spaceID == id }
+        let gone = Set(tabs.filter { $0.spaceID == id && !$0.isEssential }.map { $0.id })
+        tabs.removeAll { gone.contains($0.id) }
         splits.removeAll { $0.spaceID == id }
         folders.removeAll { $0.spaceID == id }
-        history.removeAll { if case .tab(let t) = $0 { return gone.contains(t) }; return false }
-        spaces.remove(at: i)
+        selectionHistory.removeAll { if case .tab(let t) = $0 { return gone.contains(t) }; return false }
+        spaces.remove(at: spaces.firstIndex(where: { $0.id == id }) ?? i)
         refreshFocus()
         scheduleSave()
     }
@@ -1095,15 +1167,25 @@ final class BrowserModel: ObservableObject {
         }
     }
 
+    func promptNewProfile(for sp: Space) {
+        guard let name = Prompt.text(title: "New profile", message: "Pages in \(sp.name) will use their own cookies and logins under this name.", defaultValue: ""),
+              !name.isEmpty else { return }
+        updateSpace(sp.id) { $0.profile = name }
+    }
+
     /// Moves an item to another space, loose in its Tabs list.
     func move(_ tab: Tab, toSpace id: UUID) {
-        guard tab.spaceID != id else { return }
+        guard tab.spaceID != id || tab.isEssential else { return }
         let wasSelected = isSelected(tab)
         if split(containing: tab.id) != nil { dissolveSplit(around: tab.id) }
         if wasSelected { endDwell(tab) }
+        let oldProfile = profile(of: tab)
         tab.spaceID = id
         tab.folderID = nil
         tab.isPinned = false
+        tab.isEssential = false
+        tab.order = topOrder(today: id)
+        if profile(of: tab) != oldProfile && tab.isLoaded { tab.unload() }
         if wasSelected || isVisible(tab) { selectPrevious(excluding: .tab(tab.id)) }
         objectWillChange.send()
         scheduleSave()
@@ -1112,10 +1194,16 @@ final class BrowserModel: ObservableObject {
     func move(split sp: SplitRecord, toSpace id: UUID) {
         guard let i = splits.firstIndex(where: { $0.id == sp.id }), sp.spaceID != id else { return }
         let wasSelected = selection == .split(sp.id)
-        for tid in [sp.left, sp.right] {
-            if let t = tab(tid) { t.spaceID = id; t.folderID = nil; t.isPinned = false }
+        for tid in sp.items {
+            if let t = tab(tid) {
+                let oldProfile = profile(of: t)
+                t.spaceID = id; t.folderID = nil; t.isPinned = false; t.isEssential = false
+                if profile(of: t) != oldProfile && t.isLoaded { t.unload() }
+            }
         }
         splits[i].spaceID = id
+        splits[i].isPinned = false
+        splits[i].order = topOrder(today: id)
         if wasSelected { selectPrevious(excluding: .split(sp.id)) }
         objectWillChange.send()
         scheduleSave()
@@ -1131,9 +1219,16 @@ final class BrowserModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 4, execute: w)
     }
 
+    /// Links from other apps. With Little Arc on, web links open in a small window of their own.
     func openFromSystem(_ urls: [URL]) {
         for u in urls {
-            if u.isFileURL && u.pathExtension.lowercased() == "md" { openNote(u) } else { newTab(url: u, select: true) }
+            if u.isFileURL && u.pathExtension.lowercased() == "md" {
+                openNote(u)
+            } else if BrowserPrefs.shared.value.littleArc && !u.isFileURL {
+                LittleArc.shared.open(u, model: self)
+            } else {
+                newTab(url: u, select: true)
+            }
         }
     }
 }
