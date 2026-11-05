@@ -153,6 +153,11 @@ final class LlamaModel: @unchecked Sendable {
 
     /// Relevance in 0...1 for each document against the query.
     func rerank(query: String, instruction: String, documents: [String]) -> [Float] {
+        rerank(pairs: documents.map { (query, $0) }, instruction: instruction)
+    }
+
+    /// Relevance in 0...1 for each (query, document) pair.
+    func rerank(pairs: [(String, String)], instruction: String) -> [Float] {
         precondition(kind == .reranker)
         lock.lock(); defer { lock.unlock() }
         let fallback = "<|im_start|>user\n<Instruct>: {instruction}\n<Query>: {query}\n<Document>: {document}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
@@ -161,9 +166,9 @@ final class LlamaModel: @unchecked Sendable {
             .replacingOccurrences(of: "Given a web search query, retrieve relevant passages that answer the query", with: instruction)
             .replacingOccurrences(of: "{instruction}", with: instruction)
         // Keep the query whole and cut the document so the prompt fits.
-        let queryTokens = tokenize(query, addSpecial: false, parseSpecial: false).count
-        let docBudget = max(64, maxTokens - queryTokens - 110)
-        let seqs: [[llama_token]] = documents.map { d in
+        let seqs: [[llama_token]] = pairs.map { query, d in
+            let queryTokens = tokenize(query, addSpecial: false, parseSpecial: false).count
+            let docBudget = max(64, maxTokens - queryTokens - 110)
             let dt = tokenize(d, addSpecial: false, parseSpecial: false)
             let doc = dt.count > docBudget ? detokenize(Array(dt.prefix(docBudget))) : d
             let prompt = template.replacingOccurrences(of: "{query}", with: query).replacingOccurrences(of: "{document}", with: doc)

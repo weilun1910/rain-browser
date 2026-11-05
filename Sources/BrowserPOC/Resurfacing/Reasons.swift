@@ -60,16 +60,23 @@ enum Reasons {
         }
     }
 
-    /// The covers-what sentence without a model.
+    /// Plain words worth naming: no dates, numbers or names, at least five letters.
+    static func isIdeaWord(_ w: String) -> Bool {
+        let f = TextAnalysis.fold(Substring(w))
+        return w == w.lowercased() && f.count >= 5 && !Phrases.timeWords.contains(f) && !TextAnalysis.stopwords.contains(f)
+            && !f.contains(where: \.isNumber)
+    }
+
+    /// The covers-what sentence without a model: the ideas both share, in their own words.
     static func coverage(_ m: Match) -> String {
-        let t = topics(m)
-        switch t.count {
-        case 2: return "Both cover \(t[0]) and \(t[1])."
-        case 1: return "Both mention \(t[0])."
-        default:
-            if let first = m.sharedTerms.first { return "It also covers \(first)." }
-            return "It matches what you have open by meaning."
-        }
+        let p = m.sharedPhrases
+        if p.count >= 2 { return "Both cover \(p[0]) and \(p[1])." }
+        if let one = p.first { return "Both cover \(one)." }
+        let words = m.ideaWords
+        if words.count >= 2 { return "Both mention \(words[0]) and \(words[1])." }
+        if let w = words.first { return "Both mention \(w)." }
+        if let main = m.itemPhrases.first { return "It covers \(main)." }
+        return "It's about the same subject as what you have open."
     }
 
     static func template(_ m: Match, visits: [Visit] = []) -> String {

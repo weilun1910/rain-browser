@@ -16,6 +16,10 @@ struct HybridQuery {
     /// A compact description of the context for the cross-encoder.
     var rerankQuery: String
     var work: WorkingContextSummary?
+    /// The texts behind the query vectors, in the same order. The first `chunkCount` are parts
+    /// of the context itself.
+    var queryTexts: [String] = []
+    var chunkCount = 0
 }
 
 /// One retrieved item before the reranker and the judgment.
@@ -33,6 +37,12 @@ struct Candidate {
     var topicTerms: [String]
     var foundBy: [String]
     var penalized: Bool
+    /// The mean of the item's passage vectors, for spotting near-duplicates and for diversity.
+    var centroid: [Float]? = nil
+    /// The cleaned text of the passage, without headings, for reasons.
+    var rawPassage: String = ""
+    /// Which query text the chosen passage matched best.
+    var queryIndex: Int? = nil
 }
 
 struct CandidateSet {
@@ -89,14 +99,15 @@ extension IndexStore {
         // 1. Distinctive context words: frequent here, rare in the index.
         let vocab = try db.prepare("SELECT doc FROM pfts_vocab WHERE term = ?")
         var weighted: [(String, Double)] = []
-        for (t, tf) in q.counts.counts.sorted(by: { $0.value > $1.value }).prefix(150) {
+        // Ties break by the word itself, so the same context always picks the same words.
+        for (t, tf) in q.counts.counts.sorted(by: { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }).prefix(150) {
             var pdf = 0
             for v in Self.termVariants(t) { vocab.bind([v]); if try vocab.step() { pdf += Int(vocab.int(0)) } }
             guard pdf > 0, Double(pdf) < max(6, 0.15 * Double(totalPassages)) else { continue }
             let idf = log(Double(totalPassages + 1) / (Double(pdf) + 0.5))
             weighted.append((t, (1 + log(tf)) * idf))
         }
-        weighted.sort { $0.1 > $1.1 }
+        weighted.sort { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0 < $1.0 }
         let terms = Array(weighted.prefix(14))
         out.terms = terms.map { $0.0 }
         let termWeight = Dictionary(uniqueKeysWithValues: terms)
@@ -107,6 +118,11 @@ extension IndexStore {
         var bestPassage: [Int64: (Int64, Double)] = [:]   // doc -> (passage, strength)
         var denseBest: [Int64: Float] = [:]
         var meaningBest: [Int64: Double] = [:]
+        /// Every passage's meaning score, so the card and the reranker get the passage that fits best.
+        var passageDense: [Int64: Float] = [:]
+        var bm25Best: [Int64: Int64] = [:]
+        var passageQuery: [Int64: Int] = [:]
+        var passageChunkScore: [Int64: Float] = [:]
 
         func bm25List(_ expr: String, name: String) throws {
             let stmt = try db.prepare("""
@@ -127,6 +143,7 @@ extension IndexStore {
                 rank += 1
                 let strength = 1.0 / Double(rank + 1)
                 if (bestPassage[did]?.1 ?? 0) < strength { bestPassage[did] = (pid, strength) }
+                if bm25Best[did] == nil { bm25Best[did] = pid }
             }
             if !ranked.isEmpty { lists.append((name, ranked)) }
         }
@@ -144,10 +161,10 @@ extension IndexStore {
         }
 
         // 4. Dense search, one list per embedder that has both query and passage vectors.
-        for (model, qvecs) in q.queryVectors {
+        for (model, qvecs) in q.queryVectors.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
             guard let set = vectorSets[model], let d = vectorDims[model], !qvecs.isEmpty else { continue }
-            let qs = qvecs.filter { $0.count == d }
-            guard !qs.isEmpty else { continue }
+            let qs = qvecs
+            guard qs.contains(where: { $0.count == d }) else { continue }
             var scored: [(Int64, Float)] = []
             scored.reserveCapacity(set.count)
             for (did, plist) in set where !excluded.contains(did) {
@@ -155,14 +172,21 @@ extension IndexStore {
                 var bestPid: Int64 = 0
                 for (pid, v) in plist {
                     var m: Float = -1
+                    // The best part of the context itself, apart from the model's search queries,
+                    // so the reranker can read the passage next to the text it matched.
+                    var mc: Float = -1
+                    var mq = -1
                     v.withUnsafeBufferPointer { vp in
-                        for c in qs {
+                        for (qi, c) in qs.enumerated() where c.count == d {
                             var r: Float = 0
                             c.withUnsafeBufferPointer { cp in vDSP_dotpr(vp.baseAddress!, 1, cp.baseAddress!, 1, &r, vDSP_Length(d)) }
                             m = max(m, r)
+                            if qi < q.chunkCount, r > mc { mc = r; mq = qi }
                         }
                     }
                     if m > best { best = m; bestPid = pid }
+                    if m > (passageDense[pid] ?? -1) { passageDense[pid] = m }
+                    if mq >= 0, mc > (passageChunkScore[pid] ?? -1) { passageChunkScore[pid] = mc; passageQuery[pid] = mq }
                 }
                 scored.append((did, best))
                 let floor = Self.denseFloor(model), strong = Self.denseStrong(model)
@@ -174,7 +198,7 @@ extension IndexStore {
                     if (bestPassage[did]?.1 ?? 0) < Double(best) { bestPassage[did] = (bestPid, Double(best)) }
                 }
             }
-            scored.sort { $0.1 > $1.1 }
+            scored.sort { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0 < $1.0 }
             var ranked: [CardSection: [Int64]] = [:]
             for (did, s) in scored where s > Self.denseFloor(model) {
                 let sec = sectionOf[did] ?? .sites
@@ -185,7 +209,7 @@ extension IndexStore {
 
         // 5. Shared names, rarer names first.
         var docEntities: [Int64: [String]] = [:]
-        let names = Array(q.entities.keys.prefix(40))
+        let names = Array(q.entities.keys.sorted().prefix(40))
         if !names.isEmpty {
             let ph = Array(repeating: "?", count: names.count).joined(separator: ",")
             let rows = try db.query("SELECT doc_id, name, display FROM entities WHERE name IN (\(ph))", names) { ($0.int(0), $0.text(1), $0.text(2)) }
@@ -197,7 +221,7 @@ extension IndexStore {
                 score[did, default: 0] += log(Double(eligible + 1) / Double((df[n] ?? 1) + 1))
             }
             var ranked: [CardSection: [Int64]] = [:]
-            for (did, _) in score.sorted(by: { $0.value > $1.value }) {
+            for (did, _) in score.sorted(by: { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }) {
                 ranked[sectionOf[did] ?? .sites, default: []].append(did)
             }
             if !ranked.isEmpty { lists.append(("names", ranked)) }
@@ -230,7 +254,7 @@ extension IndexStore {
         }
 
         var top: [CardSection: [Int64]] = [:]
-        for (did, f) in fused.sorted(by: { $0.value > $1.value }) where !hidden.contains(did) {
+        for (did, f) in fused.sorted(by: { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }) where !hidden.contains(did) {
             let sec = sectionOf[did] ?? .sites
             if top[sec, default: []].count < perSection || p.keepIDs.contains(did) {
                 top[sec, default: []].append(did)
@@ -249,6 +273,16 @@ extension IndexStore {
             ($0.int(0), $0.int(1), $0.text(2))
         }) { passages[did, default: []].append((pid, text)) }
 
+        func centroid(_ did: Int64) -> [Float]? {
+            for m in [EmbedderID.gemma, .contextual, .sentence] {
+                guard let list = vectorSets[m]?[did], !list.isEmpty, let d = vectorDims[m] else { continue }
+                var mean = [Float](repeating: 0, count: d)
+                for (_, v) in list { vDSP_vadd(mean, 1, v, 1, &mean, 1, vDSP_Length(d)) }
+                return VectorMath.normalized(mean)
+            }
+            return nil
+        }
+
         var seenCanon: [String: (CardSection, Int)] = [:]
         for sec in CardSection.allCases {
             var list: [Candidate] = []
@@ -257,20 +291,40 @@ extension IndexStore {
                 let canon = CanonicalID.of(url: meta.url)
                 if let canon, canon == currentCanon { continue }
                 let plist = passages[did] ?? []
-                let chosen = plist.first { $0.0 == bestPassage[did]?.0 }?.1 ?? plist.first?.1 ?? meta.description
+                // The passage that fits best by meaning, unless it's navigation or a stray heading.
+                var chosenIndex = plist.firstIndex { $0.0 == bestPassage[did]?.0 } ?? 0
+                if !passageDense.isEmpty, !plist.isEmpty {
+                    var bestScore = -Double.infinity
+                    for (i, (pid, text)) in plist.enumerated() {
+                        var s = Double(passageDense[pid] ?? -1) * Self.proseFactor(Snippet.body(text, title: meta.title))
+                        if pid == bm25Best[did] { s += 0.02 }
+                        if s > bestScore { bestScore = s; chosenIndex = i }
+                    }
+                }
+                let chosen = plist.isEmpty ? meta.description : plist[chosenIndex].1
+                // What the reranker reads: the passage, plus the next one when it's short.
+                var readText = Snippet.body(chosen, title: meta.title)
+                var next = chosenIndex + 1
+                while readText.count < 450, next < plist.count {
+                    readText += "\n" + Snippet.body(plist[next].1, title: meta.title)
+                    next += 1
+                }
                 // Shared words, checked against every passage of the item.
                 let folded = plist.map { TextAnalysis.fold(Substring($0.1)) }.joined(separator: " ") + " " + TextAnalysis.fold(Substring(meta.title))
                 let shared = terms.filter { t in Self.termVariants(t.0).contains { folded.contains($0) } }.map { $0.0 }
                 let kw = shared.reduce(0) { $0 + (termWeight[$1] ?? 0) }
                 let c = Candidate(
                     doc: meta, section: sec,
-                    passage: meta.hasText ? Snippet.make(chosen, terms: shared.map { q.counts.display[$0] ?? $0 } + (docEntities[did] ?? []), title: meta.title, length: 600) : Snippet.prettyURL(meta.url),
+                    passage: meta.hasText ? Snippet.make(readText, terms: shared.map { q.counts.display[$0] ?? $0 } + (docEntities[did] ?? []), title: meta.title, length: 600) : Snippet.prettyURL(meta.url),
                     fused: fused[did] ?? 0, keywordWeight: kw, dense: denseBest[did] ?? -1, meaning: meaningBest[did] ?? 0,
                     sharedTerms: shared.map { q.counts.display[$0] ?? $0 },
                     sharedEntities: docEntities[did] ?? [],
                     topicTerms: Self.topicOrder(shared.filter { q.nouns.contains($0) }, title: meta.title).map { q.counts.display[$0] ?? $0 },
                     foundBy: Array(foundBy[did] ?? []).sorted(),
-                    penalized: penalty[did] != nil)
+                    penalized: penalty[did] != nil,
+                    centroid: centroid(did),
+                    rawPassage: String(readText.prefix(1100)),
+                    queryIndex: plist.isEmpty ? nil : passageQuery[plist[chosenIndex].0])
                 if let canon {
                     if let (s0, i) = seenCanon[canon] {
                         // One card per document: keep the copy that has text.
@@ -281,10 +335,25 @@ extension IndexStore {
                 }
                 list.append(c)
             }
-            list.sort { $0.fused > $1.fused }
+            list.sort { $0.fused != $1.fused ? $0.fused > $1.fused : $0.doc.id < $1.doc.id }
             if sec == .sites { out.sites = list } else { out.docs = list }
         }
         return out
+    }
+
+    static let functionWords: Set<String> = ["the", "a", "an", "of", "to", "and", "in", "is", "for", "that", "it", "on", "with", "as",
+                                             "was", "we", "i", "you", "are", "be", "this", "by", "at", "or", "but", "not", "from", "they", "he", "she",
+                                             "his", "her", "their", "our", "my", "so", "if", "about", "what", "which", "who", "when", "how", "can", "will"]
+
+    /// 1 for ordinary prose, lower for navigation lists, link farms and one-line fragments.
+    static func proseFactor(_ text: String) -> Double {
+        let words = TextAnalysis.rawWords(text)
+        guard !words.isEmpty else { return 0.3 }
+        let fn = words.filter { functionWords.contains($0.lowercased()) }.count
+        let r = Double(fn) / Double(words.count)
+        var f = r < 0.06 ? 0.6 : r < 0.12 ? 0.85 : 1.0
+        if text.count < 60 { f *= 0.5 } else if text.count < 140 { f *= 0.85 }
+        return f
     }
 
     static func termVariants(_ t: String) -> [String] {

@@ -119,6 +119,8 @@ extension IndexStore {
             if !v.isEmpty { hq.queryVectors[m] = v }
         }
         hq.rerankQuery = q
+        hq.queryTexts = [q]
+        hq.chunkCount = 1
         var p = RankParams.fromSettings(AppSettings())
         p.recentWindow = 0
         p.writingSites = filters.writingSites

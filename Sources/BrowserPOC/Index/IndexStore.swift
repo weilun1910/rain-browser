@@ -128,6 +128,12 @@ struct Match {
     var judgeReason: String? = nil
     /// Which retrievers found it: keyword, meaning, names, queries.
     var foundBy: [String] = []
+    /// Noun phrases the item's passage and the context both use, for the reason line.
+    var sharedPhrases: [String] = []
+    /// The passage's own main phrase, when none is shared word for word.
+    var itemPhrases: [String] = []
+    /// Distinctive single words both share, without names, dates or title words.
+    var ideaWords: [String] = []
 }
 
 struct RetrievalResult {
@@ -1059,9 +1065,29 @@ enum Snippet {
     }
 
     /// Picks a stretch of the passage around the first shared term, starting at a sentence edge.
+    /// Drops the lines a card shouldn't open with: Markdown headings, the item's own title and
+    /// metadata lines like "Date: ..." at the top.
+    static func body(_ text: String, title: String) -> String {
+        let foldedTitle = TextAnalysis.fold(Substring(title)).trimmingCharacters(in: .whitespaces)
+        var lines = text.components(separatedBy: .newlines)
+        while let first = lines.first {
+            let l = first.trimmingCharacters(in: .whitespaces)
+            let bare = l.drop(while: { $0 == "#" || $0 == " " })
+            let f = TextAnalysis.fold(Substring(bare)).trimmingCharacters(in: .whitespaces)
+            let isMeta = l.range(of: "^[A-Z][A-Za-z ]{1,20}:\\s", options: .regularExpression) != nil && l.count < 120
+            if l.isEmpty || l.hasPrefix("#") || l == "---" || (!foldedTitle.isEmpty && (f == foldedTitle || foldedTitle.hasPrefix(f) && f.count > 8)) || isMeta {
+                lines.removeFirst()
+            } else { break }
+        }
+        let out = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        return out.isEmpty ? text : out
+    }
+
     static func make(_ text: String, terms: [String], title: String, length: Int = 260) -> String {
-        var t = text.replacingOccurrences(of: "\n", with: " ")
+        var t = body(text, title: title).replacingOccurrences(of: "\n", with: " ")
         if !title.isEmpty, t.hasPrefix(title) { t = String(t.dropFirst(title.count)).trimmingCharacters(in: .whitespaces) }
+        // Headings inside the passage read as run-on text once lines are joined.
+        t = t.replacingOccurrences(of: "#+ ", with: "", options: .regularExpression)
         while t.contains("  ") { t = t.replacingOccurrences(of: "  ", with: " ") }
         var start = t.startIndex
         for term in terms where !term.isEmpty {

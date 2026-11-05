@@ -33,7 +33,7 @@ final class Reembedder: @unchecked Sendable {
     private func loop() {
         defer { lock.lock(); running = false; lock.unlock() }
         var total = 0
-        while true {
+        while enabled, !Intelligence.shared.isShuttingDown {
             let n = runBatch()
             if n == 0 { break }
             total += n
@@ -49,7 +49,7 @@ final class Reembedder: @unchecked Sendable {
     /// Returns how many it did.
     @discardableResult
     func runBatch(size: Int = 32) -> Int {
-        guard let store = IndexStore.shared else { return 0 }
+        guard let store = IndexStore.shared, !Intelligence.shared.isShuttingDown else { return 0 }
         let target = Intelligence.shared.documentEmbedder
         let rows = store.passagesNeedingVectors(model: target, limit: size)
         guard !rows.isEmpty else { return 0 }
@@ -114,7 +114,7 @@ final class TopicTagger: @unchecked Sendable {
                                            instructions: "List the main topics of the text.")
         let input = "Title: \(title)\n\(text.prefix(2400))"
         do {
-            let r = try await session.respond(to: input, generating: Tags.self, options: GenerationOptions(temperature: 0))
+            let r = try await session.respond(to: input, generating: Tags.self, options: GenerationOptions(sampling: .greedy))
             return r.content.topics.map { Fmt.clean($0.trimmingCharacters(in: .whitespacesAndNewlines)) }.filter { !$0.isEmpty }
         } catch {
             return nil
