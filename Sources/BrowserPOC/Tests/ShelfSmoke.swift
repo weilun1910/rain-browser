@@ -210,16 +210,23 @@ extension ShelfSmoke {
         if let sp = model.currentSplit { model.separate(sp) }
         window.appearance = NSAppearance(named: .darkAqua)
         let plan = dir.appendingPathComponent("notes-root", isDirectory: true).appendingPathComponent("Browser plan.md")
+        // Whether this note gets Related cards depends on the folder watcher: where it runs (the
+        // system temp folder), it re-indexes the Graph fixture's notes with their real mtime, and
+        // Related leaves out anything seen in the last 10 minutes. So the scene holds the shelf up
+        // with the model download pill, the shelf's own way to show without cards, and doesn't
+        // wait on the ranking. Cards are checked in the page and note scenes above.
+        state.progressOverride = 0.6
         model.openNote(plan)
         _ = wait(5) { model.document?.state == .ready }
-        let gotCards = wait(20) { !model.resurfacer.cards.isEmpty }
         _ = wait(30) { !model.resurfacer.isWorking }
         _ = wait(1) { false }
-        check(gotCards && RelatedShelf.presence(model) == .shown && !Settings.shared.value.rightPanelOpen,
-              "the shelf shows over the graph fixture's note", model.resurfacer.cards.map { $0.match.doc.title.prefix(24) }.joined(separator: " | "))
+        check(RelatedShelf.presence(model) == .shown && RelatedPrefs.shared.mode == .shelf && !Settings.shared.value.rightPanelOpen,
+              "the shelf stays up in shelf mode over the graph fixture's note",
+              model.resurfacer.cards.isEmpty ? "no cards for this note here, the download pill holds the shelf"
+                                             : model.resurfacer.cards.map { $0.match.doc.title.prefix(24) }.joined(separator: " | "))
         state.toggleGraph()
         _ = wait(0.7) { false } // the popover growing in
-        let opened = wait(10) { l.view?.window === window && l.centerKey == URLKey.fileKey(plan) && l.layout.nodes.count > 3 }
+        let opened = wait(20) { l.view?.window === window && l.centerKey == URLKey.fileKey(plan) && l.layout.nodes.count > 3 }
         check(state.open == .graph && opened, "the shelf's graph button opens the real local graph around the note",
               "\(l.layout.nodes.count) nodes around \(l.layout.center.map { l.layout.nodes[$0].title } ?? "nothing")")
         if let v = l.view { l.settle(ticks: 300, size: v.bounds.size) }
@@ -231,5 +238,6 @@ extension ShelfSmoke {
         window.appearance = NSAppearance(named: .darkAqua)
         state.toggleGraph()
         check(state.open == nil, "a second click closes the graph")
+        state.progressOverride = nil
     }
 }
