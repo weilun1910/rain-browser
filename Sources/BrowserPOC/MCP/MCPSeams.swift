@@ -70,25 +70,33 @@ struct EngineSearchSource: MCPSearchSource {
         f.since = since
         f.until = until
         f.writingSites = ctx.app.writingSites
-        let hits = store.search(query, filters: f, limit: min(100, limit * 3 + 10))
-        // Details come from the live index, so an item deleted since the copy drops out.
-        let metas = ctx.reader.items(ids: hits.map { $0.doc.id })
+        var hits = store.search(query, filters: f, limit: min(100, limit * 3 + 10))
+        // Dense search always finds something. With the reranker, the Engine scores a hit 1 plus the
+        // reranker's 0 to 1, and unrelated passages score under 0.1, so those go.
+        if Intelligence.shared.hasReranker { hits = hits.filter { $0.score >= 1 + Self.rerankerFloor } }
+        // Items the app indexed after the copy was made, from the live keyword search, go first:
+        // they're the newest and they matched the words.
         var out: [MCPSearchResult] = []
-        for h in hits where out.count < limit {
-            guard let it = metas[h.doc.id], filter(it) else { continue }
-            out.append(MCPSearchResult(item: it, score: h.score, passage: h.passage, history: h.history))
-        }
-        let have = Set(out.map { $0.item.id })
-        let fresh = ctx.reader.ids(indexedAfter: ctx.ranking.builtAt.timeIntervalSince1970 - 1).subtracting(have)
-        if !fresh.isEmpty && out.count < limit {
-            for var r in live.search(query, limit: limit - out.count, sources: sources, since: since, until: until,
+        let fresh = ctx.reader.ids(indexedAfter: ctx.ranking.copiedThrough)
+        if !fresh.isEmpty {
+            for var r in live.search(query, limit: limit, sources: sources, since: since, until: until,
                                      filter: { fresh.contains($0.id) && filter($0) }) {
                 r.fresh = true
                 out.append(r)
             }
         }
+        let have = Set(out.map { $0.item.id })
+        // Details come from the live index, so an item deleted since the copy drops out.
+        let metas = ctx.reader.items(ids: hits.map { $0.doc.id })
+        for h in hits where out.count < limit && !have.contains(h.doc.id) {
+            guard let it = metas[h.doc.id], filter(it) else { continue }
+            out.append(MCPSearchResult(item: it, score: h.score, passage: h.passage, history: h.history))
+        }
         return out
     }
+
+    /// The Engine measured unrelated passages under 0.1 and relevant ones from 0.55.
+    static let rerankerFloor = 0.1
 }
 
 /// FTS5 with bm25, a title bonus and a little recency, then a rerank by meaning with Apple's
@@ -297,8 +305,9 @@ enum LinkScan {
 final class RankingSnapshot {
     private var store: IndexStore?
     private var builtVersion: Int64 = .min
-    /// When the copy was made. Items indexed after this aren't in it.
-    private(set) var builtAt = Date.distantPast
+    private var builtAt = Date.distantPast
+    /// The newest `indexed_at` in the copy. Items indexed after this aren't in it.
+    private(set) var copiedThrough: Double = 0
     private let dir: URL
     var refreshInterval: TimeInterval = 30
 
@@ -322,6 +331,7 @@ final class RankingSnapshot {
             }
             sqlite3_backup_step(b, -1)
             sqlite3_backup_finish(b)
+            copiedThrough = (try? copy.query("SELECT coalesce(max(indexed_at), 0) FROM docs") { $0.double(0) })?.first ?? 0
             store = try IndexStore(url: dest)
             builtVersion = v
             builtAt = Date()

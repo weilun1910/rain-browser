@@ -158,7 +158,9 @@ enum MCPTests {
         let s1Titles = titles(s1["results"])
         check(!s1Err && s1Titles.contains("How to feed and maintain a sourdough starter") && s1Titles.contains("Sourdough plan"),
               "search finds pages and notes", s1Titles.joined(separator: "; "))
-        check(!s1Titles.contains("Sign in to Example") && !s1Titles.contains("Chase checking account") && (s1["hidden"] as? Int ?? 0) >= 2,
+        // With the reranker, those two drop out as unrelated before the privacy filter counts them.
+        check(!s1Titles.contains("Sign in to Example") && !s1Titles.contains("Chase checking account")
+              && (s1["hidden"] as? Int ?? 0) >= (Intelligence.shared.hasReranker ? 0 : 2),
               "search leaves out sign-in links and excluded sites", "hidden \(s1["hidden"] ?? "?")")
         check((s1["results"] as? [JSON] ?? []).allSatisfy { ($0["cite"] as? String)?.hasPrefix("[") == true && $0["id"] is Int },
               "search results carry an id and a cite link")
