@@ -17,13 +17,13 @@ struct LocalGraphSlot: View {
             if store.value.localExpanded {
                 ZStack {
                     GraphCanvas(controller: controller)
-                    if controller.hasLoaded && controller.layout.nodes.count <= 1 && !controller.isBuilding {
+                    if controller.hasLoaded && controller.liveCount <= 1 && !controller.isBuilding {
                         Text(emptyText)
                             .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 20)
-                            .padding(.top, controller.layout.nodes.count == 1 ? 70 : 0)
+                            .padding(.top, controller.liveCount == 1 ? 70 : 0)
                             .allowsHitTesting(false)
                     }
                 }
@@ -55,7 +55,7 @@ struct LocalGraphSlot: View {
 
     private var emptyText: String {
         if followed == nil { return "Open a page or a note to see what it connects to." }
-        if controller.layout.nodes.isEmpty { return "This isn't in the graph yet. Pages join once they've been open a few seconds." }
+        if controller.liveCount == 0 { return "This isn't in the graph yet. Pages join once they've been open a few seconds." }
         return "No connections yet."
     }
 
@@ -111,8 +111,8 @@ struct LocalGraphSlot: View {
             if let h = controller.hover {
                 Text(h.title).font(.system(size: 11.5, weight: .medium)).lineLimit(1)
                 Text(h.reasons.first ?? h.kind).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
-            } else if controller.layout.nodes.count > 1 {
-                let n = controller.layout.nodes.count - 1
+            } else if controller.liveCount > 1 {
+                let n = controller.liveCount - 1
                 Text(n == 1 ? "1 connection" : "\(n) connections")
                     .font(.system(size: 11)).foregroundStyle(.tertiary)
             }

@@ -1,6 +1,23 @@
 import AppKit
 import SwiftUI
 
+/// Rects in the pane that the graph's names keep clear of.
+struct GraphOccluderKey: PreferenceKey {
+    static let defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, b in b })
+    }
+}
+
+extension View {
+    /// Reports this view's frame in the graph pane, so names don't sit under it.
+    func graphOccluder(_ name: String) -> some View {
+        background(GeometryReader { g in
+            Color.clear.preference(key: GraphOccluderKey.self, value: [name: g.frame(in: .named("graphPane"))])
+        })
+    }
+}
+
 /// The global graph, shown when the Graph item is open: the canvas, a search field, the
 /// settings panel, a legend and a hover card.
 struct GraphPane: View {
@@ -8,26 +25,30 @@ struct GraphPane: View {
     @ObservedObject var controller = GraphController.global
     @ObservedObject var store = GraphSettingsStore.shared
     @Environment(\.colorScheme) private var scheme
+    @State private var canvasID = UUID()
+    @State private var occluders: [String: CGRect] = [:]
 
     var body: some View {
         GeometryReader { g in
             ZStack(alignment: .topLeading) {
-                GraphCanvas(controller: controller)
-                if controller.hasLoaded && controller.layout.isEmpty && !controller.isBuilding {
+                GraphCanvas(controller: controller, id: canvasID, occluders: Array(occluders.values))
+                if controller.hasLoaded && controller.liveCount == 0 && !controller.isBuilding {
                     emptyState.frame(width: g.size.width, height: g.size.height)
                 }
                 VStack(alignment: .leading, spacing: 0) {
-                    toolbar
+                    toolbar.graphOccluder("toolbar")
                     Spacer(minLength: 0)
                     // The card sits in the corner, so it never covers the neighbours it describes.
-                    if let h = controller.hover {
+                    if let h = controller.hover, controller.hoverViewID == canvasID || controller.selected != nil {
                         GraphHoverCard(hover: h)
                             .padding(.leading, 12)
                             .allowsHitTesting(false)
                             .transition(.opacity)
+                            .graphOccluder("card")
                     }
-                    GraphLegend(kinds: legendKinds)
+                    legend
                         .padding(12)
+                        .graphOccluder("legend")
                 }
                 if store.value.panelOpen {
                     HStack {
@@ -35,6 +56,7 @@ struct GraphPane: View {
                         GraphSettingsPanel(store: store, controller: controller)
                             .frame(width: 272)
                             .frame(maxHeight: g.size.height - 56)
+                            .graphOccluder("panel")
                             .padding(.top, 46)
                             .padding(.trailing, 10)
                     }
@@ -42,8 +64,12 @@ struct GraphPane: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
-            .animation(.easeOut(duration: 0.16), value: controller.hover)
-            .animation(.easeOut(duration: 0.2), value: store.value.panelOpen)
+            .coordinateSpace(name: "graphPane")
+            .onPreferenceChange(GraphOccluderKey.self) { v in
+                occluders = store.value.panelOpen ? v : v.filter { $0.key != "panel" }
+            }
+            .animation(GraphTheme.cardFade, value: controller.hover)
+            .animation(GraphTheme.panelSpring, value: store.value.panelOpen)
         }
         .onAppear {
             controller.model = model
@@ -58,8 +84,28 @@ struct GraphPane: View {
         controller.youAreHereKey = model.visibleTabs.first { $0.kind != .graph }.flatMap(GraphRecorder.key)
     }
 
+    private var live: ArraySlice<LayoutNode> { controller.layout.nodes.prefix(controller.liveCount) }
+
+    @ViewBuilder private var legend: some View {
+        if store.value.colorBy == .space && live.contains(where: { $0.space != nil }) {
+            let used = Set(live.compactMap(\.space))
+            let spaces = model.spaces.enumerated().filter { used.contains($0.offset) }
+            HStack(spacing: 12) {
+                ForEach(spaces, id: \.element.id) { _, sp in
+                    HStack(spacing: 5) {
+                        Circle().fill((scheme == .dark ? GraphTheme.dark : GraphTheme.light).accent(sp.color).swiftUI).frame(width: 7, height: 7)
+                        Text(sp.name).font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                }
+                Text("Brighter dots are things you wrote").font(.system(size: 11)).foregroundStyle(.tertiary)
+            }
+        } else {
+            GraphLegend(kinds: legendKinds)
+        }
+    }
+
     private var legendKinds: [GraphNodeKind] {
-        let present = Set(controller.layout.nodes.map(\.kind))
+        let present = Set(live.map(\.kind))
         return [.note, .doc, .site, .meeting, .topic, .siteGroup, .unresolved].filter { present.contains($0) }
     }
 
@@ -113,10 +159,10 @@ struct GraphPane: View {
     }
 
     private var countText: String {
-        let l = controller.layout
-        let items = l.nodes.filter { $0.kind != .topic && $0.kind != .unresolved }.reduce(0) { $0 + max(1, $1.members.count) }
-        var s = "\(items.formatted()) items   \(l.edges.count.formatted()) connections"
-        if l.hiddenBySiteGroups > 0 { s += "   pages grouped by site" }
+        let items = live.filter { $0.kind != .topic && $0.kind != .unresolved }.reduce(0) { $0 + max(1, $1.members.count) }
+        let lines = controller.layout.edges.filter { $0.a < controller.liveCount && $0.b < controller.liveCount }.count
+        var s = "\(items.formatted()) items   \(lines.formatted()) connections"
+        if controller.layout.hiddenBySiteGroups > 0 { s += "   pages grouped by site" }
         return s
     }
 
@@ -134,6 +180,7 @@ struct GraphPane: View {
         }
     }
 }
+
 
 enum GraphTab {
     static let icon = "point.3.connected.trianglepath.dotted"
@@ -179,8 +226,8 @@ struct GraphHoverCard: View {
         .padding(.horizontal, 11)
         .padding(.vertical, 9)
         .frame(width: 290, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(.regularMaterial))
-        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
+        .background(RoundedRectangle(cornerRadius: GraphTheme.cardRadius, style: .continuous).fill(GraphTheme.panelFill))
+        .overlay(RoundedRectangle(cornerRadius: GraphTheme.cardRadius, style: .continuous).strokeBorder(GraphTheme.hairline, lineWidth: 1))
         .shadow(color: .black.opacity(0.18), radius: 10, y: 3)
     }
 }
@@ -224,8 +271,8 @@ struct GraphSearchField: View {
         }
         .padding(.horizontal, 9)
         .frame(height: 28)
-        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(.regularMaterial))
-        .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(Color.primary.opacity(focused ? 0.22 : 0.1), lineWidth: 0.5))
+        .background(RoundedRectangle(cornerRadius: GraphTheme.buttonRadius, style: .continuous).fill(GraphTheme.panelFill))
+        .overlay(RoundedRectangle(cornerRadius: GraphTheme.buttonRadius, style: .continuous).strokeBorder(Color.primary.opacity(focused ? 0.22 : 0.1), lineWidth: 0.5))
         .help("Words match titles, addresses and projects. type:note, site:github.com and project:Browser narrow it.")
     }
 }
@@ -236,10 +283,10 @@ struct GraphIconButton: ButtonStyle {
         configuration.label
             .frame(width: 28, height: 28)
             .foregroundStyle(active ? Color.primary : Color.secondary)
-            .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(.regularMaterial)
+            .background(RoundedRectangle(cornerRadius: GraphTheme.buttonRadius, style: .continuous)
+                .fill(GraphTheme.panelFill)
                 .opacity(configuration.isPressed ? 0.6 : 1))
-            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(Color.primary.opacity(active ? 0.25 : 0.1), lineWidth: 0.5))
+            .overlay(RoundedRectangle(cornerRadius: GraphTheme.buttonRadius, style: .continuous).strokeBorder(Color.primary.opacity(active ? 0.25 : 0.1), lineWidth: 0.5))
             .contentShape(Rectangle())
     }
 }
@@ -251,8 +298,8 @@ struct GraphQuietButton: ButtonStyle {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 9)
             .frame(height: 26)
-            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(.regularMaterial).opacity(configuration.isPressed ? 0.6 : 1))
-            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
+            .background(RoundedRectangle(cornerRadius: GraphTheme.buttonRadius, style: .continuous).fill(GraphTheme.panelFill).opacity(configuration.isPressed ? 0.6 : 1))
+            .overlay(RoundedRectangle(cornerRadius: GraphTheme.buttonRadius, style: .continuous).strokeBorder(GraphTheme.hairline, lineWidth: 1))
     }
 }
 
@@ -288,8 +335,8 @@ struct GraphSettingsPanel: View {
             .padding(12)
         }
         .scrollIndicators(.never)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.regularMaterial))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
+        .background(RoundedRectangle(cornerRadius: GraphTheme.panelRadius, style: .continuous).fill(GraphTheme.panelFill))
+        .overlay(RoundedRectangle(cornerRadius: GraphTheme.panelRadius, style: .continuous).strokeBorder(GraphTheme.hairline, lineWidth: 1))
         .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
         .controlSize(.small)
     }
@@ -378,8 +425,8 @@ struct GraphSettingsPanel: View {
         ForEach(store.value.groups.indices, id: \.self) { i in
             HStack(spacing: 6) {
                 Menu {
-                    ForEach(GraphTheme.groupPalette, id: \.self) { hex in
-                        Button { store.value.groups[i].color = hex } label: { Text(hex) }
+                    ForEach(GraphTheme.groupPalette, id: \.hex) { c in
+                        Button { store.value.groups[i].color = c.hex } label: { Text(c.name) }
                     }
                 } label: {
                     Circle().fill(Color(hex: store.value.groups[i].color)).frame(width: 10, height: 10)
@@ -399,7 +446,7 @@ struct GraphSettingsPanel: View {
         }
         Button("New group") {
             let used = Set(store.value.groups.map(\.color))
-            let color = GraphTheme.groupPalette.first { !used.contains($0) } ?? GraphTheme.groupPalette[0]
+            let color = GraphTheme.groupPalette.first { !used.contains($0.hex) }?.hex ?? GraphTheme.groupPalette[0].hex
             store.value.groups.append(GraphGroup(query: "", color: color))
         }
         .buttonStyle(.link)
@@ -411,6 +458,9 @@ struct GraphSettingsPanel: View {
     }
 
     @ViewBuilder private var display: some View {
+        Picker("Colour by", selection: s.colorBy) {
+            ForEach(GraphColorBy.allCases) { Text($0.title).tag($0) }
+        }
         Toggle("Arrows", isOn: s.arrows)
         slider("Text fade threshold", s.textFade, 0...1)
         slider("Node size", s.nodeSize, 0.4...2.5)
@@ -426,6 +476,7 @@ struct GraphSettingsPanel: View {
         slider("Repel force", s.repelForce, 0...20)
         slider("Link force", s.linkForce, 0...1)
         slider("Link distance", s.linkDistance, 10...200)
+        slider("Space pull", s.spacePull, 0...1)
     }
 
     private func caption(_ t: String) -> some View {
