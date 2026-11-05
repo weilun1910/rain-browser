@@ -99,7 +99,7 @@ enum GraphLayoutTests {
         var links: [(Int, Int)] = []
         for c in 0..<2 { for i in 0..<10 { for j in (i + 1)..<10 where (i + j) % 3 != 0 { links.append((c * 10 + i, c * 10 + j)) } } }
         let sim = ForceSimulation()
-        sim.setGraph(count: 20, links: links, radii: Array(repeating: 3, count: 20), start: Array(repeating: nil, count: 20),
+        sim.setGraph(count: 20, links: links, start: Array(repeating: nil, count: 20),
                      params: ForceSimulation.Params(), alpha: 1)
         sim.stop()
         sim.run(ticks: 300)
@@ -167,7 +167,7 @@ enum GraphLayoutTests {
         let buildMS = (CACurrentMediaTime() - t0) * 1000
         print(String(format: "      5,000 node graph: %d nodes, %d lines, built in %.0f ms", layout.nodes.count, layout.edges.count, buildMS))
         let sim = ForceSimulation()
-        sim.setGraph(count: layout.nodes.count, links: layout.edges.map { ($0.a, $0.b) }, radii: layout.nodes.map(\.radius),
+        sim.setGraph(count: layout.nodes.count, links: layout.edges.map { ($0.a, $0.b) },
                      start: Array(repeating: nil, count: layout.nodes.count), params: ForceSimulation.Params(s), alpha: 1)
         sim.stop()
         sim.run(ticks: 5)

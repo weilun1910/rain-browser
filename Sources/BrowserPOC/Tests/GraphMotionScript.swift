@@ -18,12 +18,15 @@ final class GraphMotionScript {
     }
 
     private let c: GraphController
-    private weak var view: GraphMetalView?
+    private weak var firstView: GraphMetalView?
+    /// The graph's view. If the pane was rebuilt, the newest one.
+    private var view: GraphMetalView? { firstView ?? c.view }
     private var phases: [Phase] = []
     private var index = -1
     private var phaseStart = CACurrentMediaTime()
     private var timer: Timer?
     private var results: [GraphFramePacer.Summary] = []
+    private var partLines: [String] = []
 
     static func start(_ c: GraphController, view: GraphMetalView) {
         guard isRequested, running == nil else { return }
@@ -36,7 +39,7 @@ final class GraphMotionScript {
 
     private init(_ c: GraphController, view: GraphMetalView) {
         self.c = c
-        self.view = view
+        firstView = view
     }
 
     private func waitForLoad(tries: Int) {
@@ -112,13 +115,30 @@ final class GraphMotionScript {
         ]
     }
 
+    /// With BROWSERPOC_GRAPH_STILLS set to a folder, each phase ends with a still of the view.
+    private func saveStill(_ name: String) {
+        guard let dir = ProcessInfo.processInfo.environment["BROWSERPOC_GRAPH_STILLS"], let v = view,
+              let img = c.renderImage(size: v.bounds.size, pixelRatio: v.window?.backingScaleFactor ?? 2, appearance: v.effectiveAppearance, state: v.state)
+        else { return }
+        let u = URL(fileURLWithPath: dir).appendingPathComponent("\(String(format: "%02d", index))-\(name).png")
+        try? NSBitmapImageRep(cgImage: img).representation(using: .png, properties: [:])?.write(to: u)
+    }
+
     private func next() {
+        timer?.invalidate()
         if index >= 0 {
-            phases[index].finish()
+            partLines.append(c.pacer.partsSummary())
             results.append(c.pacer.end())
+            saveStill(phases[index].name)
+            phases[index].finish()
         }
         index += 1
         guard index < phases.count else { done(); return }
+        // A short gap so the still above doesn't land in the next phase's numbers.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { self.begin() }
+    }
+
+    private func begin() {
         c.pacer.refresh = view?.window?.screen?.maximumFramesPerSecond ?? 60
         c.pacer.begin(phases[index].name)
         phases[index].setup()
@@ -143,7 +163,7 @@ final class GraphMotionScript {
         timer?.invalidate()
         let refresh = view?.window?.screen?.maximumFramesPerSecond ?? 0
         print("graph motion script: display \(refresh) Hz, view asks for \(view?.preferredFramesPerSecond ?? 0) fps, \(c.layout.nodes.count) nodes, \(c.layout.edges.count) lines")
-        for r in results { print("pacing " + r.description) }
+        for (r, p) in zip(results, partLines) { print("pacing " + r.description); print("         " + p) }
         fflush(stdout)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { NSApp.terminate(nil) }
     }

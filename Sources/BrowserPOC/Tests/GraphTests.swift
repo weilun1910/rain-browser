@@ -185,6 +185,7 @@ enum GraphTests {
 
         recorderTests(dir: gdir, store: store)
         GraphLayoutTests.builderTests(store)
+        GraphMotionTests.run(store: store)
         GraphLayoutTests.simulationTests()
         GraphLayoutTests.performanceTests()
     }
