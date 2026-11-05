@@ -92,6 +92,8 @@ struct CardView: View {
             if m.section == .docs { return "doc.richtext" }
             return m.doc.source == .web ? "globe" : "clock.arrow.circlepath"
         case .note, .markdown: return "note.text"
+        case .notion, .gdocs: return "doc.richtext"
+        case .granola: return "person.2.wave.2"
         }
     }
 
@@ -103,6 +105,9 @@ struct CardView: View {
             return host
         case .note, .markdown:
             return m.doc.project ?? "Notes"
+        case .notion: return "Notion"
+        case .gdocs: return "Google Docs"
+        case .granola: return "Granola meeting"
         }
     }
 

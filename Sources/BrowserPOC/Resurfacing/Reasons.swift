@@ -1,6 +1,9 @@
 import Foundation
 import FoundationModels
 
+/// Card reasons. The first sentence is always history from the index: when Felix saw the item
+/// and what he was doing then. The second says what it covers, from the on-device model's
+/// judgment when it ran, or from shared names and words when it didn't.
 enum Reasons {
     /// Up to two shared topics, people and organisations first.
     static func topics(_ m: Match) -> [String] {
@@ -14,31 +17,68 @@ enum Reasons {
         return out
     }
 
-    static func history(_ m: Match) -> String {
-        let d = m.doc
+    static func day(_ t: Double) -> String { Fmt.onDay(Date(timeIntervalSince1970: t)) }
+
+    /// "while writing Thesis outline", from the visit closest to the item's last sighting.
+    static func during(_ visits: [Visit]) -> String? {
+        guard let v = visits.first(where: { ($0.during ?? "").isEmpty == false }), let d = v.during else { return nil }
+        return d
+    }
+
+    static func docKind(_ url: String) -> String {
+        guard let u = URL(string: url), let d = WritingKey.googleDoc(u) else { return "Google Doc" }
+        switch d.type {
+        case "spreadsheets": return "Google Sheet"
+        case "presentation": return "Google Slides deck"
+        default: return "Google Doc"
+        }
+    }
+
+    /// When and in what context Felix saw it. Never vague: every part comes from stored history.
+    static func history(_ d: DocMeta, visits: [Visit] = []) -> String {
+        let latestVisit = visits.first
+        let ctx = during(visits).map { " while \($0)" } ?? ""
         switch d.source {
         case .web:
-            var s = "You read this \(Fmt.onDay(Date(timeIntervalSince1970: d.lastSeen)))"
-            if d.visitCount > 1 { s += ", \(d.visitCount) visits" }
+            let when = day(latestVisit?.at ?? d.lastSeen)
+            var s = "You read this \(when)\(ctx)"
+            if ctx.isEmpty && d.visitCount > 1 { s += ", \(d.visitCount) visits" }
             return s + "."
         case .chrome:
             var s = "From your Chrome history, last visited \(Fmt.day(Date(timeIntervalSince1970: d.lastSeen)))"
             if d.visitCount > 1 { s += ", \(d.visitCount) visits" }
             return s + "."
         case .note, .markdown:
-            return "Your note, last edited \(Fmt.day(Date(timeIntervalSince1970: d.mtime)))."
+            let where_ = d.project.map { " in \($0)" } ?? ""
+            return "Your note\(where_), last edited \(Fmt.day(Date(timeIntervalSince1970: d.mtime)))."
+        case .notion:
+            return "Your Notion page, last opened \(Fmt.day(Date(timeIntervalSince1970: d.lastSeen)))\(ctx)."
+        case .gdocs:
+            return "Your \(docKind(d.url)), last opened \(Fmt.day(Date(timeIntervalSince1970: d.lastSeen)))\(ctx)."
+        case .granola:
+            return "From your meeting \(day(d.firstSeen))."
         }
     }
 
-    static func template(_ m: Match) -> String {
+    /// The covers-what sentence without a model.
+    static func coverage(_ m: Match) -> String {
         let t = topics(m)
-        let tail: String
         switch t.count {
-        case 2: tail = "Both cover \(t[0]) and \(t[1])."
-        case 1: tail = "Both mention \(t[0])."
-        default: tail = "Close in topic to what you have open."
+        case 2: return "Both cover \(t[0]) and \(t[1])."
+        case 1: return "Both mention \(t[0])."
+        default:
+            if let first = m.sharedTerms.first { return "It also covers \(first)." }
+            return "It matches what you have open by meaning."
         }
-        return Fmt.clean(history(m) + " " + tail)
+    }
+
+    static func template(_ m: Match, visits: [Visit] = []) -> String {
+        Fmt.clean(history(m.doc, visits: visits) + " " + coverage(m))
+    }
+
+    static func withJudgment(_ m: Match, visits: [Visit], judgment: Judgment) -> String {
+        guard judgment.helpful, !judgment.reason.isEmpty else { return template(m, visits: visits) }
+        return Fmt.clean(history(m.doc, visits: visits) + " " + judgment.reason)
     }
 
     /// Keeps a model-written line short and within Felix's punctuation rules.
@@ -52,107 +92,59 @@ enum Reasons {
         t = Fmt.clean(t)
         t = t.replacingOccurrences(of: " - ", with: ", ")
         var words = t.split(separator: " ").map(String.init)
-        if words.count > 20 {
-            words = Array(words.prefix(20))
+        if words.count > 24 {
+            words = Array(words.prefix(24))
             t = words.joined(separator: " ").trimmingCharacters(in: CharacterSet(charactersIn: ",;:"))
             if !t.hasSuffix(".") { t += "." }
         }
         guard words.count >= 4 else { return nil }
         if let last = t.last, !".!?".contains(last) { t += "." }
+        if let f = t.first, f.isLowercase { t = f.uppercased() + t.dropFirst() }
         return t
     }
 }
 
-/// Writes short reasons with Apple's on-device model when it's there. One at a time.
-@MainActor
-final class ReasonWriter {
-    static let shared = ReasonWriter()
-
-    struct Job {
-        let docID: Int64
-        let contextKey: String
-        let prompt: String
-        let done: (String) -> Void
-    }
-
-    private var jobs: [Job] = []
-    private var running = false
-
-    nonisolated static var availabilityText: String {
+/// Foundation Models availability, for logs and Settings.
+enum ReasonWriter {
+    static var availabilityText: String {
         switch SystemLanguageModel.default.availability {
         case .available: return "available"
         case .unavailable(let reason): return "unavailable (\(reason))"
         }
     }
 
-    nonisolated static var isAvailable: Bool {
-        if case .available = SystemLanguageModel.default.availability { return true }
-        return false
+    static var isAvailable: Bool { SystemLanguageModel.default.isAvailable }
+}
+
+/// What Felix is writing or where he is, so captures can record the context they happened in.
+/// Written on the main thread by the Resurfacer, read by the indexer.
+final class ActivityTracker: @unchecked Sendable {
+    static let shared = ActivityTracker()
+    private let lock = NSLock()
+    private var writing: (title: String, key: String, at: Date)?
+    private var space: String?
+    private var spaceCount = 1
+
+    func noteWriting(title: String, key: String) {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        lock.lock(); writing = (String(t.prefix(80)), key, Date()); lock.unlock()
     }
 
-    nonisolated static let instructions = """
-    You write one short line for a card in a browser sidebar. The card shows an item the user read or wrote earlier. \
-    Say why it is useful for what they have open now by naming the specific topic both share. \
-    Describe what the earlier item covers. Never claim the user did anything beyond reading or writing it. \
-    One sentence, at most 18 words, plain words. No quotes, no dashes, no emoji, no preamble. \
-    Example: Covers how Nook converts CRX files, which this page says you need before loading extensions.
-    """
-
-    static func prompt(contextTitle: String, contextPassage: String, match m: Match) -> String {
-        let source: String
-        switch m.doc.source {
-        case .web: source = "a web page they read in this browser"
-        case .chrome: source = "a page from their Chrome history"
-        case .note, .markdown: source = "one of their notes"
-        }
-        return """
-        Open now: \(contextTitle)
-        \(contextPassage.prefix(600))
-
-        Earlier item, \(source). \(Reasons.history(m))
-        Title: \(m.doc.title)
-        \(m.passage.prefix(600))
-
-        Shared terms: \((m.sharedEntities + m.sharedTerms).prefix(6).joined(separator: ", "))
-
-        Write the line.
-        """
+    func noteSpace(_ name: String?, count: Int) {
+        lock.lock(); space = name; spaceCount = count; lock.unlock()
     }
 
-    func request(_ job: Job) {
-        guard Self.isAvailable else { return }
-        jobs.removeAll { $0.docID == job.docID && $0.contextKey == job.contextKey }
-        jobs.append(job)
-        pump()
+    /// "writing Thesis outline" when Felix wrote in something during the last 20 minutes,
+    /// else "in your Research space" when he has more than one space. Nil otherwise.
+    func current(excluding key: String? = nil, now: Date = Date()) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        if let w = writing, now.timeIntervalSince(w.at) < 1200, w.key != key { return "writing \(w.title)" }
+        if spaceCount > 1, let s = space, !s.isEmpty { return "in your \(s) space" }
+        return nil
     }
 
-    func cancelAll(except contextKey: String) {
-        jobs.removeAll { $0.contextKey != contextKey }
-    }
-
-    private func pump() {
-        guard !running, !jobs.isEmpty else { return }
-        running = true
-        let job = jobs.removeFirst()
-        Task {
-            let text = await Self.generate(job.prompt)
-            if let text {
-                IndexStore.shared.saveReason(docID: job.docID, contextKey: job.contextKey, text: text)
-                job.done(text)
-            }
-            self.running = false
-            self.pump()
-        }
-    }
-
-    nonisolated static func generate(_ prompt: String) async -> String? {
-        let session = LanguageModelSession(instructions: instructions)
-        do {
-            let r = try await session.respond(to: prompt, options: GenerationOptions(temperature: 0.3, maximumResponseTokens: 60))
-            return Reasons.tidy(r.content)
-        } catch {
-            appLog.notice("reason generation failed: \(String(describing: error), privacy: .public)")
-            return nil
-        }
+    func reset() {
+        lock.lock(); writing = nil; space = nil; spaceCount = 1; lock.unlock()
     }
 }

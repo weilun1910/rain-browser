@@ -209,6 +209,9 @@ struct SourcesSettings: View {
         case .note: return "Notes"
         case .markdown: return "Notes (older entries)"
         case .chrome: return "Chrome history"
+        case .notion: return "Notion pages"
+        case .gdocs: return "Google Docs"
+        case .granola: return "Granola meetings"
         }
     }
 
