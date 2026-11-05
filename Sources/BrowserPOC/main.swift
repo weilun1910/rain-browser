@@ -54,6 +54,8 @@ if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
     Paths.ensure(dir)
     MainActor.assumeIsolated { BrowserModel.dataStoreID = Paths.storeID(for: dir) }
 }
+// The Related shelf demo keeps nothing of WebKit's on disk.
+if args.contains("--shelf-demo") { MainActor.assumeIsolated { BrowserModel.useEphemeralStore = true } }
 
 let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--workdir", "--extract-check", "--data-dir",
                           "--eval", "--models-dir", "--verbose", "--notion-dry-run", "--granola-dry-run", "--download-models", "--scale",

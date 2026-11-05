@@ -22,8 +22,7 @@ enum ShelfDemo {
             exit(2)
         }
         t0 = Date()
-        // Nothing of WebKit's is kept on disk for the demo.
-        BrowserModel.useEphemeralStore = true
+        // main.swift has already switched WebKit to a store that keeps nothing on disk.
         if IndexStore.shared.doc(key: SelfTest.fixtures[0].key) == nil { SelfTest.seed(IndexStore.shared, now: Date()) }
         Settings.shared.update { $0.firstRunDone = true }
         RelatedPrefs.shared.setMode(.shelf)
