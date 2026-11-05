@@ -206,7 +206,10 @@ enum LookRenders {
         settle()
         model.bar.open(.newTab, text: query)
         _ = SmokeTest.wait(1) { false }
+        // Web snapshots are laid over everything, so they would cover the bar. Leave them out here.
+        skipWeb = true
         both(window, out, "p\(order.count + 1)-command-bar")
+        skipWeb = false
         model.bar.close()
         Settings.shared.update { $0.rightPanelOpen = false }
         _ = SmokeTest.wait(1) { false }
@@ -219,6 +222,9 @@ enum LookRenders {
     static func both(_ w: NSWindow, _ out: URL, _ name: String) { both(w, name, out) }
 
     /// Renders the window in light and dark.
+    /// Leave web view snapshots out, for scenes with something floating over a page.
+    static var skipWeb = false
+
     static func both(_ w: NSWindow, _ name: String, _ out: URL) {
         for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             w.appearance = NSAppearance(named: appearance)
@@ -264,7 +270,7 @@ enum LookRenders {
         guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
         view.cacheDisplay(in: view.bounds, to: rep)
         var shots: [(NSRect, NSImage)] = []
-        for wv in webViews(in: view) where !wv.isHiddenOrHasHiddenAncestor && wv.bounds.width > 20 {
+        for wv in webViews(in: view) where !skipWeb && !wv.isHiddenOrHasHiddenAncestor && wv.bounds.width > 20 {
             var img: NSImage?
             var done = false
             wv.takeSnapshot(with: nil) { i, _ in img = i; done = true }
