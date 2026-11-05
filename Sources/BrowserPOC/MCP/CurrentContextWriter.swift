@@ -23,7 +23,10 @@ struct CurrentContextFile: Codable, Equatable {
     var pid: Int32
     var space: SpaceRef?
     var focused: Ref?
+    /// The first other pane of the focused split, for older readers.
     var splitWith: Ref?
+    /// Every other pane of the focused split. Splits hold up to four.
+    var splitPanes: [Ref]? = nil
     var openTabs: [Ref] = []
     var related: [Ref] = []
     /// The last things focused, newest first.
@@ -90,7 +93,11 @@ final class CurrentContextWriter {
         if let s = m.currentSpace { f.space = .init(id: s.id.uuidString, name: s.name) }
         let focused = m.currentTab.flatMap(ref)
         f.focused = focused
-        if let sp = m.currentSplit, let other = m.tab(sp.other) { f.splitWith = ref(other) }
+        if let sp = m.currentSplit {
+            let others = sp.items.filter { $0 != sp.focused }.compactMap { m.tab($0) }.compactMap(ref)
+            f.splitWith = others.first
+            f.splitPanes = others
+        }
         f.openTabs = m.spaceTabs.prefix(60).compactMap(ref)
         f.related = m.resurfacer.cards.map {
             CurrentContextFile.Ref(title: $0.match.doc.title, url: $0.match.doc.url,

@@ -611,6 +611,7 @@ final class MCPToolbox {
                     "space": S.anyObj,
                     "focused": S.anyObj,
                     "split_with": S.anyObj,
+                    "split_panes": S.arr(ref, "Every other pane of the split, up to three"),
                     "open_tabs": S.arr(ref),
                     "related_on_screen": S.arr(ref),
                     "recently_focused": S.arr(ref),
@@ -648,7 +649,12 @@ final class MCPToolbox {
                 }
                 out["focused"] = f
             }
-            if let o = ref(cc.splitWith) { out["split_with"] = o }
+            // Every other pane of the split, up to three. Older files only have the one.
+            let panes = (cc.splitPanes ?? cc.splitWith.map { [$0] } ?? []).compactMap(ref)
+            if let first = panes.first {
+                out["split_with"] = first
+                out["split_panes"] = panes
+            }
             out["open_tabs"] = cc.openTabs.compactMap(ref)
             out["related_on_screen"] = cc.related.compactMap(ref)
             out["recently_focused"] = cc.trail.prefix(15).compactMap(ref)
@@ -711,7 +717,7 @@ final class MCPToolbox {
     private func spacesTool() -> MCPTool {
         let tab = S.obj(["title": S.str(""), "url": S.str(""), "kind": S.str("page or note"), "id": ["type": ["integer", "null"]], "cite": S.str("")])
         return MCPTool(name: "list_spaces", title: "Spaces, pins and folders",
-                description: "The user's browser spaces (like projects or areas of life), each with its pinned items, sidebar folders and what's in them, open tabs and side-by-side splits. Use it to learn how the user organises their work, or to see what belongs to a project.",
+                description: "The user's browser spaces (like projects or areas of life), each with its pinned items, sidebar folders and what's in them, open tabs and side-by-side splits of up to four panes, plus the Essentials shared by every space. Use it to learn how the user organises their work, or to see what belongs to a project.",
                 input: S.obj(["space": S.str("Only the space with this name")]),
                 output: S.obj([
                     "current_space": S.nullableStr,
@@ -720,8 +726,10 @@ final class MCPToolbox {
                         "pinned": S.arr(tab),
                         "folders": S.arr(S.obj(["name": S.str(""), "items": S.arr(tab)])),
                         "open_tabs": S.arr(tab),
-                        "splits": S.arr(S.obj(["left": tab, "right": tab])),
+                        "splits": S.arr(S.obj(["panes": S.arr(tab, "Two to four items side by side, in reading order"),
+                                               "focused": S.nullableStr])),
                     ])),
+                    "essentials": S.arr(tab, "Items pinned for every space"),
                     "hidden": S.int("Tabs left out because the user hid them"),
                 ], required: ["spaces"]),
                 writes: false) { [unowned self] a in
@@ -737,7 +745,8 @@ final class MCPToolbox {
                 let isNote = t.kind != .web
                 guard ctx.privacy.allows(source: isNote ? MCPSources.notes : MCPSources.web, url: url) else { hidden += 1; return nil }
                 let hit = ctx.reader.resolve(url)
-                let title = t.title.isEmpty ? (hit.map(ctx.title) ?? url) : t.title
+                let named = (t.customTitle?.isEmpty == false ? t.customTitle! : t.title)
+                let title = named.isEmpty ? (hit.map(ctx.title) ?? url) : named
                 served.append(title)
                 return ["title": title, "url": url, "kind": isNote ? "note" : "page", "id": hit.map { $0.id as Any } ?? NSNull(),
                         "cite": ctx.cite(title: title, url: url)]
@@ -745,29 +754,37 @@ final class MCPToolbox {
             let spaces = state.spaces ?? []
             let homeID = spaces.first?.id
             let byID = Dictionary(state.tabs.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            // Sidebar order where the app recorded one, otherwise the order they were made.
+            let ordered = state.tabs.enumerated().sorted { ($0.element.order ?? Double($0.offset)) < ($1.element.order ?? Double($1.offset)) }
+                .map { $0.element }
+            let essentials = ordered.filter { $0.isEssential == true }
             var out: [JSON] = []
             for sp in spaces {
                 if let only, sp.name.lowercased() != only { continue }
-                let tabs = state.tabs.filter { ($0.spaceID ?? homeID) == sp.id }
+                let tabs = ordered.filter { ($0.spaceID ?? homeID) == sp.id && $0.isEssential != true }
                 let splits = (state.splits ?? []).filter { ($0.spaceID ?? homeID) == sp.id }
-                let inSplit = Set(splits.flatMap { [$0.left, $0.right] })
+                let inSplit = Set(splits.flatMap { $0.items })
                 let folders = state.folders.filter { ($0.spaceID ?? homeID) == sp.id }
                 let folderIDs = Set(folders.map { $0.id })
                 var j: JSON = ["name": sp.name, "id": sp.id.uuidString, "is_current": sp.id == (state.currentSpace ?? homeID)]
-                j["pinned"] = tabs.filter { $0.isPinned && !inSplit.contains($0.id) }.compactMap(tabJSON)
+                j["pinned"] = tabs.filter { $0.isPinned && $0.folderID == nil && !inSplit.contains($0.id) }.compactMap(tabJSON)
                 j["folders"] = folders.map { f in
-                    ["name": f.name, "items": tabs.filter { $0.folderID == f.id && !$0.isPinned }.compactMap(tabJSON)] as JSON
+                    ["name": f.name, "items": tabs.filter { $0.folderID == f.id }.compactMap(tabJSON)] as JSON
                 }
                 j["open_tabs"] = tabs.filter { !$0.isPinned && !folderIDs.contains($0.folderID ?? UUID()) && !inSplit.contains($0.id) }.compactMap(tabJSON)
+                // Splits hold up to four panes, in reading order.
                 j["splits"] = splits.compactMap { s -> JSON? in
-                    guard let l = byID[s.left].flatMap(tabJSON), let r = byID[s.right].flatMap(tabJSON) else { return nil }
-                    return ["left": l, "right": r]
+                    let panes = s.items.compactMap { byID[$0] }.compactMap(tabJSON)
+                    guard panes.count >= 2 else { return nil }
+                    let focused = byID[s.focused].flatMap(tabJSON)?["title"] as? String
+                    return ["panes": panes, "focused": focused.map { $0 as Any } ?? NSNull()]
                 }
                 out.append(j)
             }
             let current = spaces.first { $0.id == (state.currentSpace ?? homeID) }?.name
             ctx.log("tool", "list_spaces", only ?? "", served: served, hidden: hidden)
-            return ["spaces": out, "current_space": current.map { $0 as Any } ?? NSNull(), "hidden": hidden]
+            return ["spaces": out, "essentials": essentials.compactMap(tabJSON),
+                    "current_space": current.map { $0 as Any } ?? NSNull(), "hidden": hidden]
         }
     }
 

@@ -195,12 +195,20 @@ enum MCPFixture {
         let logTab = tab(.note, breadLog.absoluteString, "Bread bake log", space: baking)
         let chaseTab = tab(.web, excludedPage, "Chase", space: baking)
         let docTab = tab(.web, googleDoc, "Bread pop-up plan", space: baking)
+        // An Essential shows in every space. This one has a name Felix gave it.
+        var essential = tab(.web, "https://www.runnersworld.com/training/marathon-plan", "A 16 week marathon training plan for beginners",
+                            space: home, pinned: true)
+        essential.isEssential = true
+        essential.customTitle = "Marathon plan"
+        let appTab = tab(.app, "browser://history", "History", space: baking)
         var state = SavedState()
         state.spaces = [home, baking]
         state.currentSpace = baking.id
         state.folders = [research]
-        state.tabs = [nookTab, wkTab, engineTab, notionTab, planTab, kaTab, logTab, chaseTab, docTab]
-        state.splits = [SplitRecord(left: kaTab.id, right: logTab.id, spaceID: baking.id)]
+        state.tabs = [nookTab, wkTab, engineTab, notionTab, planTab, kaTab, logTab, chaseTab, docTab, essential, appTab]
+        // A split of three panes: the page on the left, the bake log and the doc stacked on the right.
+        state.splits = [SplitRecord(root: .branch(.row, [.leaf(kaTab.id), .branch(.column, [.leaf(logTab.id), .leaf(docTab.id)], [0.5, 0.5])], [0.5, 0.5]),
+                                    focused: kaTab.id, spaceID: baking.id)]
         try JSONEncoder.pretty.encode(state).write(to: root.appendingPathComponent("state.json"))
 
         // What's on screen.
@@ -215,6 +223,7 @@ enum MCPFixture {
         cc.space = .init(id: baking.id.uuidString, name: baking.name)
         cc.focused = planRef
         cc.splitWith = kaRef
+        cc.splitPanes = [kaRef, logRef, docRef]
         cc.openTabs = [planRef, kaRef, logRef, chaseRef, docRef]
         cc.related = [logRef, docRef]
         cc.trail = [planRef, kaRef, chaseRef, logRef].enumerated().map { i, r in var x = r; x.at = now.addingTimeInterval(Double(-600 * i)); return x }

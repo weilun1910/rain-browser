@@ -259,6 +259,8 @@ enum MCPTests {
               && (cc["split_with"] as? JSON)?["title"] as? String == "How to feed and maintain a sourdough starter"
               && cc["app_running"] as? Bool == true && (cc["space"] as? JSON)?["name"] as? String == "Baking",
               "current_context shows the focused note, the split and the space")
+        check(titles(cc["split_panes"]) == ["How to feed and maintain a sourdough starter", "Bread bake log", "Bread pop-up plan"],
+              "current_context lists every other pane of a bigger split", titles(cc["split_panes"]).joined(separator: "; "))
         check(!titles(cc["open_tabs"]).contains("Chase") && !titles(cc["recently_focused"]).contains("Chase")
               && titles(cc["related_on_screen"]).contains("Bread bake log"), "current_context filters hidden tabs")
 
@@ -279,6 +281,14 @@ enum MCPTests {
               && titles((home?["folders"] as? [JSON])?.first?["items"]) == ["WKWebExtension", "Browser engine notes"]
               && titles(home?["pinned"]) == ["Nook ExtensionManager"] && (baking?["splits"] as? [JSON])?.count == 1,
               "list_spaces returns pins, folders, tabs and splits")
+        let split = (baking?["splits"] as? [JSON])?.first
+        check(titles(split?["panes"]) == ["How to feed and maintain a sourdough starter", "Bread bake log", "Bread pop-up plan"]
+              && split?["focused"] as? String == "How to feed and maintain a sourdough starter",
+              "a three-pane split lists every pane in order, with the focused one", titles(split?["panes"]).joined(separator: "; "))
+        check(titles(sp["essentials"]) == ["Marathon plan"] && !titles(home?["pinned"]).contains("Marathon plan")
+              && !titles(baking?["open_tabs"]).contains("History") && !titles(baking?["open_tabs"]).contains("Bread pop-up plan"),
+              "Essentials come once with their custom name, and app pages and split panes stay out of open tabs",
+              titles(baking?["open_tabs"]).joined(separator: "; "))
         check(!titles(baking?["open_tabs"]).contains("Chase") && (sp["hidden"] as? Int ?? 0) >= 1, "list_spaces hides excluded tabs")
 
         // list_notes and read_note
@@ -627,6 +637,20 @@ enum MCPTests {
                   && f?.trail.first?.url == f?.focused?.url && f?.space?.name == m.currentSpace?.name,
                   "the app writes current-context.json with the focused note, space and trail")
             check(!w.writeNow(), "the context file is only rewritten when something changed")
+            // Three notes in one split: the focused one, and the other two as split panes.
+            var files = [a]
+            for name in ["Second note", "Third note"] {
+                let u = notes.appendingPathComponent(name + ".md")
+                try? Data("# \(name)\n\nText.\n".utf8).write(to: u)
+                files.append(u)
+            }
+            let tabs = files.map { m.openNote($0, select: false) }
+            let sp = m.split(items: tabs.map { $0.id })
+            _ = w.writeNow()
+            let g = try? JSONDecoder.iso.decode(CurrentContextFile.self, from: Data(contentsOf: CurrentContextFile.url(Paths.root)))
+            check(sp?.count == 3 && g?.splitPanes?.count == 2 && g?.splitWith != nil && !(g?.splitPanes ?? []).contains { $0.url == g?.focused?.url },
+                  "the context file lists every other pane of a three-pane split",
+                  "\(g?.focused?.title ?? "-") with \((g?.splitPanes ?? []).map { $0.title })")
             try? FileManager.default.removeItem(at: CurrentContextFile.url(Paths.root))
         }
     }
