@@ -197,6 +197,9 @@ enum SmokeTest {
         snapshot(window.contentView!, snaps.appendingPathComponent("8-command-bar.png"))
         model.bar.close()
 
+        // 10. The graph: global, hover, settings, local and in a split.
+        GraphSmoke.run(model: model, window: window, snaps: snaps, dir: dir)
+
         model.prepareForQuit()
         print(SelfTest.failures == 0 ? "\nSmoke test passed." : "\n\(SelfTest.failures) check(s) failed.")
         return SelfTest.failures == 0 ? 0 : 1
