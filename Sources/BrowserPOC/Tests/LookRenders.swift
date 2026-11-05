@@ -43,6 +43,8 @@ enum LookRenders {
         SpaceTintBackground.forceActive = true
         // Snapshots catch views mid-animation otherwise.
         Motion.forceReduce = true
+        // Liquid Glass only draws in a real window, so offscreen snapshots show the solid fallback.
+        Theme.GlassStyle.forceReduceTransparency = true
         let notesRoot = dir.appendingPathComponent("Notes", isDirectory: true)
         Paths.ensure(notesRoot)
         Settings.shared.update { $0.notesFolders = [notesRoot.path]; $0.firstRunDone = false; $0.rightPanelOpen = true }
@@ -184,6 +186,7 @@ enum LookRenders {
         BrowserModel.useEphemeralStore = true
         SpaceTintBackground.forceActive = true
         Motion.forceReduce = true
+        Theme.GlassStyle.forceReduceTransparency = true
         let model = BrowserModel()
         model.notes.reload()
         let window = SmokeTest.offscreenWindow(MainView.host(model), size: NSSize(width: 1440, height: 900))

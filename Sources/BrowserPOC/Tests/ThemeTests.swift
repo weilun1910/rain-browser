@@ -11,6 +11,7 @@ enum ThemeTests {
         colour()
         layout()
         motion()
+        glass()
         startup()
         mark()
         MainActor.assumeIsolated {
@@ -110,6 +111,29 @@ enum ThemeTests {
         let cut = Motion.animation(Motion.panel, reduce: false) == nil && Motion.animation(Motion.hover, reduce: false, fadeOnly: true) == nil
         Motion.suppressed = false
         check(cut && Motion.animation(Motion.panel, reduce: false) != nil, "nothing animates while motion is suppressed")
+    }
+
+    static func glass() {
+        let G = Theme.GlassStyle.self
+        let before = G.forceReduceTransparency
+        G.forceReduceTransparency = false
+        let glassy = !G.isSolid(false) && G.isSolid(true)
+        G.forceReduceTransparency = true
+        let forced = G.isSolid(false)
+        G.forceReduceTransparency = before
+        check(glassy && forced, "glass gives way to solid surfaces under Reduce Transparency, and --reduce-transparency forces it")
+        check(G.containerSpacing < ShelfStyle.pillGap, "the shelf's pills never weld into one glass shape at rest",
+              "spacing \(G.containerSpacing), gap \(ShelfStyle.pillGap)")
+        let wash = { (dark: Bool) -> CGFloat in
+            var alpha: CGFloat = 0
+            NSAppearance(named: dark ? .darkAqua : .aqua)?.performAsCurrentDrawingAppearance {
+                alpha = NSColor(G.readingWash).usingColorSpace(.sRGB)?.alphaComponent ?? 0
+            }
+            return alpha
+        }
+        check((0.4...0.65).contains(wash(false)) && (0.4...0.65).contains(wash(true)),
+              "text-heavy glass carries a wash strong enough to read over a loud page, and light enough to stay glass",
+              String(format: "light %.2f, dark %.2f", wash(false), wash(true)))
     }
 
     static func startup() {
