@@ -19,24 +19,24 @@ struct NoteEditorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.Space.l) {
                 if doc.isReadOnly {
                     Image(systemName: "lock").font(.system(size: 11)).foregroundStyle(.secondary)
                     Text(doc.notUTF8 ? "Read only, this file isn't plain UTF-8 text" : "Read only, outside your notes folders")
-                        .font(.system(size: 12))
+                        .font(Theme.Font.secondary)
                         .foregroundStyle(.secondary)
                 } else {
                     Text(location)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.tertiary)
+                        .font(Theme.Font.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.head)
                         .help(doc.url.path)
                 }
                 Spacer()
-                Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([doc.url]) }
-                    .buttonStyle(.link)
-                    .font(.system(size: 12))
+                IconButton(symbol: "folder", help: "Reveal in Finder", width: 26, height: 24, symbolSize: 12) {
+                    NSWorkspace.shared.activateFileViewerSelecting([doc.url])
+                }
                 Picker("", selection: $doc.showPreview) {
                     Text("Edit").tag(false)
                     Text("Preview").tag(true)
@@ -46,22 +46,24 @@ struct NoteEditorView: View {
                 .frame(width: 140)
                 .controlSize(.small)
             }
-            .padding(.horizontal, 14)
-            .frame(height: 36)
+            .padding(.leading, Theme.Space.xxl)
+            .padding(.trailing, Theme.Space.l)
+            .frame(height: 40)
             if let change = doc.diskChange {
                 DiskChangeBar(doc: doc, change: change)
+                    .transition(.opacity)
             }
-            Divider().opacity(0.5)
+            Rectangle().fill(Theme.Palette.hairline).frame(height: 1)
             switch doc.state {
             case .loading:
                 Color.clear
             case .waitingForICloud:
                 Text("Downloading from iCloud...")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(Theme.Font.row).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .failed(let why):
-                VStack(spacing: 8) {
-                    Text(why).foregroundStyle(.secondary)
+                VStack(spacing: Theme.Space.l) {
+                    Text(why).font(Theme.Font.row).foregroundStyle(.secondary)
                     Button("Try again") { doc.load() }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -83,12 +85,12 @@ struct DiskChangeBar: View {
     @EnvironmentObject var model: BrowserModel
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Theme.Space.l) {
             Image(systemName: change == .missing ? "questionmark.folder" : "arrow.triangle.2.circlepath")
                 .font(.system(size: 11)).foregroundStyle(.secondary)
             Text(change == .missing ? "This file was moved or deleted on disk. Your text is still here."
                                     : "This file changed on disk. Your edits aren't saved yet.")
-                .font(.system(size: 12)).foregroundStyle(.secondary)
+                .font(Theme.Font.secondary).foregroundStyle(.secondary)
             Spacer()
             if change == .changed {
                 Button("Load disk version") { doc.loadDiskVersion() }
@@ -102,9 +104,9 @@ struct DiskChangeBar: View {
         }
         .buttonStyle(.link)
         .font(.system(size: 12))
-        .padding(.horizontal, 14)
-        .frame(height: 30)
-        .background(Color.primary.opacity(0.04))
+        .padding(.horizontal, Theme.Space.xxl)
+        .frame(height: 34)
+        .background(Theme.Palette.field)
     }
 }
 
@@ -115,7 +117,7 @@ struct MissingNoteView: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            Text("This note's file is missing").font(.title3.weight(.semibold))
+            Text("This note's file is missing").font(Theme.Font.display(22)).displayTracking()
             Text(tab.url?.path ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(2).truncationMode(.middle)
                 .frame(maxWidth: 420)
             HStack(spacing: 14) {
@@ -169,7 +171,7 @@ struct MarkdownTextView: NSViewRepresentable {
         tv.textColor = .labelColor
         tv.isEditable = !doc.isReadOnly
         tv.isSelectable = true
-        tv.textContainerInset = NSSize(width: 36, height: 28)
+        tv.textContainerInset = NSSize(width: 44, height: 32)
         tv.textContainer?.lineFragmentPadding = 0
         tv.defaultParagraphStyle = MarkdownStyler.paragraph
         tv.typingAttributes = MarkdownStyler.baseAttributes
@@ -213,8 +215,8 @@ enum MarkdownStyler {
     static let bodyFont = NSFont.systemFont(ofSize: 15)
     static let paragraph: NSParagraphStyle = {
         let p = NSMutableParagraphStyle()
-        p.lineSpacing = 4
-        p.paragraphSpacing = 4
+        p.lineSpacing = 5
+        p.paragraphSpacing = 6
         return p
     }()
     static var baseAttributes: [NSAttributedString.Key: Any] {

@@ -176,14 +176,13 @@ struct WebContainer: NSViewRepresentable {
     }
 }
 
-/// The empty card: the mark, faint, and two ways to start.
+/// The empty card: one quiet line and two ways to start. No mark here: an open ring in an
+/// empty page reads as a loading spinner.
 struct StartView: View {
     @EnvironmentObject var model: BrowserModel
 
     var body: some View {
-        VStack(spacing: Theme.Space.xl) {
-            BrandMark(weight: 0.07, color: .primary, opacity: 0.16)
-                .frame(width: 40, height: 40)
+        VStack(spacing: Theme.Space.l) {
             Text("Search or enter an address")
                 .font(Theme.Font.display(22))
                 .displayTracking()
