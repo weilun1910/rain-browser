@@ -16,15 +16,16 @@ struct GraphPane: View {
                 if controller.hasLoaded && controller.layout.isEmpty && !controller.isBuilding {
                     emptyState.frame(width: g.size.width, height: g.size.height)
                 }
-                if let h = controller.hover {
-                    GraphHoverCard(hover: h)
-                        .position(cardPosition(h, in: g.size))
-                        .allowsHitTesting(false)
-                        .transition(.opacity)
-                }
                 VStack(alignment: .leading, spacing: 0) {
                     toolbar
                     Spacer(minLength: 0)
+                    // The card sits in the corner, so it never covers the neighbours it describes.
+                    if let h = controller.hover {
+                        GraphHoverCard(hover: h)
+                            .padding(.leading, 12)
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                    }
                     GraphLegend(kinds: legendKinds)
                         .padding(12)
                 }
@@ -48,7 +49,8 @@ struct GraphPane: View {
             controller.model = model
             updateYouAreHere()
         }
-        .onReceive(model.$selection) { _ in updateYouAreHere() }
+        // @Published fires before the value changes, so read it on the next turn.
+        .onReceive(model.$selection) { _ in DispatchQueue.main.async { updateYouAreHere() } }
     }
 
     /// In a split, the item next to the graph gets the "you are here" ring.
@@ -59,15 +61,6 @@ struct GraphPane: View {
     private var legendKinds: [GraphNodeKind] {
         let present = Set(controller.layout.nodes.map(\.kind))
         return [.note, .doc, .site, .meeting, .topic, .siteGroup, .unresolved].filter { present.contains($0) }
-    }
-
-    private func cardPosition(_ h: GraphHover, in size: CGSize) -> CGPoint {
-        let w: CGFloat = 290, approxH: CGFloat = 60 + CGFloat(h.reasons.count) * 17
-        var x = h.point.x + h.radius + 14 + w / 2
-        if x + w / 2 > size.width - 8 { x = h.point.x - h.radius - 14 - w / 2 }
-        var y = h.point.y
-        y = min(max(y, approxH / 2 + 50), size.height - approxH / 2 - 8)
-        return CGPoint(x: max(w / 2 + 8, x), y: y)
     }
 
     private var toolbar: some View {
@@ -299,7 +292,6 @@ struct GraphSettingsPanel: View {
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
         .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
         .controlSize(.small)
-        .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder

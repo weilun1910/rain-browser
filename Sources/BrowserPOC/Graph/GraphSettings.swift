@@ -58,7 +58,7 @@ struct GraphSettings: Codable, Equatable {
     // Display
     var arrows = false
     /// 0 shows names early, 1 only when zoomed right in.
-    var textFade: Double = 0.45
+    var textFade: Double = 0.3
     var nodeSize: Double = 1
     var linkThickness: Double = 1
     // Forces

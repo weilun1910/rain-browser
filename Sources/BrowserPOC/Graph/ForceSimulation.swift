@@ -38,6 +38,9 @@ final class ForceSimulation: @unchecked Sendable {
     private var charge: [Float] = []
     private var linkS: [Int32] = [], linkT: [Int32] = []
     private var linkStrength: [Float] = [], linkDist: [Float] = [], linkBias: [Float] = []
+    /// Per-node pull toward the middle. Items with no links get more, so they ring the graph
+    /// instead of drifting off.
+    private var pull: [Float] = []
     private var params = Params()
     private var alpha: Float = 1
     private var alphaTarget: Float = 0
@@ -106,6 +109,7 @@ final class ForceSimulation: @unchecked Sendable {
 
     private func setupLinks(deg: [Int]) {
         let m = linkS.count
+        pull = deg.map { $0 == 0 ? 3 : 1 }
         linkStrength = .init(repeating: 0, count: m)
         linkDist = .init(repeating: params.linkDistance, count: m)
         linkBias = .init(repeating: 0.5, count: m)
@@ -300,11 +304,12 @@ final class ForceSimulation: @unchecked Sendable {
             }
 
             // A pull toward the middle: Obsidian's center force makes the graph rounder and tighter.
-            let k = params.center * 0.012
+            let k = params.center * 0.04
             var sx: Float = 0, sy: Float = 0, m: Float = 0
             for i in 0..<n where active[i] {
-                VX[i] -= X[i] * k * a
-                VY[i] -= Y[i] * k * a
+                let pk = i < pull.count ? pull[i] : 1
+                VX[i] -= X[i] * k * a * pk
+                VY[i] -= Y[i] * k * a * pk
                 sx += X[i]; sy += Y[i]; m += 1
             }
 

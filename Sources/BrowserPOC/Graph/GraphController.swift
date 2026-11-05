@@ -172,6 +172,8 @@ final class GraphController: ObservableObject {
                 start.append(nil)
             }
         }
+        // Keep the hover across a rebuild, as long as the node is still there.
+        let hoveredID = hovered.flatMap { $0 < layout.nodes.count ? layout.nodes[$0].id : nil }
         layout = new
         hovered = nil
         hover = nil
@@ -185,6 +187,10 @@ final class GraphController: ObservableObject {
         sim.setGraph(count: new.nodes.count, links: new.edges.map { ($0.a, $0.b) }, radii: new.nodes.map(\.radius),
                      start: start, params: ForceSimulation.Params(settings), alpha: fresh > 0.5 ? 1 : max(0.12, fresh))
         if timelapse != nil { timelapse = nil }
+        if let id = hoveredID, let ni = new.indexByID[id] {
+            sim.flush()
+            setHover(ni)
+        }
         wake()
     }
 
@@ -282,7 +288,7 @@ final class GraphController: ObservableObject {
         let layout = self.layout
         let n = layout.nodes.count
         let w = Float(viewSize.width), h = Float(viewSize.height)
-        let lo = 3 + Float(s.textFade) * 10, hi = lo + 4
+        let lo = 1.5 + Float(s.textFade) * 8, hi = lo + 3
         let nb = hovered.map { layout.neighbours($0) } ?? []
         let smallLocal = (mode == .local || focusID != nil) && n <= 40
         var cands: [(Int, Float, Float)] = [] // index, alpha, priority

@@ -38,17 +38,23 @@ struct LocalGraphSlot: View {
             GraphController.global.model = model
             follow()
         }
-        .onReceive(model.$selection) { _ in follow() }
+        // @Published fires before the value changes, so read it on the next turn.
+        .onReceive(model.$selection) { _ in DispatchQueue.main.async { follow() } }
         .onReceive(resurfacer.objectWillChange) { _ in DispatchQueue.main.async { follow() } }
     }
 
+    /// The focused item, or with the graph focused in a split, the item next to it.
+    private var followed: Tab? {
+        if model.currentTab?.kind == .graph { return model.visibleTabs.first { $0.kind != .graph } }
+        return model.currentTab
+    }
+
     private func follow() {
-        let tab = model.currentTab
-        controller.follow(key: tab.flatMap(GraphRecorder.key))
+        controller.follow(key: followed.flatMap(GraphRecorder.key))
     }
 
     private var emptyText: String {
-        if model.currentTab == nil || model.currentTab?.kind == .graph { return "Open a page or a note to see what it connects to." }
+        if followed == nil { return "Open a page or a note to see what it connects to." }
         if controller.layout.nodes.isEmpty { return "This isn't in the graph yet. Pages join once they've been open a few seconds." }
         return "No connections yet."
     }

@@ -71,21 +71,56 @@ struct GraphLayout {
         return groupedReasons(i, other: other, limit: limit)
     }
 
+    /// One line per neighbour, said from the hovered node's side, most specific kind first.
     private func groupedReasons(_ i: Int, other: Int?, limit: Int) -> [String] {
-        var out: [(Int, String)] = []
+        var out: [(Int, Int, String)] = []
+        let mine = Set(nodes[i].members)
         for e in adjacency[i] {
             let edge = edges[e]
             let o = edge.a == i ? edge.b : edge.a
             if let other, o != other { continue }
-            for li in edge.links {
-                let l = snapshot.links[li]
-                out.append((l.type.rank, GraphStore.why(l, snapshot)))
-            }
+            let links = edge.links.map { snapshot.links[$0] }
+            guard let line = Self.phrase(links, mine: mine, other: nodes[o]) else { continue }
+            out.append((edge.type.rank, -nodes[o].degree, line))
         }
-        var seen = Set<String>()
-        let sorted = out.sorted { $0.0 < $1.0 }.map { $0.1 }.filter { seen.insert($0).inserted }
-        if sorted.count > limit { return Array(sorted.prefix(limit)) + ["and \(sorted.count - limit) more"] }
+        let sorted = out.sorted { ($0.0, $0.1) < ($1.0, $1.1) }.map { $0.2 }
+        if sorted.count > limit { return Array(sorted.prefix(limit)) + ["and \(sorted.count - limit) more connections"] }
         return sorted
+    }
+
+    static func short(_ t: String) -> String { t.count > 40 ? String(t.prefix(38)) + "..." : t }
+
+    static func phrase(_ links: [GraphLink], mine: Set<Int>, other: LayoutNode) -> String? {
+        guard let primary = links.map(\.type).min(by: { $0.rank < $1.rank }) else { return nil }
+        let o = short(other.title)
+        let ofType = links.filter { $0.type == primary }
+        let out = ofType.contains { mine.contains($0.a) }
+        let inbound = ofType.contains { mine.contains($0.b) && !mine.contains($0.a) }
+        let count = ofType.map(\.count).max() ?? 1
+        var line: String
+        switch primary {
+        case .link:
+            line = out && inbound ? "Linked both ways with \(o)" : (out ? "Links to \(o)" : "Linked from \(o)")
+        case .navigation:
+            line = out ? "Led you to \(o)" : "You came here from \(o)"
+            if count > 1 { line += ", \(count) times" }
+        case .research:
+            line = out ? "You added \(o) to research from here" : "Added to research from \(o)"
+        case .together:
+            let split = ofType.contains { $0.detail == "split" }
+            line = split ? "Side by side with \(o) in a split" : "Used with \(o) in \(count) sessions"
+        case .similar:
+            line = "Close in meaning to \(o)"
+        case .topic:
+            line = other.kind == .topic ? "Mentions \(o)" : "Both mention \(links.first?.detail ?? o)"
+        }
+        let also = Set(links.map(\.type)).subtracting([primary]).sorted { $0.rank < $1.rank }
+        if !also.isEmpty {
+            let words: [GraphEdgeType: String] = [.link: "linked", .navigation: "visited in a row", .research: "researched",
+                                                  .together: "used together", .similar: "close in meaning", .topic: "a shared topic"]
+            line += ", also " + also.compactMap { words[$0] }.joined(separator: " and ")
+        }
+        return line
     }
 }
 

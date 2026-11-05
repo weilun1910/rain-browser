@@ -248,7 +248,7 @@ final class GraphStore: @unchecked Sendable {
             try db.run("DELETE FROM g_edges WHERE type = 'similar'")
             for id in semantic.docIDs {
                 guard let ka = keys[id] else { continue }
-                for n in semantic.neighbours(of: id, k: Self.similarK) {
+                for n in similarNeighbours(of: id) {
                     guard let kb = keys[n.docID] else { continue }
                     try insertSimilar(ka, kb, n.score)
                 }
@@ -263,11 +263,24 @@ final class GraphStore: @unchecked Sendable {
             for id in ids {
                 guard let ka = keys[id] else { continue }
                 try db.run("DELETE FROM g_edges WHERE type = 'similar' AND (a = ? OR b = ?)", [ka, ka])
-                for n in semantic.neighbours(of: id, k: Self.similarK) {
+                for n in similarNeighbours(of: id) {
                     guard let kb = keys[n.docID] else { continue }
                     try insertSimilar(ka, kb, n.score)
                 }
             }
+        }
+    }
+
+    /// Above this, a pair counts as similar on its own.
+    static let strongSimilarity = 0.88
+
+    /// An item's top neighbours by meaning, kept only when the pair is mutual (each in the other's
+    /// top k) or very close. Short notes in one style tend to look alike to a sentence model, and
+    /// a one-sided match is usually that.
+    private func similarNeighbours(of id: Int64) -> [(docID: Int64, score: Double)] {
+        guard let semantic else { return [] }
+        return semantic.neighbours(of: id, k: Self.similarK).filter { n in
+            n.score >= Self.strongSimilarity || semantic.neighbours(of: n.docID, k: Self.similarK).contains { $0.docID == id }
         }
     }
 

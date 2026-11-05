@@ -43,20 +43,24 @@ final class GraphMetalView: MTKView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        MainActor.assumeIsolated {
-            // Offscreen snapshots (cacheDisplay) draw into a bitmap context instead of the drawable.
-            if let ctx = NSGraphicsContext.current, !ctx.isDrawingToScreen {
-                if let img = controller.renderImage(size: bounds.size, pixelRatio: window?.backingScaleFactor ?? 2, appearance: effectiveAppearance) {
-                    ctx.cgContext.saveGState()
-                    ctx.cgContext.translateBy(x: 0, y: bounds.height)
-                    ctx.cgContext.scaleBy(x: 1, y: -1)
-                    ctx.cgContext.draw(img, in: CGRect(origin: .zero, size: bounds.size))
-                    ctx.cgContext.restoreGState()
-                }
-                return
-            }
-            controller.drawFrame(in: self)
+        controller.drawFrame(in: self)
+    }
+
+    private var still: NSImageView?
+
+    /// `cacheDisplay` can't read a Metal layer, so offscreen snapshots put a rendered still on top
+    /// for as long as `body` runs.
+    func withStill(_ body: () -> Void) {
+        if let img = controller.renderImage(size: bounds.size, pixelRatio: window?.backingScaleFactor ?? 2, appearance: effectiveAppearance) {
+            let iv = NSImageView(frame: bounds)
+            iv.image = NSImage(cgImage: img, size: bounds.size)
+            iv.imageScaling = .scaleAxesIndependently
+            addSubview(iv)
+            still = iv
         }
+        body()
+        still?.removeFromSuperview()
+        still = nil
     }
 
     override func updateTrackingAreas() {
