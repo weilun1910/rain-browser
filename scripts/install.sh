@@ -14,11 +14,12 @@ if [ "${1:-}" != "--no-build" ]; then
 fi
 [ -d "$BUILT" ] || { echo "No build at $BUILT. Run scripts/build.sh first." >&2; exit 1; }
 
-# Only the app itself has to close. AI clients run Rain's MCP server from the same binary
-# (BrowserPOC --mcp) for as long as they're open. Those keep the old build until the client
-# restarts them, and the swap doesn't disturb them.
+# Only the app itself has to close, which runs with no flags. AI clients run Rain's MCP server
+# from the same binary (BrowserPOC --mcp) for as long as they're open, and evals and other tools
+# run it with flags too. Those keep the old build until they restart, and the swap doesn't
+# disturb them.
 running() {
-  ps -axo command= | grep -F "$DEST/Contents/MacOS/BrowserPOC" | grep -v -e "--mcp" -e "grep -F" >/dev/null
+  ps -axo command= | awk -v bin="$DEST/Contents/MacOS/BrowserPOC" '$0 == bin || index($0, bin " -psn") == 1 { found = 1 } END { exit !found }'
 }
 if running; then
   echo "Rain is open. Quit it (Cmd-Q) and the new build goes in."
