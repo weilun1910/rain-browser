@@ -93,6 +93,23 @@ enum ThemeTests {
         let fullGraph = GraphTheme.glide == 0.5 && GraphTheme.momentumTime == 0.35
         Motion.forceReduce = before
         check(reducedGraph && fullGraph, "the graph's camera jumps instead of gliding under Reduce Motion")
+        check(Motion.animation(Motion.settle, reduce: true, tracked: true) == Motion.reducedSettle
+              && Motion.animation(Motion.settle, reduce: false, tracked: true) == Motion.settle,
+              "under Reduce Motion a gesture's end becomes a short ease-out, not a cut")
+        check(Motion.gestureEnd(velocity: 800, distance: 200, reduce: false) != nil, "a gesture's settle starts at its velocity")
+        check(Motion.stagger(0) == 0 && abs(Motion.stagger(3) - 0.12) < 1e-9 && Motion.stagger(40) == Motion.stagger(Motion.Timing.staggerCap)
+              && abs(Motion.stagger(2, step: Motion.Timing.rowStagger) - 0.04) < 1e-9,
+              "staggers step 40 ms for cards and 20 ms for rows, and stop growing past the cap")
+        check(ShelfStyle.stagger == Motion.Timing.cardStagger, "the shelf's pills and the Related cards share one stagger")
+        check(ShelfStyle.cardRadius == Theme.Radius.card && ShelfStyle.popoverRadius == Theme.Radius.popover,
+              "the shelf uses the design system's radii")
+        let springs = Motion.Springs.self
+        check(springs.settle.duration == 0.3 && springs.spaceSwitch.duration == 0.28 && springs.settle.bounce == 0,
+              "the per-frame springs match the animations they stand in for")
+        Motion.suppressed = true
+        let cut = Motion.animation(Motion.panel, reduce: false) == nil && Motion.animation(Motion.hover, reduce: false, fadeOnly: true) == nil
+        Motion.suppressed = false
+        check(cut && Motion.animation(Motion.panel, reduce: false) != nil, "nothing animates while motion is suppressed")
     }
 
     static func startup() {
