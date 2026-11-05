@@ -190,6 +190,11 @@ final class WebCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDown
             decisionHandler(.cancel)
             return
         }
+        // The graph's navigation edges: page A led to page B. Links that open a new window are
+        // recorded in createWebViewWith instead.
+        if navigationAction.navigationType == .linkActivated, navigationAction.targetFrame?.isMainFrame == true {
+            GraphRecorder.linkFollowed(from: webView.url, to: url)
+        }
         if navigationAction.navigationType == .linkActivated,
            navigationAction.modifierFlags.contains(.command) {
             model?.newTab(url: url, select: navigationAction.modifierFlags.contains(.shift))
@@ -251,6 +256,7 @@ final class WebCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDown
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         guard let model else { return nil }
+        GraphRecorder.linkFollowed(from: webView.url, to: navigationAction.request.url)
         let t = model.newTab(url: nil, select: true, configuration: configuration)
         return t.webView
     }
