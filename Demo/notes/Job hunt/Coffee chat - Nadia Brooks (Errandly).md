@@ -13,10 +13,10 @@ Senior PM on the supply team at Errandly. Yale '21, found her through the alumni
 
 ## How Errandly launched
 - They never launched a city. They launched a neighbourhood. Astoria first, then two more in Queens, then one in Brooklyn. "A city is a hundred tiny marketplaces pretending to be one."
-- The chicken-or-egg problem was all on the supply side. Customers will try anything once. Runners won't stay if they sit around with no errands.
-- So they paid it down. Runners got a guaranteed $22 an hour for the first six weeks in each new neighbourhood, errands or not. Expensive, but it meant a request always got picked up.
-- The founders ran errands themselves for the first month. She called it the only honest way to learn what the job is.
-- They kept the map small on purpose. If you were three blocks outside the zone the app told you no.
+- The chicken-or-egg problem was all on the supply side. Customers will try anything once. Runners won't stay if they sit around with no errands. So supply was the hardest side and they went after it first.
+- They subsidized supply, because it was the most valuable side. Runners got a guaranteed $22 an hour for the first six weeks in each new neighbourhood, errands or not. She said Uber did the same in its early cities, paying drivers so riders always found a car. Expensive, but it meant a request always got picked up.
+- The founders ran errands by hand for the first month. She called it the only honest way to learn what the job is.
+- A hard geographic constraint, on purpose. If you were three blocks outside the zone the app told you no.
 
 ## The metric
 - Fill rate: share of requests picked up within 30 minutes. That's their liquidity number.

@@ -1,0 +1,298 @@
+{
+  "version": 1,
+  "about": "Labelled resurfacing cases for the demo content. Refs are content ids: front matter ids for notes, docs and meetings, and page ids from history.json. Section is where a card belongs in the Related panel: docs is Notes / Docs (notes, Google files, Notion, Granola), sites is Sites (pages that were only read). Each panel section shows up to 3 cards, so a case never lists more than 3 musts per section.",
+  "howToScore": {
+    "must": "Should appear in its section. A miss is a recall failure.",
+    "nice": "Good if it appears. Not a failure if it doesn't.",
+    "acceptable": "Fine either way. Don't count it as a false positive.",
+    "shouldNotSurface": "Appearing anywhere is a precision failure.",
+    "atMostOneOf": "At most one item from each group may appear. Both appearing is a failure.",
+    "onScreen": "Visible next to the context, so the app hides it. Ignore it when scoring."
+  },
+  "nearDuplicateGroups": [
+    {
+      "id": "nd-paper-outline",
+      "items": ["note-paper-outline-v2", "note-paper-outline"],
+      "prefer": "note-paper-outline-v2",
+      "why": "v2 is a revised copy of the same outline, three weeks newer, with most lines unchanged."
+    },
+    {
+      "id": "nd-swapshelf-roadmap",
+      "items": ["notion-swapshelf-roadmap", "note-swapshelf-roadmap-export"],
+      "prefer": "notion-swapshelf-roadmap",
+      "why": "The Markdown note is a stale export of the Notion page from Oct 21. The Notion page is the live one."
+    },
+    {
+      "id": "nd-network-effect",
+      "items": ["web-wiki-network-effect", "web-wiki-network-effects-redirect"],
+      "prefer": "web-wiki-network-effect",
+      "why": "Wikipedia serves the same article at the redirect URL. Same text, two URLs."
+    }
+  ],
+  "distractors": [
+    {"items": ["note-swiftui-launch", "web-apple-launch-time"], "looksLike": "the cold start problem", "why": "Cold start here means an app launching with nothing in memory."},
+    {"items": ["web-wiki-multihoming-ip"], "looksLike": "multi-homing in two-sided markets", "why": "This Multihoming is about connecting a computer to more than one network. Theo bounced after 20 seconds."},
+    {"items": ["note-cpsc365-pset5", "web-wiki-max-flow-min-cut", "web-wiki-flow-network", "web-wiki-ford-fulkerson"], "looksLike": "networks, supply and demand, matching", "why": "Network flow algorithms for a CS problem set."},
+    {"items": ["web-wiki-chicken-or-egg"], "looksLike": "the chicken-or-egg problem in marketplaces", "why": "The philosophy of causality dilemma."},
+    {"items": ["web-wiki-market-liquidity"], "looksLike": "marketplace liquidity", "why": "Financial market liquidity, how fast an asset can be sold."},
+    {"items": ["web-apple-testflight", "gdoc-swapshelf-app-store-copy"], "looksLike": "booking flights", "why": "TestFlight is Apple's beta testing service."},
+    {"items": ["granola-2026-11-03-japan-call", "note-japanese-phrases", "note-tokyo-food", "note-japan-overview"], "looksLike": "anything mentioning Priya", "why": "Priya Kapoor is a trip friend. Priya Raman runs the mock interviews."}
+  ],
+  "cases": [
+    {
+      "id": "case-opening-draft",
+      "description": "The moment the demo opens on. Theo is drafting section 2 of his paper next to an article on the chicken-or-egg problem. The check-in where Prof. Hartley set these exact tasks should come back, and so should a coffee chat note from another space that describes the same launch pattern at city scale.",
+      "context": {"kind": "note", "ref": "note-paper-draft-s2", "space": "school"},
+      "onScreen": ["web-nfx-chicken-or-egg-tactics"],
+      "must": [
+        {"ref": "granola-2026-10-16-paper-check-in", "section": "docs", "why": "Its action items are the checklist at the top of the draft: narrow the thesis, multi-homing evidence, the Swapshelf case."},
+        {"ref": "note-coffee-nadia", "section": "docs", "why": "Job hunt space. One dense neighbourhood at a time, guaranteed supply-side earnings, fill rate over signups, runners multi-homing. The draft paraphrases this without a link."},
+        {"ref": "web-wiki-history-of-facebook", "section": "sites", "why": "The draft uses Facebook's 2004 college-by-college launch from Harvard to Columbia, Stanford and Yale."}
+      ],
+      "nice": [
+        {"ref": "gdoc-swapshelf-pilot-plan", "section": "docs", "why": "Swapshelf space. The pilot the draft uses as its case, seeding listings by hand in two colleges."},
+        {"ref": "note-swapshelf-pilot-metrics", "section": "docs", "why": "The 72-hour request rate and the waitlist numbers the draft is waiting for."},
+        {"ref": "note-multihoming-evidence", "section": "docs", "why": "Same Chen et al. caveat as section 2.2."},
+        {"ref": "web-pg-do-things-that-dont-scale", "section": "sites", "why": "Recruiting the first users by hand, read for the paper in September."},
+        {"ref": "web-nber-uber-flexible-work", "section": "sites", "why": "The paper the draft cites in 2.2."},
+        {"ref": "web-wiki-critical-mass", "section": "sites", "why": "The draft leans on critical mass."}
+      ],
+      "acceptable": ["gdoc-paper-draft", "note-paper-outline-v2", "note-book-cold-start", "granola-2026-10-30-paper-peer-review", "notion-errandly-research", "web-wiki-two-sided-market", "web-wiki-network-effect", "web-andrewchen-cold-start-social", "web-lenny-kickstart-marketplace", "web-gurley-all-markets", "web-wiki-tinder"],
+      "shouldNotSurface": [
+        {"ref": "note-paper-outline", "why": "Older near-duplicate of outline v2."},
+        {"ref": "note-swiftui-launch", "why": "Cold start of an app, not a marketplace."},
+        {"ref": "web-apple-launch-time", "why": "Cold launch of an app."},
+        {"ref": "note-cpsc365-pset5", "why": "Network flow, shares words like network, supply and demand."},
+        {"ref": "web-wiki-max-flow-min-cut", "why": "Network flow."},
+        {"ref": "web-wiki-multihoming-ip", "why": "IP multihoming."},
+        {"ref": "web-wiki-market-liquidity", "why": "Financial liquidity."},
+        {"ref": "note-tokyo-food", "why": "Only connected through the Nadia note's ramen tip."}
+      ],
+      "atMostOneOf": [["web-wiki-network-effect", "web-wiki-network-effects-redirect"], ["note-paper-outline-v2", "note-paper-outline"]]
+    },
+    {
+      "id": "case-reading-chicken-egg",
+      "description": "Theo clicks the article pane of the same split. Reading about chicken-or-egg tactics in School should bring back the coffee chat from Job hunt, which nothing links to.",
+      "context": {"kind": "web", "ref": "web-nfx-chicken-or-egg-tactics", "space": "school"},
+      "onScreen": ["note-paper-draft-s2"],
+      "must": [
+        {"ref": "note-coffee-nadia", "section": "docs", "why": "Supply side first, subsidise it with guaranteed earnings, constrain the geography. These are tactics from the article, told from the inside."},
+        {"ref": "web-andrewchen-cold-start-social", "section": "sites", "why": "Same problem, same vocabulary."}
+      ],
+      "nice": [
+        {"ref": "gdoc-swapshelf-pilot-plan", "section": "docs", "why": "Seeding supply by hand before opening demand."},
+        {"ref": "note-book-cold-start", "section": "docs", "why": "Hard side, atomic network."},
+        {"ref": "notion-errandly-research", "section": "docs", "why": "Errandly's growth playbook."},
+        {"ref": "web-lenny-kickstart-marketplace", "section": "sites", "why": "Marketplace kickstart tactics."},
+        {"ref": "web-pg-do-things-that-dont-scale", "section": "sites", "why": "Doing the supply side by hand."}
+      ],
+      "acceptable": ["granola-2026-10-16-paper-check-in", "note-paper-outline-v2", "note-ui-synthesis", "web-a16z-cold-start-book", "web-nfx-network-effects-manual", "web-wiki-two-sided-market", "web-gurley-all-markets"],
+      "shouldNotSurface": [
+        {"ref": "web-wiki-chicken-or-egg", "why": "The philosophy dilemma, same phrase."},
+        {"ref": "web-apple-launch-time", "why": "Cold launch of an app."},
+        {"ref": "note-swiftui-launch", "why": "Cold launch of an app."},
+        {"ref": "web-wiki-multihoming-ip", "why": "IP multihoming."}
+      ],
+      "atMostOneOf": [["notion-swapshelf-roadmap", "note-swapshelf-roadmap-export"]]
+    },
+    {
+      "id": "case-pilot-plan",
+      "description": "Theo opens the pilot launch plan he wrote in Google Docs on Nov 2. Paul Graham's essay, read in another space on Sep 25 and never filed, should come back, because the plan is that essay put into practice.",
+      "context": {"kind": "doc", "ref": "gdoc-swapshelf-pilot-plan", "space": "swapshelf"},
+      "onScreen": [],
+      "must": [
+        {"ref": "web-pg-do-things-that-dont-scale", "section": "sites", "why": "Recruiting users by hand, going door to door, installing on the spot, hand-written thank-you notes, a deliberately narrow market and no big launch."},
+        {"ref": "granola-2026-10-29-swapshelf-sync", "section": "docs", "why": "The sync that assigned this doc and moved the pilot to Nov 9."},
+        {"ref": "note-swapshelf-pilot-metrics", "section": "docs", "why": "The metrics section of the plan in full."}
+      ],
+      "nice": [
+        {"ref": "note-coffee-nadia", "section": "docs", "why": "Job hunt space. Errandly's neighbourhood launches and why they kept the zone small."},
+        {"ref": "note-pickup-points", "section": "docs", "why": "Buttery shelves and the 1 in 20 missing-item rule."},
+        {"ref": "gsheet-swapshelf-waitlist", "section": "docs", "why": "Anchor listers and the pilot table."},
+        {"ref": "web-wiki-saybrook-college", "section": "sites", "why": "One of the two pilot colleges."},
+        {"ref": "web-pg-startup-ideas", "section": "sites", "why": "Same author, same period of the project."}
+      ],
+      "acceptable": ["notion-swapshelf-roadmap", "note-swapshelf-roadmap-export", "notion-swapshelf-spec", "note-ui-synthesis", "gslides-swapshelf-pitch", "note-paper-draft-s2", "web-apple-testflight", "web-wiki-branford-college", "web-wiki-yale-residential-colleges", "web-lenny-kickstart-marketplace"],
+      "shouldNotSurface": [
+        {"ref": "web-apple-launch-time", "why": "App launch time, not the pilot launch."},
+        {"ref": "note-swiftui-launch", "why": "App launch time, not the pilot launch."},
+        {"ref": "note-japan-flights", "why": "Shares travel words like book and leave, nothing more."}
+      ],
+      "atMostOneOf": [["notion-swapshelf-roadmap", "note-swapshelf-roadmap-export"]]
+    },
+    {
+      "id": "case-behavioral-stories",
+      "description": "Theo is drafting behavioral stories in Job hunt. The mock interview whose action items asked for these stories should come back. The trip call with a different Priya shouldn't.",
+      "context": {"kind": "note", "ref": "note-behavioral-stories", "space": "job-hunt"},
+      "onScreen": ["web-wiki-star-method"],
+      "must": [
+        {"ref": "granola-2026-10-22-mock-interview", "section": "docs", "why": "Action items: a metrics story from the pilot, and the conflict story with the stakes first."},
+        {"ref": "note-pickup-points", "section": "docs", "why": "Swapshelf space. The conflict story is this decision."}
+      ],
+      "nice": [
+        {"ref": "granola-2026-10-20-swapshelf-sync", "section": "docs", "why": "Where the 1 in 20 rule and the 4% headline both came from."},
+        {"ref": "note-swapshelf-pilot-metrics", "section": "docs", "why": "The one number, completed swaps per week."},
+        {"ref": "gsheet-swapshelf-waitlist", "section": "docs", "why": "The 4% to 11% landing page numbers."}
+      ],
+      "acceptable": ["notion-pm-prep-hub", "gdoc-application-answers", "gdoc-resume", "note-mapleframe-prep", "granola-2026-10-29-swapshelf-sync", "note-ui-synthesis"],
+      "shouldNotSurface": [
+        {"ref": "granola-2026-11-03-japan-call", "why": "Priya Kapoor, a different Priya."},
+        {"ref": "note-japanese-phrases", "why": "Mentions Priya Kapoor."},
+        {"ref": "note-tokyo-food", "why": "Mentions Priya Kapoor."}
+      ],
+      "atMostOneOf": []
+    },
+    {
+      "id": "case-japan-flights",
+      "description": "Theo is comparing flights to Tokyo. Trip material should come back. Apple's TestFlight shouldn't.",
+      "context": {"kind": "note", "ref": "note-japan-flights", "space": "personal"},
+      "onScreen": [],
+      "must": [
+        {"ref": "granola-2026-11-03-japan-call", "section": "docs", "why": "Flights decided on the call, Priya landing at Haneda an hour later."},
+        {"ref": "gsheet-japan-budget", "section": "docs", "why": "The ANA fare row."},
+        {"ref": "web-wiki-haneda", "section": "sites", "why": "Haneda vs Narita is half the note."}
+      ],
+      "nice": [
+        {"ref": "note-japan-overview", "section": "docs", "why": "Links here, same trip."},
+        {"ref": "gdoc-japan-itinerary", "section": "docs", "why": "Flight days on Jan 3 and Jan 14."},
+        {"ref": "web-wiki-ana", "section": "sites", "why": "The airline he's leaning towards."},
+        {"ref": "web-wiki-narita", "section": "sites", "why": "The other airport."}
+      ],
+      "acceptable": ["web-wiki-jal", "web-wiki-jfk", "note-packing", "web-wiki-tokyo"],
+      "shouldNotSurface": [
+        {"ref": "web-apple-testflight", "why": "TestFlight, not flights."},
+        {"ref": "gdoc-swapshelf-app-store-copy", "why": "Mentions TestFlight."}
+      ],
+      "atMostOneOf": []
+    },
+    {
+      "id": "case-tokyo-food",
+      "description": "Theo opens his Tokyo food list. A coffee chat from the job hunt is where the Fuunji tip came from, so it's a fair card even though nothing else about it is food.",
+      "context": {"kind": "note", "ref": "note-tokyo-food", "space": "personal"},
+      "onScreen": [],
+      "must": [
+        {"ref": "web-wiki-tsukemen", "section": "sites", "why": "Searched \"fuunji tsukemen shinjuku\" the evening of the coffee chat."}
+      ],
+      "nice": [
+        {"ref": "note-coffee-nadia", "section": "docs", "why": "Job hunt space. The Fuunji recommendation, and the note links to it."},
+        {"ref": "gdoc-japan-itinerary", "section": "docs", "why": "Fuunji before 11 on Jan 7, Tsukiji breakfast."},
+        {"ref": "web-wiki-tsukiji", "section": "sites", "why": "On the list."},
+        {"ref": "web-wiki-ramen", "section": "sites", "why": "On the list."}
+      ],
+      "acceptable": ["note-japan-overview", "note-kyoto-shortlist", "web-wiki-shinjuku", "web-wiki-nishiki-market", "granola-2026-11-03-japan-call"],
+      "shouldNotSurface": [
+        {"ref": "notion-errandly-research", "why": "Shares only the company name."},
+        {"ref": "note-paper-draft-s2", "why": "Nothing to do with food."}
+      ],
+      "atMostOneOf": []
+    },
+    {
+      "id": "case-hartley-meeting",
+      "description": "Theo reopens the Oct 16 check-in to see what he promised. The work that came out of it should come back, with only the newer outline.",
+      "context": {"kind": "meeting", "ref": "granola-2026-10-16-paper-check-in", "space": "school"},
+      "onScreen": [],
+      "must": [
+        {"ref": "note-paper-outline-v2", "section": "docs", "why": "The revised outline she asked for, with the narrowed thesis."},
+        {"ref": "note-multihoming-evidence", "section": "docs", "why": "Her multi-homing ask, started three days later."}
+      ],
+      "nice": [
+        {"ref": "note-paper-draft-s2", "section": "docs", "why": "Working through the action items."},
+        {"ref": "gdoc-paper-proposal", "section": "docs", "why": "Her comment on turnover that this meeting picks up."},
+        {"ref": "web-nber-uber-flexible-work", "section": "sites", "why": "The ride-hailing driver literature she pointed to."},
+        {"ref": "web-wiki-history-of-facebook", "section": "sites", "why": "Facebook and turnover come up first."}
+      ],
+      "acceptable": ["granola-2026-10-30-paper-peer-review", "note-swapshelf-pilot-metrics", "note-reading-rochet-tirole", "gdoc-paper-draft", "gdoc-seminar-syllabus", "web-wiki-two-sided-market"],
+      "shouldNotSurface": [
+        {"ref": "web-wiki-multihoming-ip", "why": "IP multihoming."},
+        {"ref": "web-wiki-market-liquidity", "why": "Financial liquidity."}
+      ],
+      "atMostOneOf": [["note-paper-outline-v2", "note-paper-outline"]]
+    },
+    {
+      "id": "case-two-sided-market-page",
+      "description": "Theo rereads Wikipedia's two-sided market article. His own reading notes on the theory should come back, along with the coffee chat that put it in practice.",
+      "context": {"kind": "web", "ref": "web-wiki-two-sided-market", "space": "school"},
+      "onScreen": [],
+      "must": [
+        {"ref": "note-reading-rochet-tirole", "section": "docs", "why": "Notes on the paper the article is built on."}
+      ],
+      "nice": [
+        {"ref": "note-reading-network-effects", "section": "docs", "why": "Cross-side network effects."},
+        {"ref": "note-paper-outline-v2", "section": "docs", "why": "The paper's theory section."},
+        {"ref": "note-coffee-nadia", "section": "docs", "why": "A two-sided market from the inside."},
+        {"ref": "web-hbr-two-sided-strategies", "section": "sites", "why": "Same topic."},
+        {"ref": "web-wiki-jean-tirole", "section": "sites", "why": "The economist behind the theory."}
+      ],
+      "acceptable": ["note-multihoming-evidence", "notion-errandly-research", "web-nobel-2014-popular", "web-nobel-tirole-facts", "web-wiki-network-effect", "web-wiki-platform-economy"],
+      "shouldNotSurface": [
+        {"ref": "web-wiki-multihoming-ip", "why": "Same word, different field."},
+        {"ref": "web-wiki-flow-network", "why": "Network flow."},
+        {"ref": "note-cpsc365-pset5", "why": "Network flow."}
+      ],
+      "atMostOneOf": [["web-wiki-network-effect", "web-wiki-network-effects-redirect"], ["note-paper-outline-v2", "note-paper-outline"]]
+    },
+    {
+      "id": "case-estimation-textbooks",
+      "description": "Interview practice in Job hunt about textbooks at Yale. The Swapshelf idea note from another space covers the same market.",
+      "context": {"kind": "note", "ref": "note-estimation-textbooks", "space": "job-hunt"},
+      "onScreen": [],
+      "must": [
+        {"ref": "note-swapshelf-idea", "section": "docs", "why": "Swapshelf space. The $160 textbook, GroupMe and the bookstore buyback."},
+        {"ref": "gslides-swapshelf-pitch", "section": "docs", "why": "Uses this estimate: about 2,600 books a term between students."}
+      ],
+      "nice": [
+        {"ref": "note-ui-daniel", "section": "docs", "why": "How a first-year actually got his four textbooks."},
+        {"ref": "web-wiki-textbook", "section": "sites", "why": "Textbook prices."},
+        {"ref": "web-wiki-fermi-problem", "section": "sites", "why": "Estimation method."}
+      ],
+      "acceptable": ["note-ui-synthesis", "notion-pm-prep-hub", "note-product-sense-lost-found", "web-wiki-yale-residential-colleges"],
+      "shouldNotSurface": [
+        {"ref": "note-cpsc365-pset5", "why": "Numbers and supply, nothing else."}
+      ],
+      "atMostOneOf": []
+    },
+    {
+      "id": "case-swiftui-launch",
+      "description": "The reverse of the cold start trap. Reading the app launch time note should bring back Apple's launch time docs and none of the paper's cold start material.",
+      "context": {"kind": "note", "ref": "note-swiftui-launch", "space": "swapshelf"},
+      "onScreen": [],
+      "must": [
+        {"ref": "web-apple-launch-time", "section": "sites", "why": "Apple's guide to cold and warm launch."}
+      ],
+      "nice": [
+        {"ref": "web-apple-swiftui-list", "section": "sites", "why": "The list performance half of the note."},
+        {"ref": "web-apple-swiftdata", "section": "sites", "why": "The cache he added."},
+        {"ref": "granola-2026-10-29-swapshelf-sync", "section": "docs", "why": "The sync where the launch fix was reported."}
+      ],
+      "acceptable": ["note-supabase-schema", "web-supabase-ios-quickstart", "web-hws-async-await", "web-apple-sf-symbols", "web-apple-hig-onboarding", "web-apple-testflight"],
+      "shouldNotSurface": [
+        {"ref": "note-paper-draft-s2", "why": "Marketplace cold start."},
+        {"ref": "note-book-cold-start", "why": "Marketplace cold start."},
+        {"ref": "web-andrewchen-cold-start-social", "why": "Marketplace cold start."},
+        {"ref": "web-a16z-cold-start-book", "why": "Marketplace cold start."},
+        {"ref": "web-nfx-chicken-or-egg-tactics", "why": "Marketplace cold start."}
+      ],
+      "atMostOneOf": []
+    },
+    {
+      "id": "case-quillstone",
+      "description": "Prep notes for a local-first notes company. The recruiter screen and the essays he read for it should come back.",
+      "context": {"kind": "note", "ref": "note-quillstone-notes", "space": "job-hunt"},
+      "onScreen": [],
+      "must": [
+        {"ref": "granola-2026-10-27-quillstone-screen", "section": "docs", "why": "The screen this note prepared for."},
+        {"ref": "web-inkandswitch-local-first", "section": "sites", "why": "The essay the note summarises."}
+      ],
+      "nice": [
+        {"ref": "web-wiki-crdt", "section": "sites", "why": "How Quillstone syncs."},
+        {"ref": "web-matuschak-evergreen-notes", "section": "sites", "why": "Named in the note."},
+        {"ref": "notion-reading-list", "section": "docs", "why": "Lists the local-first essay."}
+      ],
+      "acceptable": ["web-wiki-zettelkasten", "web-obsidian", "web-wiki-pkm", "gsheet-pm-tracker"],
+      "shouldNotSurface": [
+        {"ref": "note-supabase-schema", "why": "A different kind of sync and database."}
+      ],
+      "atMostOneOf": []
+    }
+  ]
+}
