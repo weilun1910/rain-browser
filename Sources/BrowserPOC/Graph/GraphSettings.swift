@@ -29,6 +29,12 @@ enum GraphTimeRange: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum GraphColorBy: String, Codable, CaseIterable, Identifiable {
+    case space, type
+    var id: String { rawValue }
+    var title: String { self == .space ? "Space" : "Kind" }
+}
+
 enum SiteGrouping: String, Codable, CaseIterable, Identifiable {
     case auto, always, never
     var id: String { rawValue }
@@ -56,6 +62,8 @@ struct GraphSettings: Codable, Equatable {
     // Groups
     var groups: [GraphGroup] = []
     // Display
+    /// Colour nodes by the space they belong to, or by what kind of thing they are.
+    var colorBy: GraphColorBy = .space
     var arrows = false
     /// 0 shows names early, 1 only when zoomed right in.
     var textFade: Double = 0.3
@@ -66,6 +74,8 @@ struct GraphSettings: Codable, Equatable {
     var repelForce: Double = 10
     var linkForce: Double = 1
     var linkDistance: Double = 40
+    /// How much each space keeps to its own region.
+    var spacePull: Double = 0.5
     // Local graph
     var localDepth = 1
     var localExpanded = true
@@ -94,6 +104,7 @@ struct GraphSettings: Codable, Equatable {
         spaceID = v(.spaceID, d.spaceID)
         siteGrouping = v(.siteGrouping, d.siteGrouping)
         groups = v(.groups, d.groups)
+        colorBy = v(.colorBy, d.colorBy)
         arrows = v(.arrows, d.arrows)
         textFade = v(.textFade, d.textFade)
         nodeSize = v(.nodeSize, d.nodeSize)
@@ -102,6 +113,7 @@ struct GraphSettings: Codable, Equatable {
         repelForce = v(.repelForce, d.repelForce)
         linkForce = v(.linkForce, d.linkForce)
         linkDistance = v(.linkDistance, d.linkDistance)
+        spacePull = v(.spacePull, d.spacePull)
         localDepth = v(.localDepth, d.localDepth)
         localExpanded = v(.localExpanded, d.localExpanded)
         localNeighbourLinks = v(.localNeighbourLinks, d.localNeighbourLinks)

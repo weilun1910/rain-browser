@@ -19,6 +19,9 @@ struct LayoutNode {
     var groupColor: SIMD4<Float>? = nil
     /// 0 to 1, the order this node joins the timelapse.
     var appear: Float = 0
+    /// The space this belongs to: from where it's open, pinned or filed, its notes folder, or
+    /// failing that, the space most of its connections are in.
+    var space: Int? = nil
 }
 
 /// A line as drawn. Several kinds of connection between the same two nodes share one line,
@@ -44,6 +47,8 @@ struct GraphLayout {
     var depth: [Int] = []
     var hiddenBySiteGroups = 0
     var indexByID: [String: Int] = [:]
+    /// Space colours, by the index in `LayoutNode.space`.
+    var spaceColors: [String] = []
 
     var isEmpty: Bool { nodes.isEmpty }
 
@@ -135,6 +140,12 @@ struct GraphBuildContext {
     var expandedSites: Set<String> = []
     var now = Date()
     var isLocal = false
+    /// Space colours, by index.
+    var spaceColors: [String] = []
+    /// Items open, pinned or filed in a space, by key.
+    var spaceOfKey: [String: Int] = [:]
+    /// Each space's notes folder, as a path ending in "/".
+    var spaceFolders: [(path: String, space: Int)] = []
 }
 
 /// Turns a snapshot plus settings into what gets drawn. Pure, so it runs off the main thread.
@@ -175,6 +186,49 @@ enum GraphBuilder {
         if q.words.isEmpty { return true }
         let hay = TextAnalysis.fold(Substring(n.title + " " + n.url + " " + (n.project ?? "")))
         return q.words.allSatisfy { hay.contains($0) }
+    }
+
+    /// Which space each node belongs to. Items open, pinned or filed in a space, and notes in a
+    /// space's notes folder, belong to it outright. Everything else takes the space most of its
+    /// connections are in, a few rounds out, if at least half of them agree.
+    static func assignSpaces(_ layout: inout GraphLayout, _ snap: GraphSnapshot, _ ctx: GraphBuildContext) {
+        layout.spaceColors = ctx.spaceColors
+        guard !ctx.spaceColors.isEmpty else { return }
+        func direct(_ n: GraphNode) -> Int? {
+            if let s = ctx.spaceOfKey[n.key] { return s }
+            if n.kind == .note, let path = URL(string: n.url)?.standardizedFileURL.path {
+                return ctx.spaceFolders.first { path.hasPrefix($0.path) }?.space
+            }
+            return nil
+        }
+        for i in layout.nodes.indices {
+            var votes: [Int: Int] = [:]
+            for m in layout.nodes[i].members { if let s = direct(snap.nodes[m]) { votes[s, default: 0] += 1 } }
+            layout.nodes[i].space = votes.max { $0.value < $1.value }?.key
+        }
+        let weight: [GraphEdgeType: Double] = [.link: 1, .research: 1, .navigation: 1, .together: 1, .similar: 0.7, .topic: 0.3]
+        for _ in 0..<8 {
+            var changed = false
+            var next = layout.nodes.map(\.space)
+            for i in layout.nodes.indices where layout.nodes[i].space == nil && layout.nodes[i].kind != .topic {
+                var votes: [Int: Double] = [:]
+                var total = 0.0, placed = 0.0
+                for e in layout.adjacency[i] {
+                    let edge = layout.edges[e]
+                    let o = edge.a == i ? edge.b : edge.a
+                    let w = weight[edge.type] ?? 0.5
+                    total += w
+                    if let s = layout.nodes[o].space { votes[s, default: 0] += w; placed += w }
+                }
+                // Most of the neighbours that have a space agree, and they're a fair share of all of them.
+                if let best = votes.max(by: { $0.value < $1.value }), placed > 0, best.value / placed >= 0.6, placed / total >= 0.25 {
+                    next[i] = best.key
+                    changed = true
+                }
+            }
+            for i in layout.nodes.indices { layout.nodes[i].space = next[i] }
+            if !changed { break }
+        }
     }
 
     static func build(_ snap: GraphSnapshot, _ s: GraphSettings, _ ctx: GraphBuildContext) -> GraphLayout {
@@ -361,6 +415,8 @@ enum GraphBuilder {
         let byTime = layout.nodes.indices.sorted { layout.nodes[$0].firstSeen < layout.nodes[$1].firstSeen }
         let denom = Float(max(1, byTime.count - 1))
         for (rank, i) in byTime.enumerated() { layout.nodes[i].appear = Float(rank) / denom }
+
+        assignSpaces(&layout, snap, ctx)
 
         if let c = center { layout.center = nodeOf[c] >= 0 ? nodeOf[c] : nil }
         layout.depth = layout.nodes.map { n in n.members.map { depth[$0] }.filter { $0 >= 0 }.min() ?? -1 }

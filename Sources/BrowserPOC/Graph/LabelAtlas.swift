@@ -24,7 +24,7 @@ final class LabelAtlas {
     private let maxWidth: CGFloat
     /// New names drawn this frame. Capped so a big zoom-in doesn't stall one frame.
     private var drawnThisFrame = 0
-    static let perFrameBudget = 80
+    static let perFrameBudget = 16
 
     init?(device: MTLDevice, side: Int = 2048, pixelRatio: CGFloat, fontSize: CGFloat, maxWidth: CGFloat) {
         let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r8Unorm, width: side, height: side, mipmapped: false)
