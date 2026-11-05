@@ -64,14 +64,7 @@ enum ItemDrag {
 extension View {
     /// Rounded card for a page or note pane. A split's focused pane gets a quiet ring.
     func paneCard(focusRing: Bool = false) -> some View {
-        self
-            .background(Color(nsColor: .textBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .strokeBorder(focusRing ? Color.accentColor.opacity(0.55) : Color.primary.opacity(0.08), lineWidth: focusRing ? 1.5 : 1)
-            )
-            .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+        contentCard(focused: focusRing)
     }
 }
 
@@ -135,7 +128,7 @@ struct SplitBranch: View {
     @EnvironmentObject var model: BrowserModel
     @State private var dragStart: [Double]?
 
-    static let gap: CGFloat = 8
+    static let gap: CGFloat = Theme.Space.windowMargin
     static let minPane: CGFloat = 220
 
     var body: some View {
@@ -180,7 +173,9 @@ struct SplitBranch: View {
                     }
             )
             .simultaneousGesture(TapGesture(count: 2).onEnded {
-                model.setSplitSizes(Array(repeating: 1.0 / Double(kids.count), count: kids.count), at: path, in: split.id, save: true)
+                Motion.run(Motion.split) {
+                    model.setSplitSizes(Array(repeating: 1.0 / Double(kids.count), count: kids.count), at: path, in: split.id, save: true)
+                }
             })
             .help("Drag to resize. Double-click to even out.")
     }
@@ -199,9 +194,14 @@ struct PaneLeaf: View {
             .paneCard(focusRing: split.focused == id)
             .background(PaneClickCatcher { model.focusPane(item: id) })
             .overlay(alignment: .top) {
-                if hovering, let tab { PaneControls(split: split, tab: tab).padding(.top, 6).transition(.opacity) }
+                if hovering, let tab {
+                    PaneControls(split: split, tab: tab).padding(.top, Theme.Space.s)
+                        .transition(.opacity.combined(with: .offset(y: Motion.reduceMotion ? 0 : -3)))
+                }
             }
-            .onHover { h in withAnimation(.easeOut(duration: 0.12)) { hovering = h } }
+            .onHover { h in Motion.run(Motion.hover, fadeOnly: true) { hovering = h } }
+            // A pane joining a split eases in instead of popping.
+            .appearEffect(scale: 0.985, y: 0, animation: Motion.split)
             .background(GeometryReader { g in Color.clear.preference(key: PaneFramesKey.self, value: [id: g.frame(in: .named("content"))]) })
     }
 }
@@ -214,10 +214,10 @@ struct PaneControls: View {
     @EnvironmentObject var model: BrowserModel
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 0) {
             Image(systemName: "line.3.horizontal")
                 .font(.system(size: 10, weight: .semibold))
-                .frame(width: 22, height: 18)
+                .frame(width: 24, height: 22)
                 .contentShape(Rectangle())
                 .onDrag { ItemDrag.provider(tab.id) }
                 .help("Drag to another pane's edge to move this pane")
@@ -230,10 +230,9 @@ struct PaneControls: View {
             }
         }
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 4)
-        .padding(.vertical, 2)
-        .background(Capsule().fill(.regularMaterial))
-        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.1)))
+        .padding(.horizontal, 2)
+        .padding(.vertical, 1)
+        .floatingSurface(radius: Theme.Radius.row)
     }
 }
 
@@ -242,11 +241,7 @@ struct PaneControlButton: View {
     let help: String
     let action: () -> Void
     var body: some View {
-        Button(action: action) {
-            Image(systemName: symbol).font(.system(size: 10, weight: .semibold)).frame(width: 22, height: 18).contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(help)
+        IconButton(symbol: symbol, help: help, width: 24, height: 22, symbolSize: 10, action: action)
     }
 }
 
@@ -334,7 +329,7 @@ struct SplitRow: View {
     var body: some View {
         HStack(spacing: 0) {
             ForEach(Array(split.items.enumerated()), id: \.element) { i, id in
-                if i > 0 { Rectangle().fill(Color.primary.opacity(0.15)).frame(width: 1, height: 16) }
+                if i > 0 { Rectangle().fill(Theme.Palette.hairline).frame(width: 1, height: 16) }
                 SplitHalf(tab: model.tab(id), focused: selected && split.focused == id, compact: split.count > 2, showClose: hovering) {
                     if let t = model.tab(id) { model.selectSplit(split, focusItem: id); model.focusPane(item: t.id); model.closeCurrent() }
                 }
@@ -342,7 +337,7 @@ struct SplitRow: View {
                 .onTapGesture { model.selectSplit(split, focusItem: id) }
             }
         }
-        .frame(height: 28)
+        .frame(height: Theme.Space.rowHeight)
         .modifier(RowBackground(selected: selected, hovering: hovering, multi: split.items.allSatisfy { model.multiSelection.contains($0) }))
         .contentShape(Rectangle())
         .simultaneousGesture(TapGesture().modifiers(.option).onEnded { model.separate(split) })
@@ -361,20 +356,22 @@ struct SplitHalf: View {
     let close: () -> Void
 
     var body: some View {
-        HStack(spacing: 5) {
-            ItemIcon(tab: tab, size: 12)
+        HStack(spacing: Theme.Space.s) {
+            ItemIcon(tab: tab, size: 14)
             if !compact || focused {
                 Text(tab?.displayTitle ?? "")
-                    .font(.system(size: 12, weight: focused ? .medium : .regular))
+                    .font(focused ? Theme.Font.rowEmphasis : Theme.Font.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
-            if showClose && !compact {
-                Button(action: close) { Image(systemName: "xmark").font(.system(size: 8, weight: .semibold)).frame(width: 14, height: 14) }
-                    .buttonStyle(.plain).foregroundStyle(.secondary).help("Close this pane")
+            if !compact {
+                IconButton(symbol: "xmark", help: "Close this pane", width: 16, height: 16, symbolSize: 8, action: close)
+                    .opacity(showClose ? 1 : 0)
+                    .allowsHitTesting(showClose)
+                    .motion(Motion.hover, value: showClose, fadeOnly: true)
             }
         }
-        .padding(.horizontal, 7)
+        .padding(.horizontal, Theme.Space.s)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
