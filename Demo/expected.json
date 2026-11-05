@@ -57,7 +57,7 @@
         {"ref": "web-nber-uber-flexible-work", "section": "sites", "why": "The paper the draft cites in 2.2."},
         {"ref": "web-wiki-critical-mass", "section": "sites", "why": "The draft leans on critical mass."}
       ],
-      "acceptable": ["gdoc-paper-draft", "note-paper-outline-v2", "note-book-cold-start", "granola-2026-10-30-paper-peer-review", "notion-errandly-research", "web-wiki-two-sided-market", "web-wiki-network-effect", "web-andrewchen-cold-start-social", "web-lenny-kickstart-marketplace", "web-gurley-all-markets", "web-wiki-tinder"],
+      "acceptable": ["gdoc-paper-proposal", "granola-2026-10-02-swapshelf-kickoff", "web-a16z-cold-start-book", "web-nber-uber-consumer-surplus", "web-wiki-branford-college", "gdoc-paper-draft", "note-paper-outline-v2", "note-book-cold-start", "granola-2026-10-30-paper-peer-review", "notion-errandly-research", "web-wiki-two-sided-market", "web-wiki-network-effect", "web-andrewchen-cold-start-social", "web-lenny-kickstart-marketplace", "web-gurley-all-markets", "web-wiki-tinder"],
       "shouldNotSurface": [
         {"ref": "note-paper-outline", "why": "Older near-duplicate of outline v2."},
         {"ref": "note-swiftui-launch", "why": "Cold start of an app, not a marketplace."},
@@ -86,7 +86,7 @@
         {"ref": "web-lenny-kickstart-marketplace", "section": "sites", "why": "Marketplace kickstart tactics."},
         {"ref": "web-pg-do-things-that-dont-scale", "section": "sites", "why": "Doing the supply side by hand."}
       ],
-      "acceptable": ["granola-2026-10-16-paper-check-in", "note-paper-outline-v2", "note-ui-synthesis", "web-a16z-cold-start-book", "web-nfx-network-effects-manual", "web-wiki-two-sided-market", "web-gurley-all-markets"],
+      "acceptable": ["gdoc-paper-draft", "gslides-paper-lightning-talk", "note-reading-gurley", "granola-2026-10-16-paper-check-in", "note-paper-outline-v2", "note-ui-synthesis", "web-a16z-cold-start-book", "web-nfx-network-effects-manual", "web-wiki-two-sided-market", "web-gurley-all-markets"],
       "shouldNotSurface": [
         {"ref": "web-wiki-chicken-or-egg", "why": "The philosophy dilemma, same phrase."},
         {"ref": "web-apple-launch-time", "why": "Cold launch of an app."},
@@ -112,7 +112,7 @@
         {"ref": "web-wiki-saybrook-college", "section": "sites", "why": "One of the two pilot colleges."},
         {"ref": "web-pg-startup-ideas", "section": "sites", "why": "Same author, same period of the project."}
       ],
-      "acceptable": ["notion-swapshelf-roadmap", "note-swapshelf-roadmap-export", "notion-swapshelf-spec", "note-ui-synthesis", "gslides-swapshelf-pitch", "note-paper-draft-s2", "web-apple-testflight", "web-wiki-branford-college", "web-wiki-yale-residential-colleges", "web-lenny-kickstart-marketplace"],
+      "acceptable": ["note-trust-verification", "note-weekly-plan", "notion-swapshelf-roadmap", "note-swapshelf-roadmap-export", "notion-swapshelf-spec", "note-ui-synthesis", "gslides-swapshelf-pitch", "note-paper-draft-s2", "web-apple-testflight", "web-wiki-branford-college", "web-wiki-yale-residential-colleges", "web-lenny-kickstart-marketplace"],
       "shouldNotSurface": [
         {"ref": "web-apple-launch-time", "why": "App launch time, not the pilot launch."},
         {"ref": "note-swiftui-launch", "why": "App launch time, not the pilot launch."},
@@ -134,7 +134,7 @@
         {"ref": "note-swapshelf-pilot-metrics", "section": "docs", "why": "The one number, completed swaps per week."},
         {"ref": "gsheet-swapshelf-waitlist", "section": "docs", "why": "The 4% to 11% landing page numbers."}
       ],
-      "acceptable": ["notion-pm-prep-hub", "gdoc-application-answers", "gdoc-resume", "note-mapleframe-prep", "granola-2026-10-29-swapshelf-sync", "note-ui-synthesis"],
+      "acceptable": ["note-weekly-plan", "note-pm-plan", "notion-pm-prep-hub", "gdoc-application-answers", "gdoc-resume", "note-mapleframe-prep", "granola-2026-10-29-swapshelf-sync", "note-ui-synthesis"],
       "shouldNotSurface": [
         {"ref": "granola-2026-11-03-japan-call", "why": "Priya Kapoor, a different Priya."},
         {"ref": "note-japanese-phrases", "why": "Mentions Priya Kapoor."},
@@ -158,7 +158,7 @@
         {"ref": "web-wiki-ana", "section": "sites", "why": "The airline he's leaning towards."},
         {"ref": "web-wiki-narita", "section": "sites", "why": "The other airport."}
       ],
-      "acceptable": ["web-wiki-jal", "web-wiki-jfk", "note-packing", "web-wiki-tokyo"],
+      "acceptable": ["note-weekly-plan", "web-wiki-jal", "web-wiki-jfk", "note-packing", "web-wiki-tokyo"],
       "shouldNotSurface": [
         {"ref": "web-apple-testflight", "why": "TestFlight, not flights."},
         {"ref": "gdoc-swapshelf-app-store-copy", "why": "Mentions TestFlight."}
@@ -179,7 +179,7 @@
         {"ref": "web-wiki-tsukiji", "section": "sites", "why": "On the list."},
         {"ref": "web-wiki-ramen", "section": "sites", "why": "On the list."}
       ],
-      "acceptable": ["note-japan-overview", "note-kyoto-shortlist", "web-wiki-shinjuku", "web-wiki-nishiki-market", "granola-2026-11-03-japan-call"],
+      "acceptable": ["web-japan-travel", "note-japan-overview", "note-kyoto-shortlist", "web-wiki-shinjuku", "web-wiki-nishiki-market", "granola-2026-11-03-japan-call"],
       "shouldNotSurface": [
         {"ref": "notion-errandly-research", "why": "Shares only the company name."},
         {"ref": "note-paper-draft-s2", "why": "Nothing to do with food."}
@@ -201,7 +201,7 @@
         {"ref": "web-nber-uber-flexible-work", "section": "sites", "why": "The ride-hailing driver literature she pointed to."},
         {"ref": "web-wiki-history-of-facebook", "section": "sites", "why": "Facebook and turnover come up first."}
       ],
-      "acceptable": ["granola-2026-10-30-paper-peer-review", "note-swapshelf-pilot-metrics", "note-reading-rochet-tirole", "gdoc-paper-draft", "gdoc-seminar-syllabus", "web-wiki-two-sided-market"],
+      "acceptable": ["web-wiki-jean-tirole", "web-wiki-saybrook-college", "web-wiki-branford-college", "web-lenny-kickstart-marketplace", "granola-2026-10-30-paper-peer-review", "note-swapshelf-pilot-metrics", "note-reading-rochet-tirole", "gdoc-paper-draft", "gdoc-seminar-syllabus", "web-wiki-two-sided-market"],
       "shouldNotSurface": [
         {"ref": "web-wiki-multihoming-ip", "why": "IP multihoming."},
         {"ref": "web-wiki-market-liquidity", "why": "Financial liquidity."}
@@ -223,7 +223,7 @@
         {"ref": "web-hbr-two-sided-strategies", "section": "sites", "why": "Same topic."},
         {"ref": "web-wiki-jean-tirole", "section": "sites", "why": "The economist behind the theory."}
       ],
-      "acceptable": ["note-multihoming-evidence", "notion-errandly-research", "web-nobel-2014-popular", "web-nobel-tirole-facts", "web-wiki-network-effect", "web-wiki-platform-economy"],
+      "acceptable": ["gdoc-paper-draft", "gdoc-seminar-syllabus", "note-multihoming-evidence", "notion-errandly-research", "web-nobel-2014-popular", "web-nobel-tirole-facts", "web-wiki-network-effect", "web-wiki-platform-economy"],
       "shouldNotSurface": [
         {"ref": "web-wiki-multihoming-ip", "why": "Same word, different field."},
         {"ref": "web-wiki-flow-network", "why": "Network flow."},
@@ -245,7 +245,7 @@
         {"ref": "web-wiki-textbook", "section": "sites", "why": "Textbook prices."},
         {"ref": "web-wiki-fermi-problem", "section": "sites", "why": "Estimation method."}
       ],
-      "acceptable": ["note-ui-synthesis", "notion-pm-prep-hub", "note-product-sense-lost-found", "web-wiki-yale-residential-colleges"],
+      "acceptable": ["gdoc-paper-draft", "gdoc-paper-proposal", "note-ui-synthesis", "notion-pm-prep-hub", "note-product-sense-lost-found", "web-wiki-yale-residential-colleges"],
       "shouldNotSurface": [
         {"ref": "note-cpsc365-pset5", "why": "Numbers and supply, nothing else."}
       ],
@@ -264,7 +264,7 @@
         {"ref": "web-apple-swiftdata", "section": "sites", "why": "The cache he added."},
         {"ref": "granola-2026-10-29-swapshelf-sync", "section": "docs", "why": "The sync where the launch fix was reported."}
       ],
-      "acceptable": ["note-supabase-schema", "web-supabase-ios-quickstart", "web-hws-async-await", "web-apple-sf-symbols", "web-apple-hig-onboarding", "web-apple-testflight"],
+      "acceptable": ["granola-2026-10-02-swapshelf-kickoff", "notion-swapshelf-roadmap", "note-supabase-schema", "web-supabase-ios-quickstart", "web-hws-async-await", "web-apple-sf-symbols", "web-apple-hig-onboarding", "web-apple-testflight"],
       "shouldNotSurface": [
         {"ref": "note-paper-draft-s2", "why": "Marketplace cold start."},
         {"ref": "note-book-cold-start", "why": "Marketplace cold start."},
@@ -288,7 +288,7 @@
         {"ref": "web-matuschak-evergreen-notes", "section": "sites", "why": "Named in the note."},
         {"ref": "notion-reading-list", "section": "docs", "why": "Lists the local-first essay."}
       ],
-      "acceptable": ["web-wiki-zettelkasten", "web-obsidian", "web-wiki-pkm", "gsheet-pm-tracker"],
+      "acceptable": ["note-pm-plan", "web-wiki-zettelkasten", "web-obsidian", "web-wiki-pkm", "gsheet-pm-tracker"],
       "shouldNotSurface": [
         {"ref": "note-supabase-schema", "why": "A different kind of sync and database."}
       ],

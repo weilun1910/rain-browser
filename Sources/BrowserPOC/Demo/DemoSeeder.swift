@@ -440,6 +440,7 @@ enum DemoFetch {
     }
 
     static func one(_ u: URL, _ session: URLSession) async -> Page? {
+        if let p = await appleDocs(u, session) { return p }
         var req = URLRequest(url: u)
         req.httpShouldHandleCookies = false
         req.timeoutInterval = 15
@@ -449,5 +450,44 @@ enum DemoFetch {
         let e = HTMLText.extract(html)
         if HTMLText.isLoginWall(e) || e.text.count < 200 { return nil }
         return Page(title: e.title, description: e.description, text: e.text)
+    }
+
+    /// Apple's documentation pages draw their text with JavaScript, so a plain fetch gets only the
+    /// summary. The page itself loads the same content as public JSON, which this reads instead,
+    /// so the index has what the browser would have captured from the rendered page.
+    static func appleDocs(_ u: URL, _ session: URLSession) async -> Page? {
+        guard u.host == "developer.apple.com", u.path.hasPrefix("/documentation/") || u.path.hasPrefix("/design/"),
+              let json = URL(string: "https://developer.apple.com/tutorials/data" + u.path.replacingOccurrences(of: "/$", with: "", options: .regularExpression) + ".json")
+        else { return nil }
+        var req = URLRequest(url: json)
+        req.httpShouldHandleCookies = false
+        req.timeoutInterval = 15
+        guard let (data, resp) = try? await session.data(for: req), (resp as? HTTPURLResponse)?.statusCode == 200,
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        var lines: [String] = []
+        var line = ""
+        let blocks: Set<String> = ["paragraph", "heading", "aside", "unorderedList", "orderedList", "termList", "table"]
+        func walk(_ v: Any) {
+            if let d = v as? [String: Any] {
+                let type = d["type"] as? String ?? ""
+                if type == "codeListing" { return }
+                if type == "heading", let t = d["text"] as? String { lines.append(t); return }
+                if type == "text", let t = d["text"] as? String { line += t; return }
+                if type == "codeVoice", let t = d["code"] as? String { line += t; return }
+                for k in ["abstract", "content", "inlineContent", "items", "rows"] { if let x = d[k] { walk(x) } }
+                if blocks.contains(type), !line.isEmpty { lines.append(line); line = "" }
+            } else if let a = v as? [Any] {
+                for x in a { walk(x) }
+            }
+        }
+        walk(root["abstract"] ?? [])
+        if !line.isEmpty { lines.append(line); line = "" }
+        let summary = lines.joined(separator: " ")
+        walk(root["primaryContentSections"] ?? [])
+        if !line.isEmpty { lines.append(line) }
+        let text = lines.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: "\n")
+        guard text.count >= 200 else { return nil }
+        let title = (root["metadata"] as? [String: Any])?["title"] as? String ?? ""
+        return Page(title: title, description: summary, text: text)
     }
 }
