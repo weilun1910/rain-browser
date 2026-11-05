@@ -323,8 +323,9 @@ struct SplitRow: View {
     let split: SplitRecord
     @EnvironmentObject var model: BrowserModel
     @State private var hovering = false
+    @Environment(\.pageSelection) private var pageSelection
 
-    var selected: Bool { model.currentSplit?.id == split.id }
+    var selected: Bool { model.currentSplit?.id == split.id || pageSelection == .split(split.id) }
 
     var body: some View {
         HStack(spacing: 0) {

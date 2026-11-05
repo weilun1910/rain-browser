@@ -43,7 +43,8 @@ struct MainView: View {
             if right { sidebarSlot } else { panel(leading: false) }
         }
         // The frame: neutral grey with the space's colour on the sidebar's side, fading across.
-        .background(SpaceTintBackground(hex: model.currentSpace?.color,
+        // It follows the sidebar's space strip, so a swipe carries the colour with it.
+        .background(StripTintBackground(strip: SpaceStrip.of(model),
                                         sidebarWidth: hidden ? 0 : Self.sidebarWidth, fromTrailing: right))
         .overlay(alignment: right ? .trailing : .leading) { compactSidebar }
         .overlay {

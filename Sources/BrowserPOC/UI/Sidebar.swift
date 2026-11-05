@@ -6,44 +6,26 @@ struct LeftSidebar: View {
     @ObservedObject var settings = Settings.shared
 
     @State private var addressHover = false
-    @State private var spaceSteps = StepTracker()
 
     var body: some View {
-        // Which way the list slides when the space changes.
-        let step = spaceSteps.step(for: model.spaces.firstIndex { $0.id == model.currentSpaceID })
+        let strip = SpaceStrip.of(model)
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             topBar
             addressField
             EssentialsGrid()
-            ZStack(alignment: .leading) {
-                SpaceHeader()
-                    .id(model.currentSpaceID)
-                    .transition(Motion.Transitions.spaceSlide(step))
+            // One page per space, side by side. A swipe drags them under the fingers, and clicks
+            // and shortcuts slide them. Essentials, the address and the bottom bar stay still,
+            // the way Arc keeps its Favorites still. Pages run to the sidebar's edges.
+            SpacePager(strip: strip) { id in
+                SpacePage(spaceID: id)
+                    .padding(.horizontal, Theme.Space.sidebarInset)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .clipped()
-            ScrollView {
-                // The list is keyed by space, so moving between spaces slides the new list in.
-                ZStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: Theme.Space.sectionGap) {
-                        pinnedSection
-                        foldersSection
-                        tabsSection
-                    }
-                    .padding(.bottom, Theme.Space.l)
-                    // A folder opening or closing moves everything below it on the same spring.
-                    .motion(Motion.expand, value: model.spaceFolders.map { $0.isExpanded })
-                    .id(model.currentSpaceID)
-                    .transition(Motion.Transitions.spaceSlide(step))
-                }
-            }
-            .scrollIndicators(.never)
+            .padding(.horizontal, -Theme.Space.sidebarInset)
             MediaBar()
             bottomBar
         }
-        .motion(Motion.spaceSwitch, value: model.currentSpaceID)
         .padding(.horizontal, Theme.Space.sidebarInset)
-        .background(SpaceSwipeCatcher { step in model.switchSpace(by: step) })
+        .background(SpaceSwipeTracker(model: model))
     }
 
     // MARK: Top
@@ -93,10 +75,60 @@ struct LeftSidebar: View {
         .help(model.addressText)
     }
 
+    private var bottomBar: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            if let msg = model.flashMessage {
+                Text(msg)
+                    .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .padding(.horizontal, Theme.Space.rowInset)
+                    .transition(.opacity)
+            }
+            HStack(spacing: 2) {
+                SmallIconButton(symbol: "gearshape", help: "Settings") { AppDelegate.shared?.openSettings() }
+                SmallIconButton(symbol: "clock", help: "History (Cmd-Y)") { model.openAppPage("history") }
+                SmallIconButton(symbol: GraphTab.icon, help: "Graph (Cmd-Option-G)") { model.openGraph() }
+                DownloadsButton()
+                Spacer(minLength: Theme.Space.m)
+                SpaceBar()
+            }
+            .frame(height: 32)
+        }
+        .motion(Motion.hover, value: model.flashMessage, fadeOnly: true)
+        .padding(.bottom, Theme.Space.m)
+    }
+}
+
+/// One space's page in the sidebar's strip: its name, pins, folders and tabs. Only the current
+/// space's page takes clicks and drops. The others show while the strip moves.
+struct SpacePage: View {
+    let spaceID: UUID
+    @EnvironmentObject var model: BrowserModel
+
+    var isCurrent: Bool { model.currentSpaceID == spaceID }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            SpaceHeader(spaceID: spaceID)
+            ScrollView {
+                VStack(alignment: .leading, spacing: Theme.Space.sectionGap) {
+                    pinnedSection
+                    foldersSection
+                    tabsSection
+                }
+                .padding(.bottom, Theme.Space.l)
+                // A folder opening or closing moves everything below it on the same spring.
+                .motion(Motion.expand, value: model.folders(in: spaceID).map { $0.isExpanded })
+            }
+            .scrollIndicators(.never)
+        }
+        .environment(\.pageSelection, isCurrent ? nil : model.rememberedSelection(of: spaceID))
+        .allowsHitTesting(isCurrent)
+    }
+
     // MARK: Sections
 
     private var pinnedSection: some View {
-        let rows = model.refs(in: .pinned)
+        let rows = model.refs(in: .pinned, space: spaceID)
         // Like Zen, pins sit under the space's name with no label, and a hairline closes them off.
         return SectionBox(title: rows.isEmpty ? "Pinned" : "", onDropItems: { items in model.place(items.compactMap(\.sidebarRef), in: .pinned, at: Int.max) }) {
             if rows.isEmpty {
@@ -112,7 +144,7 @@ struct LeftSidebar: View {
 
     private var foldersSection: some View {
         SectionBox(title: "Folders", trailing: AnyView(SmallIconButton(symbol: "plus", help: "New folder") { model.promptNewFolder() })) {
-            ForEach(model.spaceFolders) { f in
+            ForEach(model.folders(in: spaceID)) { f in
                 FolderRow(folder: f)
                 FolderReveal(isOpen: f.isExpanded) {
                     VStack(spacing: Theme.Space.rowGap) {
@@ -139,11 +171,11 @@ struct LeftSidebar: View {
                 }
             }
         }
-        .motion(Motion.insert, value: model.spaceFolders.map { model.refs(in: .folder($0.id)) })
+        .motion(Motion.insert, value: model.folders(in: spaceID).map { model.refs(in: .folder($0.id)) })
     }
 
     private var tabsSection: some View {
-        let rows = model.refs(in: .today)
+        let rows = model.refs(in: .today, space: spaceID)
         let trailing = HStack(spacing: 2) {
             if !rows.isEmpty {
                 Button("Clear") { _ = model.clearToday() }
@@ -161,33 +193,12 @@ struct LeftSidebar: View {
                     Spacer(minLength: 0)
                 }
             }
-            .buttonStyle(SidebarActionRowStyle(selected: model.bar.isOpen && model.bar.mode == .newTab))
+            .buttonStyle(SidebarActionRowStyle(selected: isCurrent && model.bar.isOpen && model.bar.mode == .newTab))
             ForEach(rows, id: \.self) { SidebarRow(ref: $0).transition(Motion.Transitions.tabRow) }
         }
         .motion(Motion.insert, value: rows)
     }
 
-    private var bottomBar: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            if let msg = model.flashMessage {
-                Text(msg)
-                    .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
-                    .padding(.horizontal, Theme.Space.rowInset)
-                    .transition(.opacity)
-            }
-            HStack(spacing: 2) {
-                SmallIconButton(symbol: "gearshape", help: "Settings") { AppDelegate.shared?.openSettings() }
-                SmallIconButton(symbol: "clock", help: "History (Cmd-Y)") { model.openAppPage("history") }
-                SmallIconButton(symbol: GraphTab.icon, help: "Graph (Cmd-Option-G)") { model.openGraph() }
-                DownloadsButton()
-                Spacer(minLength: Theme.Space.m)
-                SpaceBar()
-            }
-            .frame(height: 32)
-        }
-        .motion(Motion.hover, value: model.flashMessage, fadeOnly: true)
-        .padding(.bottom, Theme.Space.m)
-    }
 }
 
 extension DragItem {
@@ -202,11 +213,12 @@ extension DragItem {
 
 /// The space's name above its pins. Dropping a tab here with no Essentials yet starts the grid.
 struct SpaceHeader: View {
+    var spaceID: UUID?
     @EnvironmentObject var model: BrowserModel
     @State private var targeted = false
 
     var body: some View {
-        if let sp = model.currentSpace {
+        if let sp = spaceID.flatMap({ id in model.spaces.first { $0.id == id } }) ?? model.currentSpace {
             HStack(spacing: Theme.Space.s) {
                 SpaceIcon(icon: sp.icon, size: 11).foregroundStyle(Theme.Palette.accent(sp.color))
                 Text(targeted && model.essentials.isEmpty ? "Add to Essentials" : sp.name)
@@ -466,6 +478,7 @@ struct TabRow: View {
     @EnvironmentObject var model: BrowserModel
     @State private var hovering = false
     @Environment(\.spaceAccent) private var spaceAccent
+    @Environment(\.pageSelection) private var pageSelection
 
     var body: some View {
         HStack(spacing: Theme.Space.rowIconGap) {
@@ -525,7 +538,7 @@ struct TabRow: View {
         .padding(.leading, Theme.Space.rowInset)
         .padding(.trailing, Theme.Space.xs)
         .frame(height: Theme.Space.rowHeight)
-        .modifier(RowBackground(selected: model.isSelected(tab) || splitting, hovering: hovering, multi: model.multiSelection.contains(tab.id)))
+        .modifier(RowBackground(selected: model.isSelected(tab) || splitting || pageSelection == .tab(tab.id), hovering: hovering, multi: model.multiSelection.contains(tab.id)))
         .contentShape(Rectangle())
         .onTapGesture { click() }
         .simultaneousGesture(TapGesture(count: 2).onEnded {

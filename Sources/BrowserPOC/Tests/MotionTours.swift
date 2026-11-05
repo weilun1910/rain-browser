@@ -42,15 +42,50 @@ enum MotionTours {
 
     static func spaces(_ s: MotionTour.Steps, _ m: BrowserModel) {
         s.step(2.8, "start on the first space") { m.switchSpace(index: 0) }
-        s.step(1.2, "next") { m.switchSpace(by: 1) }
-        s.step(1.2, "back") { m.switchSpace(by: -1) }
-        s.step(1.2, "next again") { m.switchSpace(by: 1) }
+        // Swipes, made of the same events a trackpad sends, 120 a second, fed to the sidebar's tracker.
+        s.step(1.0, "swipe: slow drag past a third, then lift") { swipe(m, Array(repeating: -4, count: 32), hold: 0.12) }
+        s.step(1.4, "swipe: short drag back, then lift") { swipe(m, Array(repeating: 3, count: 18), hold: 0.12) }
+        s.step(1.4, "swipe: flick back") { swipe(m, Array(repeating: 10, count: 7)) }
+        s.step(1.4, "swipe: pull past the first space") { swipe(m, Array(repeating: 6, count: 30), hold: 0.12) }
+        s.step(1.4, "swipe: flick, then flick again mid-settle") {
+            swipe(m, Array(repeating: -10, count: 7), then: (0.12, Array(repeating: -10, count: 7)))
+        }
+        s.step(1.4, "click: back") { m.switchSpace(by: -1) }
+        s.step(1.2, "click: next") { m.switchSpace(by: 1) }
         s.step(1.2, "jump to the last") { m.switchSpace(index: m.spaces.count - 1) }
         s.step(1.2, "jump to the first") { m.switchSpace(index: 0) }
         s.step(1.2, "rapid 2") { m.switchSpace(index: 1) }
         s.step(0.1, "rapid 3") { m.switchSpace(index: 2) }
         s.step(0.1, "rapid 4") { m.switchSpace(index: 3) }
         s.step(1.4, "home") { m.switchSpace(index: 0) }
+    }
+
+    /// Plays a two-finger swipe over the sidebar: `moves` are the fingers' sideways travel per
+    /// event, 120 events a second, then `hold` seconds still before they lift. `then` plays a
+    /// second swipe that many seconds after the first lifts. Each event is sent a frame after the
+    /// one before it, so a busy main thread delays the gesture instead of bunching its events.
+    static func swipe(_ m: BrowserModel, _ moves: [CGFloat], hold: Double = 0, then: (Double, [CGFloat])? = nil) {
+        let dt = 1.0 / 120
+        var events: [(delay: Double, dx: CGFloat, phase: SwipeSample.Phase)] = []
+        func add(_ moves: [CGFloat], hold: Double, after: Double) {
+            events.append((after, 0, .mayBegin))
+            for (i, dx) in moves.enumerated() { events.append((dt, dx, i == 0 ? .began : .changed)) }
+            if hold > 0 { events.append((hold, 0, .changed)) }
+            events.append((dt, 0, .ended))
+        }
+        add(moves, hold: hold, after: 0)
+        if let then { add(then.1, hold: 0, after: then.0) }
+        play(events[...], strip: SpaceStrip.of(m))
+    }
+
+    private static func play(_ events: ArraySlice<(delay: Double, dx: CGFloat, phase: SwipeSample.Phase)>, strip: SpaceStrip) {
+        guard let e = events.first else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + e.delay) {
+            MainActor.assumeIsolated {
+                _ = strip.handle(SwipeSample(dx: e.dx, phase: e.phase, time: ProcessInfo.processInfo.systemUptime), inside: true)
+                play(events.dropFirst(), strip: strip)
+            }
+        }
     }
 
     // MARK: Rows
