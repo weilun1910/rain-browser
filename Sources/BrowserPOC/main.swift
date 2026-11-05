@@ -28,6 +28,17 @@ if args.contains("--chrome-dry-run") {
     exit(ChromeHistory.dryRun())
 }
 
+// Engine: resurfacing quality and read-only source checks.
+if args.contains("--eval") {
+    var workdir: URL?
+    if let i = args.firstIndex(of: "--workdir"), i + 1 < args.count {
+        workdir = URL(fileURLWithPath: args[i + 1], isDirectory: true)
+    }
+    exit(EngineEval.run(workdir: workdir))
+}
+if args.contains("--notion-dry-run") { exit(NotionSource.dryRun()) }
+if args.contains("--granola-dry-run") { exit(GranolaSource.dryRun()) }
+
 // --data-dir <dir> runs the app on its own support folder and its own WebKit store, so test
 // and demo runs never read or write the real profile.
 if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
@@ -37,7 +48,8 @@ if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
     MainActor.assumeIsolated { BrowserModel.dataStoreID = Paths.storeID(for: dir) }
 }
 
-let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--workdir", "--extract-check", "--data-dir"]
+let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--workdir", "--extract-check", "--data-dir",
+                          "--eval", "--models-dir", "--verbose", "--notion-dry-run", "--granola-dry-run"]
 if let unknown = args.dropFirst().first(where: { $0.hasPrefix("--") && !known.contains($0) }) {
     print("Unknown flag \(unknown). Flags: --selftest, --smoketest, --chrome-dry-run, each with optional --workdir <dir> for the tests, and --data-dir <dir> to run the app on a separate profile.")
     exit(2)

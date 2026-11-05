@@ -70,6 +70,8 @@ final class Intelligence: @unchecked Sendable {
         let m = LlamaModel(path: ModelFiles.path(ModelCatalog.embedder).path, kind: .embedding,
                            contextTokens: 2048, maxTokens: 512, sequences: 8)
         if m == nil { gemmaFailed = true; appLog.error("EmbeddingGemma failed to load") }
+        // Registered after llama.cpp set up Metal, so it runs before llama.cpp's own teardown.
+        _ = Self.exitHook
         gemma = m
         return m
     }
@@ -82,9 +84,22 @@ final class Intelligence: @unchecked Sendable {
         let m = LlamaModel(path: ModelFiles.path(ModelCatalog.reranker).path, kind: .reranker,
                            contextTokens: 4096, maxTokens: 448, sequences: 8)
         if m == nil { rerankerFailed = true; appLog.error("Reranker failed to load") }
+        _ = Self.exitHook
         reranker = m
         return m
     }
+
+    /// Frees the models. llama.cpp's Metal backend asserts if models are still loaded when the
+    /// process exits, so this also runs from an exit handler.
+    func shutdown() {
+        lock.lock(); defer { lock.unlock() }
+        gemma = nil
+        reranker = nil
+    }
+
+    private static let exitHook: Void = {
+        atexit { Intelligence.shared.shutdown() }
+    }()
 
     /// Frees about a gigabyte of model memory when nothing used it for five minutes.
     private func unloadIfIdle() {
@@ -152,7 +167,8 @@ final class Intelligence: @unchecked Sendable {
 
     // MARK: Reranking
 
-    static let rerankInstruction = "Given what the user is reading or writing right now, judge whether this earlier passage would be useful to bring back to them"
+    static let rerankInstruction: String = ProcessInfo.processInfo.environment["BROWSERPOC_RR_INSTRUCT"]
+        ?? "Given the user's current page or note, retrieve earlier passages on the same subject that would help with it"
 
     /// Scores in 0...1, or nil when the reranker isn't ready.
     func rerank(query: String, documents: [String]) -> [Float]? {

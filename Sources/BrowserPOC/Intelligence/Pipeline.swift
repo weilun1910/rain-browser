@@ -149,16 +149,23 @@ enum Pipeline {
         var terms: [String] = []
         var gate: Gate
         var candidates: [Int64: Candidate] = [:]
+        /// Every scored candidate, best first, for the eval and the debug log.
+        var scored: [(title: String, score: Double)] = []
         var matches: [Match] { sites + docs }
     }
 
     static func gate(_ p: RankParams, reranker: Bool) -> Gate {
         if reranker {
-            // The slider (0.1 to 0.9, default 0.4) moves the reranker bar around 0.5.
-            let bar = min(0.95, max(0.1, p.threshold + 0.1))
+            // The reranker's scores are close to 0 or 1, so the bar sits low and the judgment
+            // handles the middle. The slider (0.1 to 0.9, default 0.4) moves it from 0.05 to 0.65.
+            var bar = min(0.95, max(0.05, p.threshold - 0.25))
+            if let o = ProcessInfo.processInfo.environment["BROWSERPOC_BAR"], let v = Double(o) { bar = v }
             return Gate(bar: bar, strong: max(bar + 0.2, 0.85), usesReranker: true)
         }
-        return Gate(bar: p.threshold, strong: p.threshold + 0.25, usesReranker: false)
+        // Without the reranker the bar sits a little under the slider, and the judgment decides
+        // the borderline band above it.
+        let bar = max(0.1, p.threshold - 0.1)
+        return Gate(bar: bar, strong: bar + 0.25, usesReranker: false)
     }
 
     /// Context words, names and query vectors. Embeds queries with every embedder the index has
@@ -230,6 +237,7 @@ enum Pipeline {
             for c in cands.all { scored.append((c, fallbackScore(c, norm: cands.keywordNorm), nil)) }
         }
         scored.sort { $0.1 > $1.1 }
+        out.scored = scored.map { ($0.0.doc.title, $0.1) }
         for (c, s, rr) in scored {
             let m = match(c, score: s, rerank: rr, norm: cands.keywordNorm)
             if p.keepIDs.contains(c.doc.id) { out.kept[c.doc.id] = m }
@@ -278,6 +286,7 @@ enum Pipeline {
     static func accept(_ m: Match, judgment: Judgment?, gate: Gate) -> Bool {
         if m.score >= gate.strong { return true }
         guard let j = judgment else { return true }
-        return j.helpful || j.confidence < 0.6
+        // The model rarely says no with high confidence, so a moderately sure no is enough.
+        return j.helpful || j.confidence < 0.4
     }
 }
