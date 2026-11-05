@@ -43,7 +43,7 @@ def split_top(s):
             cur += c
             if c == q:
                 q = None
-        elif c in "\"'" and not cur.strip():
+        elif c in "\"'" and (not cur.strip() or cur.strip().endswith(":")):
             q = c
             cur += c
         elif c == ",":

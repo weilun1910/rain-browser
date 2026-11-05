@@ -81,7 +81,7 @@ item: { id, kind (web | note | doc | meeting), ref }
 
 - Icons are SF Symbol names from `Space.icons`. Colours are from `Space.palette`.
 - `notesFolder` is the space's folder under the demo notes root. It becomes the space's `newNotesFolder`.
-- Essentials are shared by every space, like Zen's Essentials. Until the app has them, the seeder can pin them in every space.
+- Essentials are shared by every space, like Zen's Essentials.
 - Each content id is placed at most once in the whole layout.
 - An item inside a split isn't also in a folder, because the sidebar shows a split as one joined row.
 
@@ -91,16 +91,23 @@ These aren't real documents. They must never load a real Google or Notion URL.
 
 - Each one has `demo_url`, for example `demo://google-docs/gdoc-paper-draft`. The seeder indexes it under that URL with the matching source type.
 - `origin_url` is a realistic-looking URL for display only. It's never loaded.
-- The app registers a `WKURLSchemeHandler` for `demo` on its web view configuration. It returns the item rendered with the app's Markdown renderer as a read-only page, with a quiet header showing the source, the title, the edited date and "Demo copy, read-only".
-- Tabs, splits, back and forward, pins and folders then work with no special cases. `demo://` isn't http, so page capture never indexes it as a web page.
+- `DemoScheme` (`Sources/BrowserPOC/Demo/DemoScheme.swift`) is a `WKURLSchemeHandler` registered in `BrowserModel.makeConfig`, so every web view and profile has it. It reads `demo-items/<id>.md` from the profile and draws a read-only page in the app's look: the card's neutral background, SF Pro text, a New York title, and a quiet header with the source, the edited date or meeting time, the owner or attendees and "Demo copy, read-only". Tables, task lists and Granola transcript lines are laid out properly. An unknown or odd address gets a not-found page, never the network.
+- The tab lets `demo` through its scheme check, and page extraction reads demo pages so Related gets their text. Capture still only indexes http pages, so a demo page is never indexed twice.
+- Each demo page links its source's icon as a data URL, and the seeder caches the same icons, so the sidebar shows them.
 - Card section: docs and meetings go in Notes / Docs, the same as real Google Docs, Notion pages and Granola notes.
 
 ## Seeding
 
-1. Build a fresh profile in a folder given with `--data-dir`. Refuse to seed a folder that already holds a profile. Never touch the default support folder.
-2. Copy `notes/` to `<data-dir>/Notes/`, keeping the space folders. Set each file's modification date from `updated`. Point `settings.json` at that folder and mark first run done.
-3. Index notes with the normal indexer. Index docs and meetings through the source adapters, using their own dates.
-4. Index history pages with visit count, first and last seen and dwell. Fetch full text cookie-free at seed time with the existing fetcher, and fall back to `excerpt` if the fetch fails. Load `searches` into past searches.
-5. Build `state.json` from `spaces.json`.
-6. Shift every timestamp by now minus `anchor`, so "three weeks ago" stays true whenever the demo runs. Dates written inside note text don't move.
-7. Set `last_opened` from the content's own dates, never to now. Otherwise everything open would be hidden from Related as recently opened.
+Built as `BrowserPOC --seed-demo <folder>` (`Sources/BrowserPOC/Demo/DemoSeeder.swift`), and run by `scripts/demo.sh`.
+
+1. The folder must be missing, empty, or a demo profile with the `.rain-demo-profile` marker. It's never the app's real support folder, the home folder or anything under `~/Library/Application Support`, `WebKit`, `Caches`, `Containers` or `Preferences`. A reseed clears the folder but keeps `Models/`.
+2. `--models-from <folder>` clones verified model files into `Models/`. Without them the app downloads them on first launch, and Related uses Apple's embedding until then.
+3. Notes go to `Notes/<Space folder>/<title>.md` with only their tags in front matter, and their file dates set from `created` and `updated`. Docs and meetings go to `demo-items/<id>.md` for the `demo://` pages.
+4. `settings.json` points at the notes folder and marks first run done. `sources.json` keeps Notion, Google Docs and Granola off, so Felix's real accounts are never read into the demo. `browser.json` turns auto-archive off, so the layout stays put.
+5. Notes go through the normal indexer. Docs go in as `gdocs` or `notion` and meetings as `granola`, keyed by their `demo_url`. Pages go in as visited pages, with their text read cookie-free through the Chrome importer's session and redirect rules, falling back to `excerpt`. Every visit is recorded in the index's visits table and in the browser's own history, with "in your <space> space" as its context. Searches seed past searches.
+6. Passages are embedded with the best ready model, then Apple's content tagging model tags topics (`--no-topics` skips it). The graph store records the splits as together edges and syncs links and similarity.
+7. `state.json` comes from `spaces.json`, with UUIDs derived from the ids. The demo docs open as web tabs at their `demo_url`. Essentials are pinned and shared. Each space keeps its selection, and School opens on its split with the draft focused.
+8. Every timestamp moves by seed time minus `anchor`, so the demo's "now" is the moment it was seeded. Dates written inside the text don't move. `last_opened` comes from each item's own last date, never from now.
+9. Site icons are fetched cookie-free into `favicons/`, and the demo sources get drawn icons under their demo hosts.
+
+`--offline` skips the page text and icon fetches, for tests and quick seeds.
