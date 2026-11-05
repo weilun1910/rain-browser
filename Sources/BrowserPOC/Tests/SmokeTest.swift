@@ -196,6 +196,7 @@ enum SmokeTest {
               "the command bar suggests notes and history", model.bar.results.map { $0.title.prefix(24) }.joined(separator: " | "))
         snapshot(window.contentView!, snaps.appendingPathComponent("8-command-bar.png"))
         model.bar.close()
+        MCPTests.smoke(model: model, snaps: snaps)
 
         model.prepareForQuit()
         print(SelfTest.failures == 0 ? "\nSmoke test passed." : "\n\(SelfTest.failures) check(s) failed.")
