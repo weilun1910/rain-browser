@@ -28,6 +28,15 @@ if args.contains("--graph-bench") {
     exit(GraphBench.run())
 }
 
+// The source dry runs read other apps' data from temp copies under the support folder, so they
+// honour --data-dir and keep those copies out of the real profile.
+if ["--chrome-dry-run", "--notion-dry-run", "--granola-dry-run"].contains(where: args.contains),
+   let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
+    let dir = URL(fileURLWithPath: (args[i + 1] as NSString).expandingTildeInPath, isDirectory: true)
+    Paths.overrideRoot = dir
+    Paths.ensure(dir)
+}
+
 if args.contains("--chrome-dry-run") {
     exit(ChromeHistory.dryRun())
 }
