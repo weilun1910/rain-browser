@@ -34,7 +34,7 @@ Jan 3 to Jan 14, 2027. Me, Ben and Priya. First time in Japan for all three of u
 - [[Japanese phrases to learn]]
 
 ## Budget
-About $2,800 each including flights. The sheet has the details.
+About $3,000 each including flights. The sheet has the details.
 
 ## Call notes
 Planning call with Ben and Priya on Nov 3. We agreed on the route above and that Priya books the Hakone ryokan.
