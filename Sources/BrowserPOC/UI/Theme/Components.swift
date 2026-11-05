@@ -57,12 +57,33 @@ struct SidebarRowBackground: ViewModifier {
     let selected: Bool
     let hovering: Bool
     var pressed = false
+    /// Part of a multiple selection: a quiet wash of the space's colour.
+    var multi = false
+    @Environment(\.spaceAccent) private var accent
     func body(content: Content) -> some View {
         content
             .background(
                 Theme.Radius.shape(Theme.Radius.row)
                     .fill(selected ? Theme.Palette.rowSelected
-                          : (pressed ? Theme.Palette.rowPressed : (hovering ? Theme.Palette.rowHover : .clear)))
+                          : (multi ? accent.opacity(0.16)
+                             : (pressed ? Theme.Palette.rowPressed : (hovering ? Theme.Palette.rowHover : .clear))))
+                    .themeShadow(selected ? .row : .mark)
+            )
+            .motion(Motion.hover, value: hovering, fadeOnly: true)
+            .motion(Motion.hover, value: selected, fadeOnly: true)
+            .motion(Motion.hover, value: multi, fadeOnly: true)
+    }
+}
+
+/// An Essentials tile: a soft well in the sidebar, lifting to the selected chip when it's open.
+struct EssentialTileBackground: ViewModifier {
+    let selected: Bool
+    let hovering: Bool
+    func body(content: Content) -> some View {
+        content
+            .background(
+                Theme.Radius.shape(Theme.Radius.card)
+                    .fill(selected ? Theme.Palette.rowSelected : (hovering ? Theme.Palette.fieldHover : Theme.Palette.field))
                     .themeShadow(selected ? .row : .mark)
             )
             .motion(Motion.hover, value: hovering, fadeOnly: true)
@@ -97,8 +118,12 @@ extension View {
         modifier(ContentCard(focused: focused, accent: accent))
     }
     /// Background for a sidebar row: a near-white chip when selected, a faint fill on hover.
-    func sidebarRow(selected: Bool, hovering: Bool, pressed: Bool = false) -> some View {
-        modifier(SidebarRowBackground(selected: selected, hovering: hovering, pressed: pressed))
+    func sidebarRow(selected: Bool, hovering: Bool, pressed: Bool = false, multi: Bool = false) -> some View {
+        modifier(SidebarRowBackground(selected: selected, hovering: hovering, pressed: pressed, multi: multi))
+    }
+    /// Background for an Essentials tile.
+    func essentialTile(selected: Bool, hovering: Bool) -> some View {
+        modifier(EssentialTileBackground(selected: selected, hovering: hovering))
     }
     /// A neutral card in the right panel.
     func panelCard(hovering: Bool = false) -> some View { modifier(PanelCard(hovering: hovering)) }
@@ -146,22 +171,44 @@ private struct IconButtonBody: View {
 
 /// A full-width action row in the sidebar, like New tab: quiet text, a faint fill on hover.
 struct SidebarActionRowStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View { SidebarActionRowBody(configuration: configuration) }
+    /// Shows as the selected row, for example New tab while the command bar is open for it.
+    var selected = false
+    func makeBody(configuration: Configuration) -> some View { SidebarActionRowBody(configuration: configuration, selected: selected) }
 }
 
 private struct SidebarActionRowBody: View {
     let configuration: ButtonStyleConfiguration
+    let selected: Bool
     @State private var hovering = false
     var body: some View {
         configuration.label
             .font(Theme.Font.row)
-            .foregroundStyle(hovering ? .primary : .secondary)
+            .foregroundStyle(hovering || selected ? .primary : .secondary)
             .padding(.horizontal, Theme.Space.rowInset)
             .frame(height: Theme.Space.rowHeight)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
-            .sidebarRow(selected: false, hovering: hovering, pressed: configuration.isPressed)
+            .sidebarRow(selected: selected, hovering: hovering, pressed: configuration.isPressed)
             .onHover { hovering = $0 }
+    }
+}
+
+/// Reports where the sidebar's address field sits in the window, so the command bar can grow
+/// out of it for Cmd-L and shrink back into it.
+@MainActor
+final class CommandBarAnchor: ObservableObject {
+    static let shared = CommandBarAnchor()
+    /// In the main window's content coordinates, top-left origin.
+    @Published var addressFrame: CGRect = .zero
+}
+
+struct AddressFieldFrame: View {
+    var body: some View {
+        GeometryReader { g in
+            Color.clear
+                .onAppear { CommandBarAnchor.shared.addressFrame = g.frame(in: .global) }
+                .onChange(of: g.frame(in: .global)) { _, f in CommandBarAnchor.shared.addressFrame = f }
+        }
     }
 }
 
