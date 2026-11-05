@@ -56,6 +56,9 @@ final class Resurfacer: ObservableObject {
         modelsObserver = NotificationCenter.default.addObserver(forName: .modelsChanged, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.indexDidChange() }
         }
+        // Background upkeep for the real app; both do nothing in tests.
+        ModelStore.shared.autoStart()
+        SourceSync.shared.start()
     }
 
     func contextFromTab(_ tab: Tab) {

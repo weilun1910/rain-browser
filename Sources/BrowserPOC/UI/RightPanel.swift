@@ -27,6 +27,7 @@ struct RightPanelContent: View {
             }
             .frame(height: 30)
             .padding(.top, 4)
+            ModelProgressLine()
 
             if resurfacer.cards.isEmpty {
                 Text(emptyText)
@@ -140,8 +141,10 @@ struct CardView: View {
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
             if showScores {
-                Text(String(format: "keyword %.2f | meaning %.2f | names %.2f | score %.2f%@",
-                            m.keyword, m.semantic, m.entity, m.score, m.penalized ? " | dismissed before" : ""))
+                Text(String(format: "keyword %.2f | meaning %.2f | names %.2f | score %.2f%@%@",
+                            m.keyword, m.semantic, m.entity, m.score,
+                            m.rerank.map { String(format: " | reranker %.2f", $0) } ?? "",
+                            m.penalized ? " | dismissed before" : ""))
                     .font(.system(size: 10).monospacedDigit())
                     .foregroundStyle(.tertiary)
             }

@@ -6,6 +6,7 @@ struct SettingsView: View {
         TabView {
             GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }
             SourcesSettings().tabItem { Label("Sources", systemImage: "tray.full") }
+            ModelsSettings().tabItem { Label("Models", systemImage: "cpu") }
             TuningSettings().tabItem { Label("Tuning", systemImage: "slider.horizontal.3") }
         }
         .frame(width: 580, height: 620)
@@ -69,9 +70,10 @@ struct GeneralSettings: View {
                 Text("Related shows these under Notes / Docs instead of Sites. Notion and Google Docs, Sheets and Slides always count, and so does any page where you've typed about 200 characters. One per line, like coda.io or *.atlassian.net/wiki. You can also move a single card from its right-click menu.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Section("On-device model") {
+            Section("On-device models") {
                 LabeledContent("Apple Foundation Models", value: ReasonWriter.availabilityText)
-                LabeledContent("Sentence embeddings", value: Embedder.shared.isAvailable ? "available" : "not available")
+                LabeledContent("Embedding", value: Intelligence.shared.documentEmbedder.label)
+                LabeledContent("Reranker", value: Intelligence.shared.hasReranker ? ModelCatalog.reranker.name : "Not downloaded yet. See Models.")
             }
         }
         .formStyle(.grouped)
@@ -118,6 +120,8 @@ struct SourcesSettings: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
+            NewSourcesSettings()
+
             Section {
                 if settings.published.notesFolders.isEmpty {
                     Text("No folders chosen. Notes go in the app's own folder for now.")
@@ -155,7 +159,7 @@ struct SourcesSettings: View {
             }
 
             Section("Index") {
-                ForEach([SourceType.web, .note, .chrome], id: \.self) { s in
+                ForEach([SourceType.web, .note, .chrome, .notion, .gdocs, .granola], id: \.self) { s in
                     let c = counts.first { $0.source == s }
                     LabeledContent(Self.name(s)) {
                         Text(Self.countText(s, c)).foregroundStyle(.secondary)
@@ -249,13 +253,8 @@ struct TuningSettings: View {
             Section {
                 SliderRow(title: "Relevance threshold", value: binding(\.threshold), range: 0.1...0.9)
             } footer: {
-                Text("Higher means fewer, stronger cards.")
+                Text("Higher means fewer, stronger cards. Candidates come from keywords, meaning and shared names together. With the models downloaded, a reranker reads each one next to what you have open and this slider sets the score it must reach. Apple's on-device model then checks the borderline ones.")
                     .font(.caption).foregroundStyle(.secondary)
-            }
-            Section("Signal weights") {
-                SliderRow(title: "Keywords", value: binding(\.keywordWeight), range: 0...2)
-                SliderRow(title: "Meaning", value: binding(\.semanticWeight), range: 0...2)
-                SliderRow(title: "People, orgs, places", value: binding(\.entityWeight), range: 0...2)
             }
             Section {
                 Toggle("Show scores on cards", isOn: Binding(get: { settings.published.showScores },

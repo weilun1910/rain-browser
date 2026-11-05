@@ -285,7 +285,41 @@ final class ModelStore: ObservableObject {
     }
 
     func downloadAll() {
+        try? FileManager.default.removeItem(at: ModelFiles.dir.appendingPathComponent(".paused"))
         for spec in ModelCatalog.all where state(spec) != .ready { download(spec) }
+    }
+
+    /// The first launch of a profile starts the download on its own, and a download cut off by
+    /// quitting resumes on the next launch. One Felix paused stays paused until he resumes it.
+    func autoStart() {
+        guard !SourceSync.isTestRun else { return }
+        let dir = ModelFiles.dir
+        let flag = dir.appendingPathComponent(".auto-started")
+        let paused = FileManager.default.fileExists(atPath: dir.appendingPathComponent(".paused").path)
+        Task.detached(priority: .utility) {
+            let missing = ModelCatalog.all.filter { !ModelFiles.isReady($0) }
+            guard !missing.isEmpty else { return }
+            let first = !FileManager.default.fileExists(atPath: flag.path)
+            guard first || !paused else { return }
+            Paths.ensure(dir)
+            FileManager.default.createFile(atPath: flag.path, contents: Data())
+            await MainActor.run { for s in missing { self.download(s) } }
+        }
+    }
+
+    /// Fraction done across both files, for the Related panel's status line. Nil when idle.
+    var overallProgress: Double? {
+        guard anyBusy else { return nil }
+        var done: Int64 = 0
+        for s in ModelCatalog.all {
+            switch state(s) {
+            case .ready, .verifying: done += s.bytes
+            case .downloading(let d, _): done += d
+            case .partial(let d): done += d
+            default: break
+            }
+        }
+        return Double(done) / Double(ModelCatalog.totalBytes)
     }
 
     func download(_ spec: ModelSpec) {
@@ -316,6 +350,13 @@ final class ModelStore: ObservableObject {
     private func refreshOne(_ spec: ModelSpec) {
         let partSize = ((try? FileManager.default.attributesOfItem(atPath: ModelFiles.partial(spec).path))?[.size] as? NSNumber)?.int64Value ?? 0
         states[spec.id] = partSize > 0 ? .partial(partSize) : .missing
+    }
+
+    /// Felix's pause. Remembered so the next launch doesn't resume on its own.
+    func pause() {
+        Paths.ensure(ModelFiles.dir)
+        FileManager.default.createFile(atPath: ModelFiles.dir.appendingPathComponent(".paused").path, contents: Data())
+        cancelAll()
     }
 
     func cancelAll() {
