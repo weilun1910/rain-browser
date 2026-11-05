@@ -361,7 +361,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if e.keyCode == 53 {
             if model.switcher != nil { model.switcher = nil; return true }
             if model.peek != nil && !model.bar.isOpen && mods.isEmpty { model.closePeek(); return true }
-            if model.find.visible && mods.isEmpty { model.closeFind(); return true }
+            if model.find.visible && !model.bar.isOpen && mods.isEmpty { model.closeFind(); return true }
             return false
         }
         // Ctrl-Shift-= reports "+" on most layouts, so match the key itself.
