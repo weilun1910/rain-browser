@@ -46,7 +46,9 @@ protocol MCPSearchSource {
 }
 
 enum MCPSeams {
-    static func makeGraph(_ ctx: MCPContext) -> MCPGraphSource { IndexGraphSource(ctx: ctx) }
+    static func makeGraph(_ ctx: MCPContext) -> MCPGraphSource {
+        GraphStoreSource.open(indexURL: ctx.reader.indexURL) ?? IndexGraphSource(ctx: ctx)
+    }
     static func makeSearch(_ ctx: MCPContext) -> MCPSearchSource { EngineSearchSource(ctx: ctx) }
 }
 

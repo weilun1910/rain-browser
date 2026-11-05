@@ -259,6 +259,10 @@ final class WebCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDown
             decisionHandler(.cancel)
             return
         }
+        // The graph's navigation edges: page A led to page B, however the link opens.
+        if navigationAction.navigationType == .linkActivated, navigationAction.targetFrame?.isMainFrame != false {
+            GraphRecorder.linkFollowed(from: webView.url, to: url)
+        }
         if navigationAction.navigationType == .linkActivated, navigationAction.targetFrame?.isMainFrame != false,
            let tab, let model, let route = LinkRouting.route(for: url, flags: navigationAction.modifierFlags, from: tab,
                                                              peekForPins: BrowserPrefs.shared.value.peekForPinnedLinks) {

@@ -41,6 +41,7 @@ build/BrowserPOC.app/Contents/MacOS/BrowserPOC --chrome-dry-run # what a Chrome 
 .build/debug/BrowserPOC --granola-dry-run                       # which Granola files exist and Granola's public sign-in details
 .build/debug/BrowserPOC --download-models --data-dir <profile>  # fetch the on-device models into a profile
 scripts/mcp-e2e.sh                                              # Claude Code and Codex against a made-up profile, temporary configs only
+build/BrowserPOC.app/Contents/MacOS/BrowserPOC --graph-bench    # the graph's 5,000 node timings on a release build
 ```
 
 Both tests use throwaway folders and exit non-zero if a check fails. The self test checks delete with a stand-in Trash folder inside its throwaway folder, so your real Trash is never touched. The dry run prints full URLs from your Chrome history, so keep its output to yourself.
@@ -101,6 +102,24 @@ These files may also be edited by other apps while this one is open, so the app 
 - Google Docs, Sheets and Slides: takes the documents in my history here and in the Chrome import, and refreshes each one's text through its own plain-text export with this browser's Google sign-in. Up to 40 a run, each at most once a day.
 - Granola: Granola encrypts its files on the Mac, so this uses Granola's official MCP connection. Connect opens Granola's sign-in in my default browser, with no key to paste, then brings in recent meetings' notes and summaries.
 
+**Graph.** An Obsidian-style graph of everything in the index: notes, Google Docs, Notion pages, Granola meetings and sites. Open it with the graph button at the bottom of the sidebar, View > Graph (Cmd-Option-G), Open Graph in the command bar, or its row in the sidebar. It's an app page like History, so it can be pinned, filed, put in a split next to a note and comes back after a relaunch. Lines come in six kinds, each with its own colour and filter:
+- Links: `[[wikilinks]]`, Markdown links and URLs in a note or doc that match something indexed. A wikilink to a note that doesn't exist yet shows as a hollow node, and clicking it creates the note.
+- Navigation: a link you clicked on one page that took you to another.
+- Research: something you added to research from the Related panel.
+- Together: two items in a split, or two items you spent time on within ten minutes of each other in two separate sessions.
+- Similar meaning: each item's closest neighbours by meaning from the best embedding model it has, kept only when the match goes both ways or is very close for that model.
+- Shared topics: optional topic nodes for names, and topics the tagging model found, that several items share, like Obsidian's tag nodes.
+
+Nodes take their space's colour. Things you write are bright and sites you read are toned back. An item belongs to a space when it's open, pinned or filed there, or when it's a note in that space's notes folder. Anything else takes the space most of its connections are in, and items with no clear space stay grey. Each space keeps loosely to its own region, so the things that bridge two spaces sit between them. Colour by kind and the space pull are in the settings panel.
+
+Hover a node to light up its neighbours, dim the rest and see why it's connected in the corner. Click a node to light it up and glide to it, and click again or double-click to open it. Option-click opens it in a split, right-click gives more, and dragging moves it while its neighbours follow. Pinch, Cmd-scroll or the mouse wheel zooms around the pointer. A two-finger scroll or a background drag pans, and a flung drag coasts to a stop. `+`, `-`, `0`, Esc and the arrow keys work too. The search field takes plain words plus `type:note`, `site:github.com` and `project:Browser`. The settings panel has Obsidian's Filters, Groups, Display and Forces, plus a time range, a space and grouping pages by site (on its own above 1,500 items). Play runs a timelapse in the order things were first seen.
+
+Changing a filter or a search fades and grows nodes in and out instead of redrawing everything, and fit and focus glide. The graph draws at the display's full rate, 120 Hz on ProMotion, while anything moves, and stops drawing when nothing does. It remembers where every node came to rest, so a relaunch starts from the same picture. Two graph panes each keep their own view.
+
+The bottom of the right panel shows a local graph for whatever's focused, 1 to 3 steps out, and opens the full graph focused on it. When the item changes, the local graph shifts to it instead of starting over. With the graph focused in a split, the local graph follows the item next to it, and that item gets a ring in the big graph. The graph's own tables live in `index.sqlite` next to the index, and its settings in `graph.json`.
+
+With `BROWSERPOC_GRAPH_SCRIPT=<seconds>` set, the graph drives itself through hover, pan, zoom, drag, focus, a search and fit after that delay. It prints frame pacing for each step and quits. Use it only with `--data-dir`.
+
 **Capture.** Pages that stay open about five seconds go into a local index with full-text search, sentence vectors and the names in them. Google Docs draw their text on a canvas, so for those the app asks Google for the doc's own text export, from inside your tab, once per load. The typing count only stores how many characters you typed in text areas and editable regions, never what you typed, and ignores search, address and password fields.
 
 **AI clients.** Claude Code, Claude Desktop, Codex and ChatGPT for Mac can read what the browser knows, so they understand what I'm working on and can help keep my notes in shape. The app's binary runs as an MCP server with `--mcp` (add `--data-dir` for another profile). It reads the index without changing it, works while the app is open, and stops when the client closes. The tools:
@@ -138,7 +157,8 @@ With "Let AI clients edit notes" on in Settings, three more tools can create a n
 - `Sources/BrowserPOC/Intelligence`: llama.cpp wrapper, model downloads, embeddings, the working-context description and judgment with Foundation Models, background re-embedding and topic tagging, and an MCP client with OAuth.
 - `Sources/BrowserPOC/Resurfacing`: the Related panel's cards and reasons.
 - `Sources/BrowserPOC/Sources`: Chrome import, Notion, Google Docs and Granola sources, URL safety rules, HTML text, the notes indexer and folder watcher.
-- `Sources/BrowserPOC/UI`: SwiftUI views, including the command bar, split view and spaces.
+- `Sources/BrowserPOC/Graph`: the graph's edge store and sync, link extraction, similarity, the layout builder, the force simulation, the Metal renderer and its colour tokens (`GraphTheme.swift`).
+- `Sources/BrowserPOC/UI`: SwiftUI views, including the command bar, split view, spaces and the graph panes.
 - `Sources/BrowserPOC/MCP`: the `--mcp` server, its tools, privacy rules and note writer, the current-context writer and the AI clients Settings pane.
 - `Sources/BrowserPOC/Tests`: `--selftest`, `--smoketest` and `--extract-check`.
 - `integrations`: the Claude Code, Claude Desktop, Codex and ChatGPT packaging.

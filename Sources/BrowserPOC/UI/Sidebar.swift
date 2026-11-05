@@ -152,6 +152,7 @@ struct LeftSidebar: View {
             HStack(spacing: 2) {
                 SmallIconButton(symbol: "gearshape", help: "Settings") { AppDelegate.shared?.openSettings() }
                 SmallIconButton(symbol: "clock", help: "History (Cmd-Y)") { model.openAppPage("history") }
+                SmallIconButton(symbol: GraphTab.icon, help: "Graph (Cmd-Option-G)") { model.openGraph() }
                 DownloadsButton()
                 Spacer()
                 SpaceBar()

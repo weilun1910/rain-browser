@@ -48,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         model = BrowserModel()
         CurrentContextWriter.shared.start(model: model)
+        GraphRecorder.shared.attach(model)
         buildMenu()
 
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1380, height: 880),
@@ -190,6 +191,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         view.addItem(item("Sidebar on the Other Side", #selector(sidebarSideAction), target: self))
         view.addItem(item("Show or Hide Related Panel", #selector(togglePanelAction), "r", [.command, .shift], target: self))
         view.addItem(item("Toggle Note Preview", #selector(togglePreviewAction), "p", [.command, .shift], target: self))
+        view.addItem(item("Graph", #selector(graphAction), "g", [.command, .option], target: self))
         view.addItem(.separator())
         let layout = NSMenu(title: "Split Layout")
         layout.addItem(item("Side by Side", #selector(layoutSideAction), target: self))
@@ -279,6 +281,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc func forwardAction() { model.goForward() }
     @objc func togglePanelAction() { Settings.shared.update { $0.rightPanelOpen.toggle() } }
     @objc func togglePreviewAction() { model.document?.showPreview.toggle() }
+    @objc func graphAction() { showMain(); model.openGraph() }
     @objc func zoomResetAction() { model.zoom(nil) }
     @objc func zoomInAction() { model.zoom(0.1) }
     @objc func zoomOutAction() { model.zoom(-0.1) }
