@@ -132,7 +132,7 @@ enum SelfTest {
             case .chrome:
                 d.body = ""
                 _ = store.importChrome([(d, a)])
-            case .note, .markdown:
+            case .note, .markdown, .notion, .gdocs, .granola:
                 d.project = f.source == .markdown ? "7-Eleven" : "Notes"
                 d.root = f.source == .markdown ? "/fixtures" : nil
                 store.upsertFile(d, analysis: a)
@@ -239,6 +239,8 @@ enum SelfTest {
         SpaceTests.run(dir: dir)
         CommandBarTests.run(dir: dir)
         ThemeTests.run()
+        EngineTests.run(dir: dir)
+        ArcZenTests.run(dir: dir)
 
         print(failures == 0 ? "\nAll checks passed." : "\n\(failures) check(s) failed.")
         return failures == 0 ? 0 : 1

@@ -45,6 +45,23 @@ if let i = args.firstIndex(of: "--render-review"), i + 1 < args.count {
     }
     exit(MainActor.assumeIsolated { LookRenders.run(out: dir) })
 }
+// Engine: resurfacing quality and read-only source checks.
+if args.contains("--eval") {
+    var workdir: URL?
+    if let i = args.firstIndex(of: "--workdir"), i + 1 < args.count {
+        workdir = URL(fileURLWithPath: args[i + 1], isDirectory: true)
+    }
+    exit(EngineEval.run(workdir: workdir))
+}
+if args.contains("--notion-dry-run") { exit(NotionSource.dryRun()) }
+if args.contains("--download-models") {
+    // Downloads the on-device models into a profile's Models folder, with --data-dir.
+    if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
+        Paths.overrideRoot = URL(fileURLWithPath: (args[i + 1] as NSString).expandingTildeInPath, isDirectory: true)
+    }
+    exit(ModelDownloader.commandLine())
+}
+if args.contains("--granola-dry-run") { exit(GranolaSource.dryRun()) }
 
 // --data-dir <dir> runs the app on its own support folder and its own WebKit store, so test
 // and demo runs never read or write the real profile.
@@ -56,7 +73,8 @@ if let i = args.firstIndex(of: "--data-dir"), i + 1 < args.count {
 }
 
 let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--workdir", "--extract-check", "--data-dir",
-                          "--render-art", "--render-review", "--profile", "--query", "--motion-tour"]
+                          "--render-art", "--render-review", "--profile", "--query", "--motion-tour",
+                          "--eval", "--models-dir", "--verbose", "--notion-dry-run", "--granola-dry-run", "--download-models", "--scale"]
 if let unknown = args.dropFirst().first(where: { $0.hasPrefix("--") && !known.contains($0) }) {
     print("Unknown flag \(unknown). Flags: --selftest, --smoketest, --chrome-dry-run, each with optional --workdir <dir> for the tests, and --data-dir <dir> to run the app on a separate profile.")
     exit(2)

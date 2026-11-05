@@ -150,6 +150,11 @@ enum SmokeTest {
         }
         let settingsWindow = offscreenWindow(NSHostingView(rootView: SettingsView()), size: NSSize(width: 560, height: 520))
         snapshot(settingsWindow.contentView!, snaps.appendingPathComponent("5-settings.png"))
+        // Engine: the Sources and Models tabs.
+        let sourcesWindow = offscreenWindow(NSHostingView(rootView: SourcesSettings()), size: NSSize(width: 580, height: 1400))
+        snapshot(sourcesWindow.contentView!, snaps.appendingPathComponent("5b-settings-sources.png"))
+        let modelsWindow = offscreenWindow(NSHostingView(rootView: ModelsSettings()), size: NSSize(width: 580, height: 520))
+        snapshot(modelsWindow.contentView!, snaps.appendingPathComponent("5c-settings-models.png"))
 
         // 6. Typing keeps cards in place.
         if let doc = model.document {
@@ -196,6 +201,9 @@ enum SmokeTest {
               "the command bar suggests notes and history", model.bar.results.map { $0.title.prefix(24) }.joined(separator: " | "))
         snapshot(window.contentView!, snaps.appendingPathComponent("8-command-bar.png"))
         model.bar.close()
+
+        // 10. Arc and Zen: sessions, favicons, find, splits, Peek, media, archive, the bar, layouts.
+        ArcZenSmoke.run(model: model, window: window, snaps: snaps)
 
         model.prepareForQuit()
         print(SelfTest.failures == 0 ? "\nSmoke test passed." : "\n\(SelfTest.failures) check(s) failed.")

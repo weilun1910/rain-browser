@@ -121,7 +121,7 @@ struct FolderReveal<Content: View>: View {
 /// favicons: the image fades in when it arrives, and until then a quiet monogram holds its place.
 /// Dark icons get a light backing in dark mode, and very light ones a dark backing in light mode,
 /// so a black logo never disappears into a dark sidebar.
-struct FaviconView: View {
+struct FaviconImage: View {
     let image: NSImage?
     var size: CGFloat = 16
     /// Shown while there's no image: a letter for a site, or an SF Symbol for anything else.
@@ -224,27 +224,5 @@ enum FaviconTone {
         if avg < 0.22 { return .dark }
         if avg > 0.9 && transparent > Double(n * n) * 0.2 { return .light }
         return .normal
-    }
-}
-
-/// Reads site icons that something else has saved to `<support folder>/favicons/<host>.png`.
-/// A stand-in until the Arc and Zen agent's `Favicons` arrives at merge, which uses the same
-/// files; then callers switch to `Favicons.shared.image(for:)` and this goes away.
-@MainActor
-enum FaviconLookup {
-    private static var memory: [String: NSImage] = [:]
-    private static var missing: Set<String> = []
-    private static var root: String?
-
-    static func image(for url: URL?) -> NSImage? {
-        guard let url, url.scheme?.hasPrefix("http") == true, var h = url.host?.lowercased() else { return nil }
-        if h.hasPrefix("www.") { h = String(h.dropFirst(4)) }
-        if root != Paths.root.path { memory = [:]; missing = []; root = Paths.root.path }
-        if let i = memory[h] { return i }
-        if missing.contains(h) { return nil }
-        let file = Paths.root.appendingPathComponent("favicons", isDirectory: true).appendingPathComponent(h + ".png")
-        if let i = NSImage(contentsOf: file) { memory[h] = i; return i }
-        missing.insert(h)
-        return nil
     }
 }
