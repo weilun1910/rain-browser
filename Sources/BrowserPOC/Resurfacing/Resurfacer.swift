@@ -9,8 +9,10 @@ struct Card: Identifiable {
     var feedback: String?
 }
 
-/// Keeps the right panel's cards. Recomputes on page load and note pauses, and keeps
-/// cards in place while the context stays roughly the same.
+/// Keeps the right panel's cards. Each context runs in two passes. The first uses the text on
+/// screen and shows the cards the reranker is sure about within a second or two. The second
+/// adds the on-device model's description of what Felix is doing, and its judgment on
+/// borderline cards. Cards already on screen stay put while they still qualify.
 @MainActor
 final class Resurfacer: ObservableObject {
     @Published private(set) var siteCards: [Card] = []
@@ -18,19 +20,32 @@ final class Resurfacer: ObservableObject {
     var cards: [Card] { siteCards + docCards }
     @Published private(set) var hasContext = false
     @Published private(set) var isWorking = false
+    /// The model's reading of the current context, when it ran.
+    @Published private(set) var work: WorkingContextSummary?
 
     weak var model: BrowserModel?
     private(set) var context: ContextInput?
     private var contextTerms: [String] = []
     private var lastTerms = Set<String>()
     private var lastKey: String?
+    private var lastWords = Set<String>()
     private var generation = 0
     private var indexObserver: NSObjectProtocol?
+    private var modelsObserver: NSObjectProtocol?
     private var settingsWork: DispatchWorkItem?
+    private var typingWork: DispatchWorkItem?
 
     /// Cards per context, so switching focus back to a pane doesn't refetch.
     private struct Cached { let sites: [Card]; let docs: [Card]; let terms: [String]; let at: Date }
     private var cache: [String: Cached] = [:]
+    /// The model's description per context, with the words it was made from.
+    private var summaries: [String: (words: Set<String>, summary: WorkingContextSummary)] = [:]
+    /// Judgments per context and item.
+    private var judgments: [String: Judgment] = [:]
+    /// Borderline cards waiting for a judgment, per section.
+    private var pending: [CardSection: [Match]] = [:]
+    private var visits: [Int64: [Visit]] = [:]
+    private var gate = Pipeline.Gate(bar: 0.5, strong: 0.85, usesReranker: true)
     /// How many retrievals have run. The self test uses it to check the cache.
     private(set) var retrievalCount = 0
 
@@ -38,6 +53,12 @@ final class Resurfacer: ObservableObject {
         indexObserver = NotificationCenter.default.addObserver(forName: .indexChanged, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.indexDidChange() }
         }
+        modelsObserver = NotificationCenter.default.addObserver(forName: .modelsChanged, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.indexDidChange() }
+        }
+        // Background upkeep for the real app; both do nothing in tests.
+        ModelStore.shared.autoStart()
+        SourceSync.shared.start()
     }
 
     func contextFromTab(_ tab: Tab) {
@@ -61,22 +82,58 @@ final class Resurfacer: ObservableObject {
                                 kind: doc.isReadOnly ? .file : .note))
     }
 
+    static func words(_ input: ContextInput) -> Set<String> {
+        Set(TextAnalysis.rawWords(input.title + " " + input.text.prefix(20000)).map(TextAnalysis.fold).filter(TextAnalysis.isContentWord))
+    }
+
+    private func noteActivity(_ input: ContextInput) {
+        if let m = model { ActivityTracker.shared.noteSpace(m.currentSpace?.name, count: m.spaces.count) }
+        var writing = input.kind == .note
+        if input.kind == .page, let u = URL(string: input.key) {
+            writing = WritingKey.isWritingSite(u, list: Settings.shared.value.writingSites)
+        }
+        if writing { ActivityTracker.shared.noteWriting(title: input.title, key: input.key) }
+    }
+
     func setContext(_ input: ContextInput?) {
-        generation += 1
         guard let input, (input.title.count + input.text.count) >= 40 else {
+            generation += 1
             context = input
             hasContext = input != nil
-            if input == nil || input?.key != lastKey { siteCards = []; docCards = []; lastTerms = []; lastKey = input?.key }
+            if input == nil || input?.key != lastKey { siteCards = []; docCards = []; lastTerms = []; lastKey = input?.key; work = nil }
             return
         }
+        noteActivity(input)
+        let words = Self.words(input)
+        if input.key == lastKey, context != nil {
+            // Same item, text changed: skip tiny edits, and wait for a pause in typing.
+            if Self.jaccard(words, lastWords) >= 0.97 { context = input; return }
+            context = input
+            typingWork?.cancel()
+            let w = DispatchWorkItem { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self, let c = self.context, c.key == input.key else { return }
+                    self.generation += 1
+                    self.lastWords = Self.words(c)
+                    self.run(c, replace: false)
+                }
+            }
+            typingWork = w
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: w)
+            return
+        }
+        generation += 1
+        typingWork?.cancel()
         context = input
         hasContext = true
+        lastWords = words
         if input.key != lastKey, let c = cache[input.key], Date().timeIntervalSince(c.at) < 180 {
             siteCards = c.sites
             docCards = c.docs
             contextTerms = c.terms
             lastTerms = Set(c.terms)
             lastKey = input.key
+            work = summaries[input.key]?.summary
             return
         }
         run(input, replace: false)
@@ -124,78 +181,176 @@ final class Resurfacer: ObservableObject {
         params.keepIDs = replace ? [] : Set(cards.map { $0.id })
         isWorking = true
         retrievalCount += 1
+        let words = Self.words(input)
+        let cachedSummary: WorkingContextSummary? = {
+            guard let s = summaries[input.key], Self.jaccard(s.words, words) >= 0.85 else { return nil }
+            return s.summary
+        }()
+        guard let store = IndexStore.shared else { return }
         Task.detached(priority: .userInitiated) {
-            let ctx = ContextAnalysis.make(input)
-            let result = IndexStore.shared.retrieve(ctx, params)
+            // Pass 1: what's on screen, plus the model's description if a recent one fits.
+            let q1 = Pipeline.makeQuery(input, work: cachedSummary, store: store)
+            let r1 = Pipeline.rank(q1, params, store: store)
+            let v1 = Self.loadVisits(r1, store: store)
             await MainActor.run {
                 guard gen == self.generation else { return }
-                self.isWorking = false
-                self.apply(result, input: input, params: params, replace: replace)
+                self.apply(r1, visits: v1, input: input, params: params, replace: replace)
+                if cachedSummary != nil || !ContextReader.isAvailable { self.isWorking = false }
             }
+            await self.judgePending(input: input, gen: gen, work: cachedSummary)
+            // Pass 2: ask the model what Felix is doing, then retrieve again with its queries.
+            guard cachedSummary == nil, ContextReader.isAvailable else { return }
+            guard await MainActor.run(body: { gen == self.generation }) else { return }
+            guard let summary = await ContextReader.describe(input) else {
+                await MainActor.run { if gen == self.generation { self.isWorking = false } }
+                return
+            }
+            var p2 = params
+            p2.keepIDs = await MainActor.run { Set(self.cards.map { $0.id }) }
+            let q2 = Pipeline.makeQuery(input, work: summary, store: store)
+            let r2 = Pipeline.rank(q2, p2, store: store)
+            let v2 = Self.loadVisits(r2, store: store)
+            await MainActor.run {
+                self.summaries[input.key] = (words, summary)
+                if self.summaries.count > 60, let k = self.summaries.keys.first { self.summaries[k] = nil }
+                guard gen == self.generation else { return }
+                self.work = summary
+                self.apply(r2, visits: v2, input: input, params: p2, replace: false)
+                self.isWorking = false
+            }
+            await self.judgePending(input: input, gen: gen, work: summary)
         }
     }
 
-    private func apply(_ result: RetrievalResult, input: ContextInput, params: RankParams, replace: Bool) {
-        let newTerms = Set(result.terms)
+    nonisolated static func loadVisits(_ r: Pipeline.Ranked, store: IndexStore) -> [Int64: [Visit]] {
+        var out: [Int64: [Visit]] = [:]
+        for m in r.matches + Array(r.kept.values) where out[m.doc.id] == nil {
+            out[m.doc.id] = store.visits(docID: m.doc.id, limit: 10)
+        }
+        return out
+    }
+
+    private func judgmentKey(_ docID: Int64, _ contextKey: String) -> String { "\(contextKey)|\(docID)" }
+
+    private func apply(_ r: Pipeline.Ranked, visits newVisits: [Int64: [Visit]], input: ContextInput, params: RankParams, replace: Bool) {
+        for (k, v) in newVisits { visits[k] = v }
+        gate = r.gate
+        let newTerms = Set(r.terms)
         let sameItem = input.key == lastKey
         let overlap = Self.jaccard(newTerms, lastTerms)
         let bigChange = replace || (!sameItem && overlap < 0.3)
         let old = cards
-        siteCards = merge(.sites, old: old, fresh: result.sites, result: result, params: params, bigChange: bigChange, sameItem: sameItem)
-        docCards = merge(.docs, old: old, fresh: result.docs, result: result, params: params, bigChange: bigChange, sameItem: sameItem)
-        contextTerms = result.terms
+        siteCards = merge(.sites, old: old, fresh: r.sites, kept: r.kept, input: input, params: params, bigChange: bigChange, sameItem: sameItem)
+        docCards = merge(.docs, old: old, fresh: r.docs, kept: r.kept, input: input, params: params, bigChange: bigChange, sameItem: sameItem)
+        contextTerms = r.terms
         lastTerms = newTerms
         lastKey = input.key
-        ReasonWriter.shared.cancelAll(except: input.key)
         storeCache()
-        for c in cards where !c.reasonFromModel {
-            requestReason(for: c, input: input)
-        }
     }
 
     /// Keeps cards that still qualify in place, then appends new ones, within one section.
-    private func merge(_ sec: CardSection, old: [Card], fresh: [Match], result: RetrievalResult,
+    /// Borderline new cards wait for the model's judgment before they appear.
+    private func merge(_ sec: CardSection, old: [Card], fresh: [Match], kept: [Int64: Match], input: ContextInput,
                        params: RankParams, bigChange: Bool, sameItem: Bool) -> [Card] {
         var next: [Card] = []
         if !bigChange {
             for c in old {
-                let m = fresh.first { $0.doc.id == c.id } ?? result.kept[c.id]
-                guard let m, m.section == sec, m.score >= params.threshold * 0.85 else { continue }
-                var kept = c
-                kept.match = m
+                let m = fresh.first { $0.doc.id == c.id } ?? kept[c.id]
+                // Hysteresis: a card on screen stays until it falls well under the bar.
+                guard let m, m.section == sec, m.score >= gate.bar * 0.75 else { continue }
+                var k = c
+                k.match = m
                 if !sameItem {
-                    kept.reason = Reasons.template(m)
-                    kept.reasonFromModel = false
-                    kept.feedback = nil
+                    k.reason = Reasons.template(m, visits: visits[m.doc.id] ?? [])
+                    k.reasonFromModel = false
+                    k.feedback = nil
                 }
-                next.append(kept)
+                next.append(k)
             }
         }
-        for m in fresh where next.count < params.limit && !next.contains(where: { $0.id == m.doc.id }) {
-            next.append(Card(match: m, reason: Reasons.template(m)))
+        var waiting: [Match] = []
+        for m in fresh where !next.contains(where: { $0.id == m.doc.id }) {
+            let j = judgments[judgmentKey(m.doc.id, input.key)]
+            let showNow = m.score >= gate.strong || !Judge.isAvailable || j != nil
+            if showNow {
+                guard Pipeline.accept(m, judgment: j, gate: gate) else { continue }
+                if next.count < params.limit { next.append(card(m, judgment: j)) }
+            } else if next.count + waiting.count < params.limit {
+                waiting.append(m)
+            }
         }
+        pending[sec] = waiting
         return Array(next.prefix(params.limit))
     }
 
-    private func requestReason(for card: Card, input: ContextInput) {
-        let key = input.key
-        let docID = card.id
-        if let cached = IndexStore.shared.cachedReason(docID: docID, contextKey: key) {
-            setReason(cached, docID: docID, key: key)
-            return
+    private func card(_ m: Match, judgment: Judgment?) -> Card {
+        var m = m
+        let v = visits[m.doc.id] ?? []
+        if let j = judgment {
+            m.judgedHelpful = j.helpful
+            m.judgeConfidence = j.confidence
+            m.judgeReason = j.reason
+            return Card(match: m, reason: Reasons.withJudgment(m, visits: v, judgment: j), reasonFromModel: j.helpful && !j.reason.isEmpty)
         }
-        guard ReasonWriter.isAvailable else { return }
-        let passage = TextAnalysis.chunk(input.text, target: 600, maxChunks: 1).first ?? input.text
-        let prompt = ReasonWriter.prompt(contextTitle: input.title, contextPassage: passage, match: card.match)
-        ReasonWriter.shared.request(.init(docID: docID, contextKey: key, prompt: prompt) { [weak self] text in
-            self?.setReason(text, docID: docID, key: key)
-        })
+        return Card(match: m, reason: Reasons.template(m, visits: v))
     }
 
-    private func setReason(_ text: String, docID: Int64, key: String) {
-        guard key == lastKey else { return }
-        if let i = siteCards.firstIndex(where: { $0.id == docID }) { siteCards[i].reason = text; siteCards[i].reasonFromModel = true }
-        if let i = docCards.firstIndex(where: { $0.id == docID }) { docCards[i].reason = text; docCards[i].reasonFromModel = true }
+    /// Judges borderline cards (which then appear or don't) and writes reasons for the cards on
+    /// screen. One at a time, newest context only.
+    nonisolated private func judgePending(input: ContextInput, gen: Int, work: WorkingContextSummary?) async {
+        guard Judge.isAvailable else { return }
+        while true {
+            let next: (Match, CardSection)? = await MainActor.run {
+                guard gen == self.generation else { return nil }
+                for sec in CardSection.allCases {
+                    if let m = self.pending[sec]?.first(where: { self.judgments[self.judgmentKey($0.doc.id, input.key)] == nil }) { return (m, sec) }
+                }
+                for c in self.cards where !c.reasonFromModel && self.judgments[self.judgmentKey(c.id, input.key)] == nil {
+                    return (c.match, c.match.section)
+                }
+                return nil
+            }
+            guard let (m, sec) = next else { return }
+            let history = Reasons.history(m.doc, visits: await MainActor.run { self.visits[m.doc.id] ?? [] })
+            let cand = Candidate(doc: m.doc, section: sec, passage: m.passage, fused: m.fused, keywordWeight: 0, dense: 0,
+                                 meaning: m.semantic, sharedTerms: m.sharedTerms, sharedEntities: m.sharedEntities,
+                                 topicTerms: m.topicTerms, foundBy: m.foundBy, penalized: m.penalized)
+            let j = await Judge.judge(work: work, input: input, item: cand, history: history)
+                ?? Judgment(helpful: true, confidence: 0, reason: "")
+            await MainActor.run {
+                self.judgments[self.judgmentKey(m.doc.id, input.key)] = j
+                if self.judgments.count > 600 { self.judgments.removeAll() }
+                guard gen == self.generation else { return }
+                self.applyJudgment(j, to: m, section: sec, contextKey: input.key)
+            }
+        }
+    }
+
+    private func applyJudgment(_ j: Judgment, to m: Match, section sec: CardSection, contextKey: String) {
+        let limit = RankParams.fromSettings(Settings.shared.value).limit
+        if let i = pending[sec]?.firstIndex(where: { $0.doc.id == m.doc.id }) {
+            pending[sec]?.remove(at: i)
+            guard Pipeline.accept(m, judgment: j, gate: gate) else { return }
+            if sec == .sites, siteCards.count < limit, !siteCards.contains(where: { $0.id == m.doc.id }) { siteCards.append(card(m, judgment: j)) }
+            if sec == .docs, docCards.count < limit, !docCards.contains(where: { $0.id == m.doc.id }) { docCards.append(card(m, judgment: j)) }
+        } else {
+            // A card already on screen gets the model's reason. It stays even on a no, so
+            // nothing disappears under Felix while he reads.
+            let update: (inout [Card]) -> Void = { list in
+                guard let i = list.firstIndex(where: { $0.id == m.doc.id }) else { return }
+                var c = list[i]
+                c.match.judgedHelpful = j.helpful
+                c.match.judgeConfidence = j.confidence
+                c.match.judgeReason = j.reason
+                if j.helpful && !j.reason.isEmpty {
+                    c.reason = Reasons.withJudgment(c.match, visits: self.visits[m.doc.id] ?? [], judgment: j)
+                }
+                c.reasonFromModel = true
+                list[i] = c
+            }
+            update(&siteCards)
+            update(&docCards)
+        }
         storeCache()
     }
 

@@ -9,6 +9,8 @@ enum Indexer {
                           done: (@Sendable () -> Void)? = nil) {
         let settings = Settings.shared.value
         guard URLKey.isIndexableWeb(url), !settings.isExcluded(host: url.host) else { return }
+        // What Felix was doing when he read it, for the reason line later.
+        let during = ActivityTracker.shared.current(excluding: URLKey.key(for: url))
         work.async {
             let key = URLKey.key(for: url)
             let now = Date().timeIntervalSince1970
@@ -18,6 +20,7 @@ enum Indexer {
                               description: description, body: trimmed, firstSeen: now, lastSeen: now,
                               visitCount: 1, dwell: dwell)
             IndexStore.shared.recordCapture(d, analysis: a)
+            IndexStore.shared.recordVisit(key: key, at: now, kind: "read", during: during)
             done?()
         }
     }

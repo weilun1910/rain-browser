@@ -150,6 +150,11 @@ enum SmokeTest {
         }
         let settingsWindow = offscreenWindow(NSHostingView(rootView: SettingsView()), size: NSSize(width: 560, height: 520))
         snapshot(settingsWindow.contentView!, snaps.appendingPathComponent("5-settings.png"))
+        // Engine: the Sources and Models tabs.
+        let sourcesWindow = offscreenWindow(NSHostingView(rootView: SourcesSettings()), size: NSSize(width: 580, height: 1400))
+        snapshot(sourcesWindow.contentView!, snaps.appendingPathComponent("5b-settings-sources.png"))
+        let modelsWindow = offscreenWindow(NSHostingView(rootView: ModelsSettings()), size: NSSize(width: 580, height: 520))
+        snapshot(modelsWindow.contentView!, snaps.appendingPathComponent("5c-settings-models.png"))
 
         // 6. Typing keeps cards in place.
         if let doc = model.document {
