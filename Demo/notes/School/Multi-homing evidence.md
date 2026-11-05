@@ -9,7 +9,7 @@ tags: [paper, research, multi-homing]
 
 # Multi-homing evidence
 
-Hartley's ask from the Oct 17 check-in: back up the multi-homing claim with something better than "everyone uses GroupMe".
+Hartley's ask from the Oct 16 check-in: back up the multi-homing claim with something better than "everyone uses GroupMe".
 
 ## What I have
 - **Chen, Chevalier, Rossi and Oehlsen, "The Value of Flexible Work: Evidence from Uber Drivers" (NBER w23296).** About how much drivers value choosing their own hours. It's adjacent. Drivers who can switch on and off at will can also switch between apps, but the paper doesn't measure that directly.

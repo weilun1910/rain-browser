@@ -2,8 +2,8 @@
 id: note-seminar-week6
 title: Seminar week 6 - platform regulation
 space: school
-created: 2026-10-08T15:35:00-04:00
-updated: 2026-10-08T17:40:00-04:00
+created: 2026-10-07T15:35:00-04:00
+updated: 2026-10-07T17:40:00-04:00
 tags: [seminar, regulation]
 ---
 

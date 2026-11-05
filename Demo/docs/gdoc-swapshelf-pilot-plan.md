@@ -27,7 +27,7 @@ An empty app on day one kills this. Nobody lists until there are people asking, 
 
 - **Recruit the first listers ourselves.** Sam and I go door to door in every Branford and Saybrook entryway the weekend before launch. We're looking for 40 anchor listers: juniors and seniors with shelves of old textbooks and a mini fridge they're done with. 17 so far.
 - **Install it on the spot.** Don't say "we'll send you a link". Take their phone, install the TestFlight build, and list their first three items together right there. A link sent later gets ignored.
-- **Seed 200 listings before requests open.** Listers only from Nov 9 to Nov 11. Requests open Wednesday Nov 12.
+- **Seed 200 listings before requests open.** Listers only from Nov 9 to Nov 11. Requests open Thursday Nov 12.
 - **Be the delivery.** For the first week we carry items to the buttery shelves ourselves when a lister asks. It doesn't scale. It doesn't need to yet.
 - **Thank people by hand.** Every one of the first 40 listers gets a hand-written note and a Blue State coffee card. They should feel like they're part of building this.
 
@@ -42,7 +42,7 @@ An empty app on day one kills this. Nobody lists until there are people asking, 
 | Week | Dates | Focus |
 |---|---|---|
 | 0 | Nov 6 to 8 | Door to door, anchor listers, TestFlight build 0.4 |
-| 1 | Nov 9 to 15 | Listers only until Wed, then requests open. We carry items. |
+| 1 | Nov 9 to 15 | Listers only until Thursday, then requests open. We carry items. |
 | 2 | Nov 16 to 22 | Stop carrying items. Watch the 72-hour request rate. |
 | 3 | Nov 23 to 29 | Thanksgiving week, expect a dip. Interview 5 users. |
 | 4 | Nov 30 to Dec 4 | Finals rush on gear. Decide on January. |

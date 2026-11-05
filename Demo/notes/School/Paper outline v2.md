@@ -9,7 +9,7 @@ tags: [paper, outline]
 
 # Paper outline v2
 
-Platforms and Markets final paper. 5,000 words, due Dec 5. Draft to Hartley Nov 14. Revised after the Oct 17 check-in and sent to her Nov 1.
+Platforms and Markets final paper. 5,000 words, due Dec 5. Draft to Hartley Nov 14. Revised after the Oct 16 check-in and sent to her Nov 1.
 
 **Thesis (v2):** Campus marketplaces stall at zero, not at scale. The hard part is getting one residential college liquid, and multi-homing on free channels like GroupMe and Facebook groups keeps them from ever tipping.
 

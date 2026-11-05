@@ -27,7 +27,7 @@ Weekly target: 18 to 25 miles.
 ## Log
 - Sep 27: 6 miles long, felt heavy
 - Oct 4: 7 miles, tried a negative split, went out too fast anyway
-- Oct 11: fartlek felt great, 8 surges
+- Oct 13: fartlek felt great, 8 surges
 - Oct 18: 8 miles long. Left knee a bit tight after mile 6. Watch it.
 
 ## Next
