@@ -356,7 +356,7 @@ struct SplitRow: View {
         .contentShape(Rectangle())
         .simultaneousGesture(TapGesture().modifiers(.option).onEnded { model.separate(split) })
         .onHover { hovering = $0 }
-        .onDrag { ItemDrag.provider(split: split.id) }
+        .onDrag { SidebarDrag.shared.begin([split.id]); return ItemDrag.provider(split: split.id) }
         .contextMenu { SplitMenu(split: split) }
         .help(split.items.compactMap { model.tab($0)?.displayTitle }.joined(separator: " | "))
     }

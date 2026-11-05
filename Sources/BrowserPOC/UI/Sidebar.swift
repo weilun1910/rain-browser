@@ -110,8 +110,12 @@ struct SpacePage: View {
 
     var isCurrent: Bool { model.currentSpaceID == spaceID }
 
+    @ObservedObject private var drag = SidebarDrag.shared
+
     private func row(_ ref: SidebarRef) -> some View {
-        SidebarRow(ref: ref).matchedGeometryEffect(id: ref, in: rowSpace)
+        // A row you dropped lands in the gap it was dropped in, so it isn't matched to where it was.
+        let id: AnyHashable = drag.landing == ref ? AnyHashable("landing") : AnyHashable(ref)
+        return SidebarRow(ref: ref).matchedGeometryEffect(id: id, in: rowSpace)
     }
 
     var body: some View {
@@ -411,7 +415,8 @@ struct RowDropDelegate: DropDelegate {
     func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [ItemDrag.type]) }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        let y = info.location.y
+        // With a gap open above the row, the row itself starts below it.
+        let y = info.location.y - (indicator == .above ? SidebarDrag.gap : 0)
         let middle = canSplit && y > height * 0.25 && y < height * 0.75
         if middle {
             if clock.enteredMiddleAt == nil {
@@ -443,10 +448,12 @@ struct RowDropDelegate: DropDelegate {
         indicator = nil
         return ItemDrag.loadItems(info.itemProviders(for: [ItemDrag.type])) { items in
             let refs = items.compactMap(\.sidebarRef)
-            if split, refs.count == 1, case .tab(let id) = refs[0] {
-                model.dropForSplit(id, onto: ref.id)
-            } else {
-                model.place(refs, next: ref, after: after)
+            SidebarDrag.shared.land(refs.first) {
+                if split, refs.count == 1, case .tab(let id) = refs[0] {
+                    model.dropForSplit(id, onto: ref.id)
+                } else {
+                    model.place(refs, next: ref, after: after)
+                }
             }
         }
     }
@@ -458,7 +465,10 @@ struct SidebarRow: View {
     @EnvironmentObject var model: BrowserModel
     @State private var indicator: RowDropIndicator?
     @State private var clock = HoverClock()
-    @Environment(\.spaceAccent) private var spaceAccent
+    @ObservedObject private var drag = SidebarDrag.shared
+
+    /// Where this row shows a gap: the drop hovering it, or the tour's stand-in for one.
+    private var gap: RowDropIndicator? { drag.preview.map { $0.ref == ref ? $0.at : nil } ?? indicator }
 
     var body: some View {
         Group {
@@ -468,13 +478,12 @@ struct SidebarRow: View {
             }
         }
         .sidebarCursor(model.sidebarCursor == .row(ref))
-        .overlay(alignment: indicator == .above ? .top : .bottom) {
-            if indicator == .above || indicator == .below {
-                Capsule().fill(spaceAccent).frame(height: 2).padding(.horizontal, Theme.Space.s).allowsHitTesting(false)
-                    .transition(.opacity)
-            }
-        }
-        .motion(Motion.hover, value: indicator, fadeOnly: true)
+        .opacity(drag.dragging.contains(ref.id) ? SidebarDrag.dimmed : 1)
+        // While a row is dragged over this one, a gap opens where it would land and the rows
+        // below move down to make room, like Zen and Arc.
+        .padding(.top, gap == .above ? SidebarDrag.gap : 0)
+        .padding(.bottom, gap == .below ? SidebarDrag.gap : 0)
+        .motion(Motion.insert, value: gap)
         .onDrop(of: [ItemDrag.type], delegate: RowDropDelegate(ref: ref, height: Theme.Space.rowHeight, canSplit: { if case .tab = ref { return true }; return false }(),
                                                                model: model, indicator: $indicator, clock: clock))
     }
@@ -555,7 +564,9 @@ struct TabRow: View {
         .onHover { hovering = $0 }
         .onDrag {
             let picked = model.multiSelection.contains(tab.id) && model.multiSelection.count > 1
-            return picked ? ItemDrag.provider(ids: model.multiSelectedTabs.map { $0.id }) : ItemDrag.provider(tab.id)
+            let ids = picked ? model.multiSelectedTabs.map { $0.id } : [tab.id]
+            SidebarDrag.shared.begin(ids)
+            return ItemDrag.provider(ids: ids)
         }
         .contextMenu { TabMenu(tab: tab) }
         .help(tab.isWeb ? "\(tab.displayTitle)\n\(tab.url.map { Snippet.prettyURL($0.absoluteString) } ?? "")" : tab.displayTitle)

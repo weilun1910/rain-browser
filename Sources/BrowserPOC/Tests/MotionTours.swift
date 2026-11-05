@@ -110,6 +110,17 @@ enum MotionTours {
         s.step(1.4, "close it") { if let o = opened { m.remove(o) } }
         s.step(1.2, "folder close") { if let f = m.spaceFolders.first { m.toggleFolder(f) } }
         s.step(1.2, "folder open") { if let f = m.spaceFolders.first { m.toggleFolder(f) } }
+        // A drag can't be started from code, so this shows the gap the way a hovering drop does.
+        var today: [SidebarRef] = []
+        s.step(1.2, "drag: pick up a row") { today = m.refs(in: .today); if let r = today.last { SidebarDrag.shared.pretend([r.id]) } }
+        for i in 0..<3 {
+            s.step(0.45, "drag: over row \(i)") { if today.indices.contains(i) { Motion.run(Motion.insert) { SidebarDrag.shared.preview = (today[i], .above) } } }
+        }
+        s.step(0.45, "drag: below row 2") { if today.indices.contains(2) { Motion.run(Motion.insert) { SidebarDrag.shared.preview = (today[2], .below) } } }
+        s.step(0.6, "drag: drop") {
+            guard let moving = today.last, today.count > 2 else { SidebarDrag.shared.end(); return }
+            SidebarDrag.shared.land(moving) { SidebarDrag.shared.preview = nil; m.place([moving], next: today[2], after: true) }
+        }
         s.step(1.2, "clear today") { _ = m.clearToday() }
         s.step(1.6, "undo") { m.runToastAction() }
     }
