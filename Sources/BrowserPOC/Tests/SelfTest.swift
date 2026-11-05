@@ -238,6 +238,7 @@ enum SelfTest {
         SplitTests.run(dir: dir)
         SpaceTests.run(dir: dir)
         CommandBarTests.run(dir: dir)
+        ThemeTests.run()
         EngineTests.run(dir: dir)
         ArcZenTests.run(dir: dir)
         ShelfTests.run(dir: dir)

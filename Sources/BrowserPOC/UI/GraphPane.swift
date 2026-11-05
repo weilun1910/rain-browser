@@ -61,7 +61,7 @@ struct GraphPane: View {
                             .padding(.trailing, 10)
                     }
                     .frame(maxHeight: .infinity, alignment: .top)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .transition(GraphTheme.panelTransition)
                 }
             }
             .coordinateSpace(name: "graphPane")

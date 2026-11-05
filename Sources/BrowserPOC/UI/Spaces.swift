@@ -23,9 +23,10 @@ struct SpaceBar: View {
     @EnvironmentObject var model: BrowserModel
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 3) {
             ForEach(Array(model.spaces.enumerated()), id: \.element.id) { i, sp in
                 SpaceButton(space: sp, index: i)
+                    .transition(Motion.Transitions.tabRow)
             }
             SmallIconButton(symbol: "plus", help: "New space") { model.promptNewSpace() }
         }
@@ -41,10 +42,16 @@ struct SpaceButton: View {
     var current: Bool { model.currentSpaceID == space.id }
 
     var body: some View {
+        // Only the current space shows its colour. The others are grey until you hover them, like Zen.
         SpaceIcon(icon: space.icon)
-            .foregroundStyle(current ? Color(hex: space.color) : Color.secondary)
+            .foregroundStyle(current || hovering ? Theme.Palette.accent(space.color) : Color.secondary)
+            .saturation(current || hovering ? 1 : 0)
+            .opacity(current || hovering ? 1 : 0.7)
             .frame(width: 26, height: 24)
-            .background(RoundedRectangle(cornerRadius: 6).fill(current ? Color(hex: space.color).opacity(0.16) : (hovering ? Color.primary.opacity(0.06) : .clear)))
+            .background(Theme.Radius.shape(Theme.Radius.button)
+                .fill(current ? Theme.Palette.tint(space.color).opacity(0.16) : (hovering ? Theme.Palette.rowHover : .clear)))
+            .motion(Motion.hover, value: hovering, fadeOnly: true)
+            .motion(Motion.spaceSwitch, value: current, fadeOnly: true)
             .contentShape(Rectangle())
             .onTapGesture { model.switchSpace(to: space.id) }
             .onHover { hovering = $0 }

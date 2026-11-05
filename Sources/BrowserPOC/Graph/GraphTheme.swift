@@ -154,17 +154,19 @@ struct GraphTheme {
     /// (0.2 s smooth) and remove (0.14 s ease in).
     static let enter: Double = 0.24
     static let exit: Double = 0.16
-    /// The camera gliding to a clicked node, to a focus, or to fit everything.
-    static let glide: Double = 0.5
-    /// How long a flung background drag keeps going.
-    static let momentumTime: Double = 0.35
+    /// The camera gliding to a clicked node, to a focus, or to fit everything. Under Reduce
+    /// Motion the camera jumps instead, the way the chrome's slides turn into fades.
+    static var glide: Double { Motion.reduceMotion ? 0.001 : 0.5 }
+    /// How long a flung background drag keeps going. Under Reduce Motion it stops on release.
+    static var momentumTime: Double { Motion.reduceMotion ? 0.001 : 0.35 }
     /// A mouse wheel step eases to its zoom over this long.
     static let wheelZoom: Double = 0.14
     /// After the last input, keep drawing every frame this long, so the next input never waits
     /// on a paused view.
     static let activityGrace: Double = 0.6
-    /// Side panels: the chrome's panel spring.
-    static let panelSpring = Animation.spring(duration: 0.3, bounce: 0.06)
+    /// Side panels: the chrome's panel spring and slide, which become a short fade under Reduce Motion.
+    static var panelSpring: Animation { Motion.reduceMotion ? Motion.reducedFade : Motion.panel }
+    static var panelTransition: AnyTransition { Motion.Transitions.panel(edge: .trailing) }
     static let cardFade = Animation.easeOut(duration: 0.12)
 }
 

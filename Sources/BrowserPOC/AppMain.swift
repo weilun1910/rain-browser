@@ -56,8 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                          styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                          backing: .buffered, defer: false)
         w.title = "Browser POC"
-        w.titlebarAppearsTransparent = true
-        w.titleVisibility = .hidden
+        WindowChrome.configure(w)
         w.isMovableByWindowBackground = false
         w.collectionBehavior.insert(.fullScreenPrimary)
         w.minSize = NSSize(width: 900, height: 560)
@@ -66,6 +65,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         w.setFrameAutosaveName("BrowserPOCMain")
         if !w.setFrameUsingName("BrowserPOCMain") { w.center() }
         window = w
+        WindowChrome.setDockIconIfUnbundled()
+        WindowChrome.installQuietTrafficLights(w)
+        if CommandLine.arguments.contains("--motion-tour") { MotionTour.start(model) }
+        Startup.shared.begin()
         w.makeKeyAndOrderFront(nil)
         NSApp.activate()
 
@@ -91,7 +94,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         model.notes.reload()
         model.startUpkeep()
 
-        if model.currentTab == nil && model.document == nil {
+        // On a fresh profile the first run panel comes first, without the command bar over it.
+        if model.currentTab == nil && model.document == nil && Settings.shared.value.firstRunDone {
             model.focusAddress()
         }
         if !pendingURLs.isEmpty { model.openFromSystem(pendingURLs); pendingURLs = [] }
@@ -142,7 +146,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let main = NSMenu()
 
         let appMenu = NSMenu()
-        appMenu.addItem(item("About Browser POC", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), target: NSApp))
+        appMenu.addItem(item("About Rain", #selector(aboutAction), target: self))
         appMenu.addItem(.separator())
         appMenu.addItem(item("Settings...", #selector(settingsAction), ",", target: self))
         appMenu.addItem(.separator())
@@ -269,6 +273,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc func settingsAction() { openSettings() }
+    @objc func aboutAction() { WindowChrome.showAbout() }
     @objc func newTabAction() { showMain(); model.newTabCommand() }
     @objc func newNoteAction() { showMain(); model.newNote() }
     @objc func splitNewTabAction() { showMain(); model.splitWithNewTab() }

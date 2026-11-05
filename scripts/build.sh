@@ -22,6 +22,26 @@ APP="$STAGE/BrowserPOC.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/BrowserPOC" "$APP/Contents/MacOS/BrowserPOC"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
+# The icon is drawn in code; scripts/make-icon.sh renders it into Resources/AppIcon.icns.
+if [ -f "$ROOT/Resources/AppIcon.icns" ]; then
+  cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+else
+  echo "Resources/AppIcon.icns is missing. Run scripts/make-icon.sh." >&2
+  exit 1
+fi
+# macOS 26 draws the icon from the Icon Composer document, compiled into Assets.car, so it can
+# show its dark, clear and tinted looks. The .icns above stays as the fallback.
+if [ -d "$ROOT/Resources/AppIcon.icon" ]; then
+  ICONTMP="$(mktemp -d)"
+  if xcrun actool "$ROOT/Resources/AppIcon.icon" --compile "$ICONTMP" --platform macosx \
+       --minimum-deployment-target 26.0 --app-icon AppIcon --output-partial-info-plist "$ICONTMP/partial.plist" \
+       --errors >/dev/null 2>&1 && [ -f "$ICONTMP/Assets.car" ]; then
+    cp "$ICONTMP/Assets.car" "$APP/Contents/Resources/Assets.car"
+  else
+    echo "actool couldn't compile Resources/AppIcon.icon; using AppIcon.icns only." >&2
+  fi
+  rm -rf "$ICONTMP"
+fi
 # llama.cpp ships as a dynamic framework. It goes in Contents/Frameworks, and the binary
 # looks there through an extra rpath.
 if [ -d "$BIN_DIR/llama.framework" ]; then

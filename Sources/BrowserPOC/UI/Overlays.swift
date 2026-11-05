@@ -11,39 +11,46 @@ struct PeekOverlay: View {
     var body: some View {
         GeometryReader { g in
             ZStack {
-                Color.black.opacity(shown ? 0.22 : 0)
+                Theme.Palette.scrim.opacity(shown ? 1.6 : 0)
                     .contentShape(Rectangle())
                     .onTapGesture { model.closePeek() }
-                VStack(spacing: 6) {
-                    HStack(spacing: 6) {
+                VStack(spacing: Theme.Space.s) {
+                    HStack(spacing: Theme.Space.s) {
                         PeekTitle(tab: peek.tab)
                         Spacer()
-                        PeekButton(symbol: "rectangle.split.2x1", help: "Open in split view") { model.splitPeek() }
-                        PeekButton(symbol: "arrow.up.left.and.arrow.down.right", help: "Open as a tab (Cmd-O)") { model.expandPeek() }
-                        PeekButton(symbol: "xmark", help: "Close (Esc)") { model.closePeek() }
+                        HStack(spacing: 0) {
+                            PeekButton(symbol: "rectangle.split.2x1", help: "Open in split view") { model.splitPeek() }
+                            PeekButton(symbol: "arrow.up.left.and.arrow.down.right", help: "Open as a tab (Cmd-O)") { model.expandPeek() }
+                            PeekButton(symbol: "xmark", help: "Close (Esc)") { model.closePeek() }
+                        }
+                        .padding(.horizontal, 2)
+                        .floatingSurface(radius: Theme.Radius.row)
                     }
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, Theme.Space.xs)
                     WebArea(tab: peek.tab)
                         .paneCard()
-                        .shadow(color: .black.opacity(0.25), radius: 24, y: 10)
+                        .themeShadow(.popover)
                 }
                 .frame(width: g.size.width * 0.84, height: g.size.height * 0.9)
-                .scaleEffect(shown ? 1 : 0.94)
+                .scaleEffect(shown || Motion.reduceMotion ? 1 : 0.96)
                 .opacity(shown ? 1 : 0)
             }
         }
-        .onAppear { withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { shown = true } }
+        .onAppear { Motion.run(Motion.peek, fadeOnly: true) { shown = true } }
     }
 }
 
 struct PeekTitle: View {
     @ObservedObject var tab: Tab
     var body: some View {
-        HStack(spacing: 6) {
-            ItemIcon(tab: tab, size: 13)
-            Text(tab.displayTitle).font(.system(size: 12, weight: .medium)).lineLimit(1).foregroundStyle(.white)
-            if let h = tab.url?.host { Text(h).font(.system(size: 11)).foregroundStyle(.white.opacity(0.7)).lineLimit(1) }
+        HStack(spacing: Theme.Space.s) {
+            ItemIcon(tab: tab, size: 14)
+            Text(tab.displayTitle).font(Theme.Font.rowEmphasis).lineLimit(1).foregroundStyle(.primary)
+            if let h = tab.url?.host { Text(h).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1) }
         }
+        .padding(.horizontal, Theme.Space.m)
+        .frame(height: 26)
+        .floatingSurface(radius: Theme.Radius.row)
     }
 }
 
@@ -52,13 +59,7 @@ struct PeekButton: View {
     let help: String
     let action: () -> Void
     var body: some View {
-        Button(action: action) {
-            Image(systemName: symbol).font(.system(size: 11, weight: .semibold)).frame(width: 26, height: 22).contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.white)
-        .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.35)))
-        .help(help)
+        IconButton(symbol: symbol, help: help, width: 28, height: 24, symbolSize: 11, action: action)
     }
 }
 
@@ -67,21 +68,21 @@ struct FindBar: View {
     @EnvironmentObject var model: BrowserModel
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(.secondary)
+        HStack(spacing: Theme.Space.s) {
+            Image(systemName: "magnifyingglass").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
             FindField(text: Binding(get: { model.find.query }, set: { model.setFindQuery($0) }), focusToken: model.find.focusToken,
                       onNext: { model.findNext(backwards: $0) }, onClose: { model.closeFind() })
                 .frame(width: 180, height: 20)
-            Text(countText).font(.system(size: 11).monospacedDigit()).foregroundStyle(.secondary).frame(minWidth: 54, alignment: .trailing)
+            Text(countText).font(Theme.Font.caption.monospacedDigit()).foregroundStyle(.secondary).frame(minWidth: 54, alignment: .trailing)
             SmallIconButton(symbol: "chevron.up", help: "Previous (Shift-Cmd-G)") { model.findNext(backwards: true) }
             SmallIconButton(symbol: "chevron.down", help: "Next (Cmd-G)") { model.findNext() }
             SmallIconButton(symbol: "xmark", help: "Done (Esc)") { model.closeFind() }
         }
-        .padding(.horizontal, 10)
-        .frame(height: 34)
-        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(.regularMaterial))
-        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color.primary.opacity(0.1)))
-        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+        .padding(.leading, Theme.Space.l - 2)
+        .padding(.trailing, Theme.Space.xs)
+        .frame(height: 36)
+        .popoverSurface(radius: Theme.Radius.card)
+        .appearEffect(scale: 0.98, y: -4, animation: Motion.barIn)
     }
 
     var countText: String {
@@ -140,18 +141,20 @@ struct ToastView: View {
     let toast: ToastState
     @EnvironmentObject var model: BrowserModel
 
+    @Environment(\.spaceAccent) private var accent
+
     var body: some View {
-        HStack(spacing: 12) {
-            Text(toast.message).font(.system(size: 12))
+        HStack(spacing: Theme.Space.l) {
+            Text(toast.message).font(Theme.Font.secondary)
             if let a = toast.actionTitle {
-                Button(a) { model.runToastAction() }.buttonStyle(.plain).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.accentColor)
+                Button(a) { model.runToastAction() }
+                    .buttonStyle(QuietActionStyle(accent: accent))
+                    .foregroundStyle(accent)
             }
         }
-        .padding(.horizontal, 14)
-        .frame(height: 32)
-        .background(Capsule().fill(.regularMaterial))
-        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.1)))
-        .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
+        .padding(.horizontal, Theme.Space.l + 2)
+        .frame(height: 34)
+        .floatingSurface(radius: Theme.Radius.card)
     }
 }
 
@@ -159,31 +162,39 @@ struct ToastView: View {
 struct SwitcherOverlay: View {
     let state: SwitcherState
     @EnvironmentObject var model: BrowserModel
+    @Environment(\.spaceAccent) private var accent
+    @Namespace private var selection
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
             ForEach(Array(state.items.enumerated()), id: \.offset) { i, s in
-                HStack(spacing: 10) {
+                HStack(spacing: Theme.Space.l) {
                     switcherIcon(s)
-                    Text(model.title(for: s)).font(.system(size: 13)).lineLimit(1)
+                    Text(model.title(for: s)).font(Theme.Font.row).lineLimit(1)
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 10)
-                .frame(height: 30)
-                .background(RoundedRectangle(cornerRadius: 7).fill(i == state.index ? Color.accentColor.opacity(0.25) : .clear))
+                .padding(.horizontal, Theme.Space.m + 2)
+                .frame(height: 32)
+                // The same gliding, space-tinted highlight as the command bar.
+                .background {
+                    if i == state.index {
+                        Theme.Radius.shape(Theme.Radius.row).fill(accent.opacity(0.16))
+                            .matchedGeometryEffect(id: "switcher", in: selection)
+                    }
+                }
             }
         }
-        .padding(8)
+        .motion(Motion.selection, value: state.index)
+        .padding(Theme.Space.m)
         .frame(width: 380)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.regularMaterial))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.1)))
-        .shadow(color: .black.opacity(0.25), radius: 30, y: 10)
+        .floatingSheet()
+        .appearEffect(scale: 0.97, y: 6, animation: Motion.barIn)
     }
 
     @ViewBuilder func switcherIcon(_ s: Selection) -> some View {
         switch s {
-        case .tab(let id): ItemIcon(tab: model.tab(id), size: 14)
-        case .split: Image(systemName: "rectangle.split.2x1").font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 14)
+        case .tab(let id): ItemIcon(tab: model.tab(id), size: 16)
+        case .split: Image(systemName: "rectangle.split.2x1").font(.system(size: 12)).foregroundStyle(.secondary).frame(width: 16)
         }
     }
 }

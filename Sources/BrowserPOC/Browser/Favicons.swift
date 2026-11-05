@@ -282,17 +282,12 @@ struct FaviconView: View {
 
     var body: some View {
         let _ = icons.generation
-        Group {
-            if let img = icons.image(for: url) {
-                Image(nsImage: img).resizable().interpolation(.high).frame(width: size, height: size)
-                    .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
-            } else if !Favicons.monogram(url).isEmpty {
-                Monogram(letter: Favicons.monogram(url), size: size)
-            } else {
-                Image(systemName: fallback).font(.system(size: size * 0.8)).foregroundStyle(.secondary).frame(width: size, height: size)
-            }
-        }
-        .onAppear { if fetch { icons.ensure(url) } }
+        // The look (rounding, the backing for dark icons, the monogram and the fade-in) is the
+        // theme's FaviconImage. This view supplies the image.
+        let letter = Favicons.monogram(url)
+        FaviconImage(image: icons.image(for: url), size: size,
+                     fallback: letter.isEmpty ? .symbol(fallback) : .monogram(letter))
+            .onAppear { if fetch { icons.ensure(url) } }
     }
 }
 
@@ -311,15 +306,11 @@ struct SourceIcon: View {
     }
 }
 
-/// A letter in a thin rounded square, for sites with no icon.
+/// A letter for sites with no icon, drawn by the theme's FaviconImage.
 struct Monogram: View {
     let letter: String
     let size: CGFloat
     var body: some View {
-        Text(letter)
-            .font(.system(size: size * 0.6, weight: .medium, design: .rounded))
-            .foregroundStyle(.secondary)
-            .frame(width: size, height: size)
-            .overlay(RoundedRectangle(cornerRadius: size * 0.25, style: .continuous).strokeBorder(Color.secondary.opacity(0.45), lineWidth: 1))
+        FaviconImage(image: nil, size: size, fallback: .monogram(letter))
     }
 }

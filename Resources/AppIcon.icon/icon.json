@@ -1,0 +1,16 @@
+{
+  "fill" : {
+    "automatic-gradient" : "srgb:0.15000,0.15000,0.16000,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        { "glass" : true, "image-name" : "drop.svg", "name" : "drop" },
+        { "glass" : true, "image-name" : "loop.svg", "name" : "loop" }
+      ],
+      "shadow" : { "kind" : "neutral", "opacity" : 0.5 },
+      "translucency" : { "enabled" : true, "value" : 0.35 }
+    }
+  ],
+  "supported-platforms" : { "squares" : [ "macOS" ] }
+}

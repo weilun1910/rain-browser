@@ -5,27 +5,45 @@ struct LeftSidebar: View {
     @EnvironmentObject var model: BrowserModel
     @ObservedObject var settings = Settings.shared
 
+    @State private var addressHover = false
+    @State private var spaceSteps = StepTracker()
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        // Which way the list slides when the space changes.
+        let step = spaceSteps.step(for: model.spaces.firstIndex { $0.id == model.currentSpaceID })
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
             topBar
             addressField
             EssentialsGrid()
-            SpaceHeader()
+            ZStack(alignment: .leading) {
+                SpaceHeader()
+                    .id(model.currentSpaceID)
+                    .transition(Motion.Transitions.spaceSlide(step))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .clipped()
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    pinnedSection
-                    foldersSection
-                    tabsSection
+                // The list is keyed by space, so moving between spaces slides the new list in.
+                ZStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: Theme.Space.sectionGap) {
+                        pinnedSection
+                        foldersSection
+                        tabsSection
+                    }
+                    .padding(.bottom, Theme.Space.l)
+                    // A folder opening or closing moves everything below it on the same spring.
+                    .motion(Motion.expand, value: model.spaceFolders.map { $0.isExpanded })
+                    .id(model.currentSpaceID)
+                    .transition(Motion.Transitions.spaceSlide(step))
                 }
-                .padding(.bottom, 12)
             }
             .scrollIndicators(.never)
             MediaBar()
             bottomBar
         }
-        .padding(.horizontal, 10)
+        .motion(Motion.spaceSwitch, value: model.currentSpaceID)
+        .padding(.horizontal, Theme.Space.sidebarInset)
         .background(SpaceSwipeCatcher { step in model.switchSpace(by: step) })
-        .background((model.currentSpace.map { Color(hex: $0.color) } ?? .clear).opacity(0.07).ignoresSafeArea())
     }
 
     // MARK: Top
@@ -42,32 +60,36 @@ struct LeftSidebar: View {
             }
             RelatedToggleButton()
         }
-        .frame(height: 30)
-        .padding(.top, 4)
+        // Matches the title bar, so these buttons share a row with the traffic lights.
+        .frame(height: Theme.Space.titleBarHeight)
     }
 
     /// Shows the focused page's address. Clicking it opens the command bar, like Cmd-L.
     private var addressField: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(.tertiary)
+        HStack(spacing: Theme.Space.m) {
+            Image(systemName: "magnifyingglass").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
             Text(model.addressText.isEmpty ? "Search or enter address" : Snippet.prettyURL(model.addressText))
-                .font(.system(size: 13))
-                .foregroundStyle(model.addressText.isEmpty ? .tertiary : .secondary)
+                .font(Theme.Font.row)
+                .foregroundStyle(model.addressText.isEmpty ? .secondary : .primary)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 0)
             if model.currentTab?.url != nil, model.currentTab?.isApp == false {
-                Button { model.copyCurrentURL() } label: {
-                    Image(systemName: "link").font(.system(size: 10)).frame(width: 18, height: 18).contentShape(Rectangle())
-                }
-                .buttonStyle(.plain).foregroundStyle(.tertiary).help("Copy link (Shift-Cmd-C)")
+                IconButton(symbol: "link", help: "Copy link (Shift-Cmd-C)", width: 20, height: 20, symbolSize: 10) { model.copyCurrentURL() }
+                    .opacity(addressHover ? 1 : 0)
+                    .motion(Motion.hover, value: addressHover, fadeOnly: true)
             }
         }
-        .padding(.horizontal, 10)
-        .frame(height: 30)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.055)))
+        .padding(.leading, Theme.Space.l - 2)
+        .padding(.trailing, Theme.Space.xs)
+        .frame(height: 32)
+        .background(Theme.Radius.shape(Theme.Radius.row).fill(addressHover ? Theme.Palette.fieldHover : Theme.Palette.field))
+        // The command bar grows out of here for Cmd-L, so it needs to know where the field is.
+        .background(AddressFieldFrame())
         .contentShape(Rectangle())
         .onTapGesture { model.focusAddress() }
+        .onHover { addressHover = $0 }
+        .motion(Motion.hover, value: addressHover, fadeOnly: true)
         .help(model.addressText)
     }
 
@@ -75,41 +97,49 @@ struct LeftSidebar: View {
 
     private var pinnedSection: some View {
         let rows = model.refs(in: .pinned)
-        return SectionBox(title: "Pinned", onDropItems: { items in model.place(items.compactMap(\.sidebarRef), in: .pinned, at: Int.max) }) {
+        // Like Zen, pins sit under the space's name with no label, and a hairline closes them off.
+        return SectionBox(title: rows.isEmpty ? "Pinned" : "", onDropItems: { items in model.place(items.compactMap(\.sidebarRef), in: .pinned, at: Int.max) }) {
             if rows.isEmpty {
-                Text("Drag tabs here to pin them").font(.system(size: 12)).foregroundStyle(.tertiary).padding(.leading, 8).frame(height: 22)
+                Text("Drag tabs here to pin them")
+                    .font(Theme.Font.secondary).foregroundStyle(.secondary)
+                    .padding(.leading, Theme.Space.rowInset).frame(height: 24)
             }
-            ForEach(rows, id: \.self) { SidebarRow(ref: $0) }
+            ForEach(rows, id: \.self) { SidebarRow(ref: $0).transition(Motion.Transitions.tabRow) }
+            if !rows.isEmpty { SectionDivider() }
         }
+        .motion(Motion.insert, value: rows)
     }
 
     private var foldersSection: some View {
         SectionBox(title: "Folders", trailing: AnyView(SmallIconButton(symbol: "plus", help: "New folder") { model.promptNewFolder() })) {
-            if model.spaceFolders.isEmpty {
-                Text("No folders yet").font(.system(size: 12)).foregroundStyle(.tertiary).padding(.leading, 8)
-            }
             ForEach(model.spaceFolders) { f in
                 FolderRow(folder: f)
-                if f.isExpanded {
-                    VStack(spacing: 1) {
+                FolderReveal(isOpen: f.isExpanded) {
+                    VStack(spacing: Theme.Space.rowGap) {
                         let rows = model.refs(in: .folder(f.id))
-                        ForEach(rows, id: \.self) { SidebarRow(ref: $0) }
+                        ForEach(rows, id: \.self) { SidebarRow(ref: $0).transition(Motion.Transitions.tabRow) }
                         if rows.isEmpty {
-                            Text("Empty").font(.system(size: 12)).foregroundStyle(.tertiary).padding(.leading, 8).frame(height: 22)
+                            Text("Empty")
+                                .font(Theme.Font.secondary).foregroundStyle(.secondary)
+                                .padding(.leading, Theme.Space.rowInset).frame(height: 24)
                         }
                     }
-                    .padding(.leading, 14)
-                    .folderReveal()
-                } else {
+                    .padding(.top, Theme.Space.rowGap)
+                    // Child icons line up under the folder's name.
+                    .padding(.leading, Theme.Space.folderIndent)
+                }
+                if !f.isExpanded {
                     // A closed folder still shows what's on screen, like Arc and Zen.
                     let shown = model.shownInClosedFolder(f)
                     if !shown.isEmpty {
-                        VStack(spacing: 1) { ForEach(shown, id: \.self) { SidebarRow(ref: $0) } }
-                            .padding(.leading, 14)
+                        VStack(spacing: Theme.Space.rowGap) { ForEach(shown, id: \.self) { SidebarRow(ref: $0) } }
+                            .padding(.leading, Theme.Space.folderIndent)
+                            .transition(.opacity)
                     }
                 }
             }
         }
+        .motion(Motion.insert, value: model.spaceFolders.map { model.refs(in: .folder($0.id)) })
     }
 
     private var tabsSection: some View {
@@ -117,47 +147,46 @@ struct LeftSidebar: View {
         let trailing = HStack(spacing: 2) {
             if !rows.isEmpty {
                 Button("Clear") { _ = model.clearToday() }
-                    .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary)
+                    .buttonStyle(QuietActionStyle())
                     .help("Archive every tab here (Shift-Cmd-K)")
-                    .padding(.trailing, 4)
+                    .padding(.trailing, Theme.Space.xs)
             }
             SmallIconButton(symbol: "square.and.pencil", help: "New note") { model.newNote() }
         }
         return SectionBox(title: "Tabs", trailing: AnyView(trailing), onDropItems: { items in model.place(items.compactMap(\.sidebarRef), in: .today, at: 0) }) {
             Button { model.newTabCommand() } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "plus").frame(width: 16)
+                HStack(spacing: Theme.Space.rowIconGap) {
+                    Image(systemName: "plus").font(.system(size: 12, weight: .medium)).frame(width: Theme.Space.rowIcon)
                     Text("New tab")
-                    Spacer()
+                    Spacer(minLength: 0)
                 }
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-                .frame(height: 28)
-                .contentShape(Rectangle())
-                .modifier(RowBackground(selected: model.bar.isOpen && model.bar.mode == .newTab, hovering: false))
             }
-            .buttonStyle(.plain)
-            ForEach(rows, id: \.self) { SidebarRow(ref: $0) }
+            .buttonStyle(SidebarActionRowStyle(selected: model.bar.isOpen && model.bar.mode == .newTab))
+            ForEach(rows, id: \.self) { SidebarRow(ref: $0).transition(Motion.Transitions.tabRow) }
         }
+        .motion(Motion.insert, value: rows)
     }
 
     private var bottomBar: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
             if let msg = model.flashMessage {
-                Text(msg).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).padding(.horizontal, 8)
+                Text(msg)
+                    .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .padding(.horizontal, Theme.Space.rowInset)
+                    .transition(.opacity)
             }
             HStack(spacing: 2) {
                 SmallIconButton(symbol: "gearshape", help: "Settings") { AppDelegate.shared?.openSettings() }
                 SmallIconButton(symbol: "clock", help: "History (Cmd-Y)") { model.openAppPage("history") }
                 SmallIconButton(symbol: GraphTab.icon, help: "Graph (Cmd-Option-G)") { model.openGraph() }
                 DownloadsButton()
-                Spacer()
+                Spacer(minLength: Theme.Space.m)
                 SpaceBar()
             }
-            .frame(height: 30)
+            .frame(height: 32)
         }
-        .padding(.bottom, 6)
+        .motion(Motion.hover, value: model.flashMessage, fadeOnly: true)
+        .padding(.bottom, Theme.Space.m)
     }
 }
 
@@ -178,19 +207,19 @@ struct SpaceHeader: View {
 
     var body: some View {
         if let sp = model.currentSpace {
-            HStack(spacing: 6) {
-                SpaceIcon(icon: sp.icon, size: 11).foregroundStyle(Color(hex: sp.color))
+            HStack(spacing: Theme.Space.s) {
+                SpaceIcon(icon: sp.icon, size: 11).foregroundStyle(Theme.Palette.accent(sp.color))
                 Text(targeted && model.essentials.isEmpty ? "Add to Essentials" : sp.name)
-                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+                    .font(Theme.Font.spaceTitle).foregroundStyle(.secondary)
                 if let p = sp.profile {
-                    Text(p).font(.system(size: 11)).foregroundStyle(.tertiary)
+                    Text(p).font(Theme.Font.caption).foregroundStyle(.secondary).opacity(0.8)
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 8)
-            .padding(.top, 2)
-            .frame(height: 20)
-            .background(RoundedRectangle(cornerRadius: 6).fill(targeted && model.essentials.isEmpty ? Color.accentColor.opacity(0.15) : .clear))
+            .padding(.horizontal, Theme.Space.rowInset)
+            .padding(.top, Theme.Space.xxs)
+            .frame(height: 22)
+            .background(Theme.Radius.shape(Theme.Radius.button).fill(targeted && model.essentials.isEmpty ? Theme.Palette.rowHover : .clear))
             .onDrop(of: [ItemDrag.type], isTargeted: $targeted) { providers in
                 guard model.essentials.isEmpty else { return false }
                 return ItemDrag.load(providers) { ids in model.place(ids.map { .tab($0) }, in: .essentials, at: Int.max) }
@@ -207,11 +236,13 @@ struct EssentialsGrid: View {
     var body: some View {
         let items = model.essentials
         if !items.isEmpty {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: min(4, max(3, items.count))), spacing: 6) {
-                ForEach(items) { EssentialTile(tab: $0) }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Theme.Space.s), count: min(4, max(3, items.count))),
+                      spacing: Theme.Space.s) {
+                ForEach(items) { EssentialTile(tab: $0).transition(Motion.Transitions.tabRow) }
             }
-            .padding(4)
-            .background(RoundedRectangle(cornerRadius: 10).fill(targeted ? Color.accentColor.opacity(0.1) : .clear))
+            .padding(.vertical, Theme.Space.xxs)
+            .background(Theme.Radius.shape(Theme.Radius.card).fill(targeted ? Theme.Palette.rowHover : .clear))
+            .motion(Motion.insert, value: items.map { $0.id })
             .onDrop(of: [ItemDrag.type], isTargeted: $targeted) { providers in
                 ItemDrag.load(providers) { ids in model.place(ids.map { .tab($0) }, in: .essentials, at: Int.max) }
             }
@@ -230,9 +261,8 @@ struct EssentialTile: View {
             ItemIcon(tab: tab, size: 18)
                 .frame(maxWidth: .infinity)
                 .frame(height: 40)
-                .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(selected ? Color.primary.opacity(0.13) : Color.primary.opacity(hovering ? 0.08 : 0.045)))
                 .opacity(tab.isLoaded || tab.isNote || tab.isApp || selected ? 1 : 0.7)
+                .essentialTile(selected: selected, hovering: hovering)
             if tab.isAwayFromPin {
                 Circle().fill(Color.secondary).frame(width: 5, height: 5).padding(5).help("Away from its pinned page. Double-click to go back.")
             }
@@ -262,18 +292,17 @@ struct SectionBox<Content: View>: View {
     @State private var targeted = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text(title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                trailing
+        VStack(alignment: .leading, spacing: Theme.Space.rowGap) {
+            if title.isEmpty {
+                // No label: a thin drop strip above the rows.
+                Theme.Radius.shape(Theme.Radius.xs)
+                    .fill(targeted ? Theme.Palette.rowHover : .clear)
+                    .frame(height: 4)
+                    .modifier(DropModifier(onDrop: onDrop, onDropItems: onDropItems, targeted: $targeted))
+            } else {
+                SectionHeader(title: title, highlighted: targeted) { trailing ?? AnyView(EmptyView()) }
+                    .modifier(DropModifier(onDrop: onDrop, onDropItems: onDropItems, targeted: $targeted))
             }
-            .padding(.horizontal, 8)
-            .frame(height: 22)
-            .background(RoundedRectangle(cornerRadius: 6).fill(targeted ? Color.accentColor.opacity(0.15) : .clear))
-            .modifier(DropModifier(onDrop: onDrop, onDropItems: onDropItems, targeted: $targeted))
             content()
         }
     }
@@ -315,17 +344,8 @@ struct NavButton: View {
     let symbol: String
     let help: String
     let action: () -> Void
-    @Environment(\.isEnabled) private var enabled
     var body: some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .medium))
-                .frame(width: 26, height: 24)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(enabled ? .secondary : .quaternary)
-        .help(help)
+        IconButton(symbol: symbol, help: help, action: action)
     }
 }
 
@@ -334,15 +354,7 @@ struct SmallIconButton: View {
     let help: String
     let action: () -> Void
     var body: some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 12))
-                .frame(width: 22, height: 20)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
-        .help(help)
+        IconButton(symbol: symbol, help: help, width: 24, height: 22, symbolSize: 12, action: action)
     }
 }
 
@@ -351,11 +363,7 @@ struct RowBackground: ViewModifier {
     let hovering: Bool
     var multi: Bool = false
     func body(content: Content) -> some View {
-        content
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(selected ? Color.primary.opacity(0.11) : (multi ? Color.accentColor.opacity(0.14) : (hovering ? Color.primary.opacity(0.05) : .clear)))
-            )
+        content.sidebarRow(selected: selected, hovering: hovering, multi: multi)
     }
 }
 
@@ -430,6 +438,7 @@ struct SidebarRow: View {
     @EnvironmentObject var model: BrowserModel
     @State private var indicator: RowDropIndicator?
     @State private var clock = HoverClock()
+    @Environment(\.spaceAccent) private var spaceAccent
 
     var body: some View {
         Group {
@@ -441,10 +450,12 @@ struct SidebarRow: View {
         .sidebarCursor(model.sidebarCursor == .row(ref))
         .overlay(alignment: indicator == .above ? .top : .bottom) {
             if indicator == .above || indicator == .below {
-                Rectangle().fill(Color.accentColor).frame(height: 2).padding(.horizontal, 6).allowsHitTesting(false)
+                Capsule().fill(spaceAccent).frame(height: 2).padding(.horizontal, Theme.Space.s).allowsHitTesting(false)
+                    .transition(.opacity)
             }
         }
-        .onDrop(of: [ItemDrag.type], delegate: RowDropDelegate(ref: ref, height: 28, canSplit: { if case .tab = ref { return true }; return false }(),
+        .motion(Motion.hover, value: indicator, fadeOnly: true)
+        .onDrop(of: [ItemDrag.type], delegate: RowDropDelegate(ref: ref, height: Theme.Space.rowHeight, canSplit: { if case .tab = ref { return true }; return false }(),
                                                                model: model, indicator: $indicator, clock: clock))
     }
 }
@@ -454,17 +465,16 @@ struct TabRow: View {
     var splitting = false
     @EnvironmentObject var model: BrowserModel
     @State private var hovering = false
+    @Environment(\.spaceAccent) private var spaceAccent
 
     var body: some View {
-        HStack(spacing: 8) {
-            ZStack {
-                if tab.isLoading {
-                    ProgressView().controlSize(.mini)
-                } else {
-                    ItemIcon(tab: tab, size: 14)
-                }
-            }
-            .frame(width: 16)
+        HStack(spacing: Theme.Space.rowIconGap) {
+            // The site's icon. Loading shows as a soft fade of the icon rather than a spinner,
+            // the way Zen hides the throbber.
+            ItemIcon(tab: tab, size: Theme.Space.rowIcon)
+                .opacity(tab.isLoading ? 0.45 : 1)
+                .motion(Motion.hover, value: tab.isLoading, fadeOnly: true)
+            .frame(width: Theme.Space.rowIcon)
             .contentShape(Rectangle())
             .onTapGesture {
                 // Arc: the icon of a wandered pin goes back. Cmd-click keeps the page in a new tab.
@@ -477,42 +487,44 @@ struct TabRow: View {
             .help(tab.isAwayFromPin ? "Back to pinned page. Cmd-click to keep this page in a new tab." : "")
             HStack(spacing: 3) {
                 Text(tab.displayTitle)
-                    .font(.system(size: 13))
+                    .font(Theme.Font.row)
                     .lineLimit(1)
                     .strikethrough(tab.isMissing, color: .secondary)
-                    .foregroundStyle(tab.isMissing ? .secondary : (tab.isLoaded || tab.kind != .web || model.isSelected(tab) ? .primary : .secondary))
+                    // Pages that aren't loaded are only a little quieter, so a folder of sources
+                    // doesn't look half disabled.
+                    .foregroundStyle(tab.isMissing ? AnyShapeStyle(.secondary)
+                                     : (tab.isLoaded || tab.kind != .web || model.isSelected(tab) ? AnyShapeStyle(.primary) : AnyShapeStyle(.primary.opacity(0.72))))
                 if tab.isAwayFromPin {
-                    Text("/").font(.system(size: 13)).foregroundStyle(.tertiary).help("This pinned tab has moved away from its pinned page")
+                    Text("/").font(Theme.Font.row).foregroundStyle(.secondary).help("This pinned tab has moved away from its pinned page")
                 }
             }
             if model.peek?.parentID == tab.id {
-                RoundedRectangle(cornerRadius: 2).strokeBorder(Color.secondary, lineWidth: 1).frame(width: 9, height: 9).help("Peek is open from this tab")
+                Theme.Radius.shape(2).strokeBorder(Color.secondary, lineWidth: 1).frame(width: 9, height: 9).help("Peek is open from this tab")
             }
             if splitting {
-                Text("Split").font(.system(size: 11, weight: .medium)).foregroundStyle(Color.accentColor)
+                Text("Split").font(Theme.Font.action).foregroundStyle(spaceAccent)
             }
             if tab.isMissing && hovering {
                 Button("Locate") { model.locateNote(tab) }
-                    .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(Color.accentColor)
+                    .buttonStyle(QuietActionStyle())
             }
             Spacer(minLength: 0)
             if tab.mediaPlaying || tab.isMuted {
-                Button { model.toggleMute(tab) } label: {
-                    Image(systemName: tab.isMuted ? "speaker.slash" : "speaker.wave.2").font(.system(size: 10)).frame(width: 16, height: 16)
-                }
-                .buttonStyle(.plain).foregroundStyle(.secondary).help(tab.isMuted ? "Unmute" : "Mute")
+                IconButton(symbol: tab.isMuted ? "speaker.slash" : "speaker.wave.2", help: tab.isMuted ? "Unmute" : "Mute",
+                           width: 20, height: 20, symbolSize: 10) { model.toggleMute(tab) }
             }
-            if hovering {
-                Button { tab.kind == .web ? model.close(tab) : model.remove(tab) } label: {
-                    Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)).frame(width: 16, height: 16)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help(tab.keepsPinnedURL ? "Back to pinned page and unload" : (tab.folderID != nil ? "Unload" : "Close"))
+            // Always laid out, so the title doesn't jump when the close button appears on hover.
+            IconButton(symbol: "xmark", help: tab.keepsPinnedURL ? "Back to pinned page and unload" : (tab.folderID != nil ? "Unload" : "Close"),
+                       width: 20, height: 20, symbolSize: 9) {
+                tab.kind == .web ? model.close(tab) : model.remove(tab)
             }
+            .opacity(hovering ? 1 : 0)
+            .allowsHitTesting(hovering)
+            .motion(Motion.hover, value: hovering, fadeOnly: true)
         }
-        .padding(.horizontal, 8)
-        .frame(height: 28)
+        .padding(.leading, Theme.Space.rowInset)
+        .padding(.trailing, Theme.Space.xs)
+        .frame(height: Theme.Space.rowHeight)
         .modifier(RowBackground(selected: model.isSelected(tab) || splitting, hovering: hovering, multi: model.multiSelection.contains(tab.id)))
         .contentShape(Rectangle())
         .onTapGesture { click() }
@@ -663,16 +675,17 @@ struct FolderRow: View {
     @State private var targeted = false
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Space.rowIconGap) {
+            // The glyph opens and closes with the folder, like Arc and Zen.
             FolderGlyph(isOpen: folder.isExpanded)
-            Text(folder.name).font(.system(size: 13)).lineLimit(1)
+            Text(folder.name).font(Theme.Font.row).lineLimit(1)
             Spacer(minLength: 0)
             Text("\(model.tabs(in: folder).count)")
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
+                .font(Theme.Font.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 8)
-        .frame(height: 28)
+        .padding(.horizontal, Theme.Space.rowInset)
+        .frame(height: Theme.Space.rowHeight)
         .modifier(RowBackground(selected: targeted, hovering: hovering))
         .sidebarCursor(model.sidebarCursor == .folder(folder.id))
         .contentShape(Rectangle())
@@ -715,18 +728,20 @@ struct MediaRow: View {
     @EnvironmentObject var model: BrowserModel
 
     var body: some View {
-        HStack(spacing: 8) {
-            ItemIcon(tab: tab, size: 14)
-            Text(tab.displayTitle).font(.system(size: 12)).lineLimit(1)
+        HStack(spacing: Theme.Space.rowIconGap) {
+            ItemIcon(tab: tab, size: Theme.Space.rowIcon)
+            Text(tab.displayTitle).font(Theme.Font.secondary).lineLimit(1)
                 .contentShape(Rectangle())
                 .onTapGesture { model.select(tab) }
             Spacer(minLength: 0)
             SmallIconButton(symbol: tab.mediaPlaying ? "pause.fill" : "play.fill", help: tab.mediaPlaying ? "Pause" : "Play") { model.togglePlayback(tab) }
             SmallIconButton(symbol: tab.isMuted ? "speaker.slash" : "speaker.wave.2", help: tab.isMuted ? "Unmute" : "Mute") { model.toggleMute(tab) }
         }
-        .padding(.horizontal, 8)
-        .frame(height: 30)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
+        .padding(.leading, Theme.Space.rowInset)
+        .padding(.trailing, Theme.Space.xs)
+        .frame(height: Theme.Space.rowHeight)
+        .background(Theme.Radius.shape(Theme.Radius.row).fill(Theme.Palette.field))
+        .transition(Motion.Transitions.tabRow)
         .help("Playing in \(tab.displayTitle). Click the title to go there.")
     }
 }
@@ -734,6 +749,7 @@ struct MediaRow: View {
 /// The downloads button: a progress ring while something downloads, and the list on click.
 struct DownloadsButton: View {
     @ObservedObject var downloads = Downloads.shared
+    @Environment(\.spaceAccent) private var spaceAccent
     @EnvironmentObject var model: BrowserModel
     @State private var showing = false
 
@@ -742,16 +758,15 @@ struct DownloadsButton: View {
             Button { showing.toggle() } label: {
                 ZStack {
                     if let p = downloads.overallProgress {
-                        Circle().stroke(Color.primary.opacity(0.15), lineWidth: 1.5).frame(width: 14, height: 14)
-                        Circle().trim(from: 0, to: p).stroke(Color.accentColor, lineWidth: 1.5).rotationEffect(.degrees(-90)).frame(width: 14, height: 14)
+                        Circle().stroke(Theme.Palette.hairline, lineWidth: 1.5).frame(width: 14, height: 14)
+                        Circle().trim(from: 0, to: p).stroke(spaceAccent, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                            .rotationEffect(.degrees(-90)).frame(width: 14, height: 14)
+                            .motion(Motion.progress, value: p)
                     }
                     Image(systemName: "arrow.down").font(.system(size: downloads.overallProgress == nil ? 12 : 7, weight: .semibold))
                 }
-                .frame(width: 22, height: 20)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
+            .buttonStyle(IconButtonStyle(width: 24, height: 22, symbolSize: 12))
             .help("Downloads")
             .popover(isPresented: $showing, arrowEdge: .top) {
                 DownloadsList(compact: true).frame(width: 320).padding(10)
