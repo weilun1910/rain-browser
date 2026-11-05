@@ -18,9 +18,8 @@ struct MainView: View {
     @EnvironmentObject var model: BrowserModel
     @ObservedObject var settings = Settings.shared
     @ObservedObject var prefs = BrowserPrefs.shared
-    /// Compact mode: the sidebar is showing because the pointer reached the edge.
-    @State private var peeking = false
-    @State private var hideWork: DispatchWorkItem?
+    /// Compact mode: the sidebar showing because the pointer rested at the edge.
+    @ObservedObject private var reveal = CompactReveal.shared
 
     static let sidebarWidth: CGFloat = Theme.Space.sidebarWidth
     static let panelWidth: CGFloat = Theme.Space.panelWidth
@@ -54,19 +53,21 @@ struct MainView: View {
         }
         .overlay { if let s = model.switcher { SwitcherOverlay(state: s) } }
         .overlay { StartupOverlayHost() }
-        .background(TrafficLights(hidden: hidden && !peeking))
+        .background(TrafficLights(hidden: hidden && !reveal.showing))
         .spaceTint(model.currentSpace?.color)
         .ignoresSafeArea()
         .frame(minWidth: 900, minHeight: 560)
-        .motion(Motion.panel, value: hidden)
+        // Cmd-S is quick: the page's width changes every frame while the sidebar moves.
+        .motion(Motion.sidebarToggle, value: hidden)
         .motion(Motion.panel, value: right)
+        .onChange(of: hidden) { _, now in if !now { reveal.reset() } }
         .motion(Motion.panel, value: settings.published.rightPanelOpen)
     }
 
     @ViewBuilder var sidebarSlot: some View {
         if !hidden {
             LeftSidebar().frame(width: Self.sidebarWidth)
-                .transition(Motion.Transitions.panel(edge: right ? .trailing : .leading))
+                .transition(Motion.Transitions.sidebar(edge: right ? .trailing : .leading))
         }
     }
 
@@ -78,14 +79,14 @@ struct MainView: View {
         }
     }
 
-    /// Compact mode: a thin edge that brings the sidebar back as an overlay. It hides one second
-    /// after the pointer leaves, like Zen.
+    /// Compact mode: a thin edge that brings the sidebar back as an overlay once the pointer rests
+    /// there for a moment, and lets it go a moment after the pointer leaves it.
     @ViewBuilder var compactSidebar: some View {
         if hidden {
             ZStack(alignment: right ? .trailing : .leading) {
                 Color.clear.frame(width: 6).contentShape(Rectangle())
-                    .onHover { if $0 { show() } }
-                if peeking {
+                    .onHover { $0 ? reveal.pointerAtEdge() : reveal.pointerLeftEdge() }
+                if reveal.showing {
                     // The sidebar floats over the page on the space's colour, like Zen's compact mode.
                     LeftSidebar()
                         .frame(width: Self.sidebarWidth)
@@ -100,24 +101,12 @@ struct MainView: View {
                         .overlay(Theme.Radius.shape(Theme.Radius.card).strokeBorder(Theme.Palette.hairline, lineWidth: 0.5))
                         .clipShape(Theme.Radius.shape(Theme.Radius.card))
                         .padding(Theme.Space.windowMargin)
-                        .onHover { inside in if inside { show() } else { scheduleHide() } }
-                        .transition(Motion.Transitions.panel(edge: right ? .trailing : .leading))
+                        .onHover { inside in inside ? reveal.pointerInside() : reveal.pointerLeft() }
+                        .transition(Motion.Transitions.sidebar(edge: right ? .trailing : .leading))
                 }
             }
             .frame(maxHeight: .infinity)
         }
-    }
-
-    func show() {
-        hideWork?.cancel()
-        if !peeking { Motion.run(Motion.panel) { peeking = true } }
-    }
-
-    func scheduleHide() {
-        hideWork?.cancel()
-        let w = DispatchWorkItem { Motion.run(Motion.remove) { peeking = false } }
-        hideWork = w
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: w)
     }
 }
 

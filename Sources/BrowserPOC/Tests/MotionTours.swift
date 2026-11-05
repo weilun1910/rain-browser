@@ -37,6 +37,11 @@ enum MotionTours {
         s.step(1.4, "quit") { NSApp.terminate(nil) }
     }
 
+    /// Notes in the current space. Tours that don't need a web page use notes: AppKit keeps drawing
+    /// them in a window nobody can see, but WebKit may stop drawing pages there, and recordings
+    /// often run with the screen locked.
+    static func notes(_ model: BrowserModel) -> [Tab] { model.spaceTabs.filter { $0.isNote && !$0.isMissing } }
+
     /// Web tabs in the current space that have an address, Tabs first.
     static func webTabs(_ model: BrowserModel) -> [Tab] {
         let today = model.refs(in: .today).compactMap { r -> Tab? in if case .tab(let id) = r { return model.tab(id) }; return nil }
@@ -147,7 +152,7 @@ enum MotionTours {
         func step(_ gap: Double, _ label: String, _ f: @escaping @MainActor () -> Void) {
             s.step(gap, label) { f(); DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { MainActor.assumeIsolated { report(label, m) } } }
         }
-        step(2.8, "pick a page") { tabs = Array(webTabs(m).prefix(3)); if let a = tabs.first { m.select(a) } }
+        step(2.8, "pick a note") { tabs = Array((notes(m) + webTabs(m)).prefix(3)); if let a = tabs.first { m.select(a) } }
         step(1.4, "split") { if tabs.count > 1 { m.openInSplit(tabs[1], side: .right) } }
         step(1.4, "swap") { if let sp = m.currentSplit { m.swap(sp) } }
         step(1.4, "third pane") { if tabs.count > 2 { m.openInSplit(tabs[2], side: .right) } }
@@ -165,18 +170,25 @@ enum MotionTours {
         print("REPORT \(label): visible \(m.visibleTabs.count), window on screen \(w?.occlusionState.contains(.visible) ?? false)")
         for t in m.visibleTabs {
             let wv = t.webView
-            print("REPORT   \(t.displayTitle.prefix(16)): in window \(wv?.window != nil), host \(wv?.superview.map { "\(type(of: $0))" } ?? "none"), \(wv.map { "\(Int($0.frame.width))x\(Int($0.frame.height))" } ?? "")")
+            print("REPORT   \(t.displayTitle.prefix(16)): in window \(wv?.window != nil), host \(wv?.superview.map { "\(type(of: $0))" } ?? "none"), \(wv.map { "\(Int($0.frame.width))x\(Int($0.frame.height)) id \(UInt(bitPattern: ObjectIdentifier($0).hashValue) % 100000) loading \($0.isLoading) progress \($0.estimatedProgress) hidden \($0.isHiddenOrHasHiddenAncestor) layers \($0.layer?.sublayers?.count ?? -1)" } ?? "")")
         }
     }
 
     // MARK: Compact mode
 
     static func compact(_ s: MotionTour.Steps, _ m: BrowserModel) {
-        s.step(2.8, "pick a page") { if let a = webTabs(m).first { m.select(a) } }
+        let r = CompactReveal.shared
+        s.step(2.8, "pick a note") { if let a = notes(m).first ?? webTabs(m).first { m.select(a) } }
         s.step(1.2, "hide the sidebar") { BrowserPrefs.shared.update { $0.sidebarHidden = true } }
-        s.step(1.4, "show it") { BrowserPrefs.shared.update { $0.sidebarHidden = false } }
+        // The pointer comes to rest at the edge, then moves onto the sidebar, then away.
+        s.step(1.2, "pointer at the edge") { r.pointerAtEdge() }
+        s.step(0.4, "pointer on the sidebar") { r.pointerInside() }
+        s.step(1.2, "pointer leaves") { r.pointerLeft() }
+        s.step(1.0, "passing the edge") { r.pointerAtEdge() }
+        s.step(0.08, "gone again") { r.pointerLeftEdge() }
+        s.step(1.0, "show it") { BrowserPrefs.shared.update { $0.sidebarHidden = false } }
         s.step(1.2, "hide again") { BrowserPrefs.shared.update { $0.sidebarHidden = true } }
-        s.step(1.6, "show") { BrowserPrefs.shared.update { $0.sidebarHidden = false } }
+        s.step(1.2, "show") { BrowserPrefs.shared.update { $0.sidebarHidden = false } }
     }
 
     // MARK: Toasts and find
