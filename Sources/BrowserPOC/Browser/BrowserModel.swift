@@ -163,6 +163,8 @@ final class BrowserModel: ObservableObject {
         TypingCounter.install(on: c.userContentController)
         MediaWatch.install(on: c.userContentController)
         Favicons.install(on: c.userContentController)
+        // demo://: the demo profile's docs and meetings as read-only local pages.
+        DemoScheme.install(on: c)
         return c
     }
 

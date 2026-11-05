@@ -43,6 +43,7 @@ build/BrowserPOC.app/Contents/MacOS/BrowserPOC --chrome-dry-run # what a Chrome 
 .build/debug/BrowserPOC --render-review <dir>                   # light and dark snapshots of every main view, offscreen
 scripts/make-icon.sh                                            # redraws the app icon from code
 .build/debug/BrowserPOC --shelf-demo --data-dir <folder>        # plays the Related shelf's motion in a window, on a throwaway profile
+.build/debug/BrowserPOC --data-dir <folder> --motion-tour glass dark --reduce-transparency  # each glass layer over a bright, busy and dark page, in a window; light or dark, and the solid fallback with --reduce-transparency
 .build/debug/BrowserPOC --data-dir <folder> --motion-tour spaces # plays one area's motion in a window for recording, then quits (also rows, peek, split, compact, toasts)
 scripts/mcp-e2e.sh                                              # Claude Code and Codex against a made-up profile, temporary configs only
 build/BrowserPOC.app/Contents/MacOS/BrowserPOC --graph-bench    # the graph's 5,000 node timings on a release build
@@ -50,9 +51,30 @@ build/BrowserPOC.app/Contents/MacOS/BrowserPOC --graph-bench    # the graph's 5,
 
 Both tests use throwaway folders and exit non-zero if a check fails. The self test checks delete with a stand-in Trash folder inside its throwaway folder, so your real Trash is never touched. The dry run prints full URLs from your Chrome history, so keep its output to yourself.
 
+## Demo profile
+
+To play with Related and the graph without my own data, `scripts/demo.sh` builds the app, makes a demo profile and opens a separate copy of the app on it. The profile belongs to Theo Park, a made-up Yale student. He's writing a seminar paper, building a textbook swap app with a friend, applying for PM internships and planning a trip to Japan. Everyone in it is made up. The web pages are real, so tabs open the actual page. What to try is in `Demo/SCENARIOS.md`.
+
+```
+scripts/demo.sh                     # seeds the profile the first time, then opens it
+scripts/demo.sh --reset             # starts the profile over; changes made in it are lost
+scripts/demo.sh --models <folder>   # copies verified model files in instead of downloading them
+```
+
+The profile lives in `demo-profile.nosync` in the project folder. The script only writes to an empty folder or to a demo profile it made before, and never to my real support folder. Seeding copies the notes in as real Markdown files, indexes the demo Google Docs, Notion pages and Granola meetings as those sources, records six weeks of visits and searches, reads each page's text without cookies, embeds and tags everything, builds the graph and lays out four spaces with Essentials, pins, folders, tabs and splits. Seeded more than a week after the demo moment, times move forward by whole weeks. Outside sources stay off in the demo profile, and auto-archive is off so the layout stays put.
+
+The demo docs and meetings open at `demo://` addresses as read-only pages drawn by the app, so nothing ever loads a real Google or Notion page.
+
+```
+BrowserPOC --seed-demo <empty folder> [--models-from <folder>] [--offline] [--no-topics]
+BrowserPOC --demo-eval <demo profile>                          # scores Related against Demo/expected.json, on a copy
+BrowserPOC --demo-snapshots <out folder> --profile <demo profile>  # the opening moment, each space and the graph, offscreen
+python3 -I Demo/tools/check_demo.py [--network]                 # checks the demo content itself
+```
+
 ## What's in it
 
-**Look and feel.** It follows Zen's layout. The page sits in a rounded card 8 points in from the window, and the sidebar runs straight into the window around it with no title bar. The traffic lights rest as grey dots in the sidebar's top row and show their colour when you hover them. Backgrounds are neutral grey with a fine grain. The only colour in the chrome is the space's, which tints the sidebar and fades toward the right. Every space colour gets the same calm strength in light and dark mode, and it dims when the window isn't in front. The UI text is SF Pro, with New York for the few headings where the app talks to you. Animations are short and don't bounce: tabs fade in, folders open like a drawer, a new space's list slides in, Cmd-T rises in and Cmd-L grows out of the address field, the selection glides between results, splits slide open and Related cards arrive one after another. With Reduce Motion on, movement turns into short fades or nothing.
+**Look and feel.** It follows Zen's layout. The page sits in a rounded card 8 points in from the window, and the sidebar runs straight into the window around it with no title bar. The traffic lights rest as grey dots in the sidebar's top row and show their colour when you hover them. Backgrounds are neutral grey with a fine grain. The only colour in the chrome is the space's, which tints the sidebar and fades toward the right. Every space colour gets the same calm strength in light and dark mode, and it dims when the window isn't in front. The UI text is SF Pro, with New York for the few headings where the app talks to you. Animations are short and don't bounce: tabs fade in, folders open like a drawer, a new space's list slides in, Cmd-T rises in and Cmd-L grows out of the address field, the selection glides between results, splits slide open and Related cards arrive one after another. With Reduce Motion on, movement turns into short fades or nothing. The controls that float over the page sit on Liquid Glass: the Cmd-T bar, the Related shelf's pills and popover, and the graph page's toolbar, hover card and settings panel. It's always Apple's regular, untinted glass. Text-heavy glass gets a neutral wash under the text so it reads over a loud page. The page, notes and sidebar stay solid, and with Reduce Transparency on every glass surface turns back into a solid one.
 
 **Startup and icon.** The app is called Rain. Every launch draws its mark in the middle of the window for about a second while the window restores behind it: an open loop drawn like a brush stroke, a dot that lands last like a drop, then the name. It never blocks a click and it's skipped with Reduce Motion on. The loop comes back around to the dot, for things you've seen coming back. The mark and the app icon are drawn in code, so they're crisp at every size. The icon is an Icon Composer icon, so macOS shows its light, dark, clear and tinted looks. It's still placeholder art.
 
@@ -184,5 +206,6 @@ With "Let AI clients edit notes" on in Settings, three more tools can create a n
 - `Sources/BrowserPOC/UI/Theme`: the design system. Colours, spacing, radii, shadows, type and motion, plus the small components the views share and the window chrome.
 - `Sources/BrowserPOC/Startup`: the mark, the launch animation and the icon art.
 - `Sources/BrowserPOC/MCP`: the `--mcp` server, its tools, privacy rules and note writer, the current-context writer and the AI clients Settings pane.
+- `Sources/BrowserPOC/Demo`: the demo profile's seeder, the `demo://` pages, the demo eval and snapshots. The content itself is in `Demo/`, with its formats in `Demo/SPEC.md`.
 - `Sources/BrowserPOC/Tests`: `--selftest`, `--smoketest` and `--extract-check`.
 - `integrations`: the Claude Code, Claude Desktop, Codex and ChatGPT packaging.

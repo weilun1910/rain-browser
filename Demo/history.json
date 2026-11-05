@@ -1,0 +1,2930 @@
+{
+  "version": 1,
+  "anchor": "2026-11-04T16:40-05:00",
+  "timezone": "America/New_York",
+  "about": "Real public pages Theo visited in the six weeks before the demo moment. Titles and excerpts were taken from the live pages with a cookie-free request when this file was built. The seeder can fetch full text the same way.",
+  "pages": [
+    {
+      "id": "web-wiki-network-effect",
+      "url": "https://en.wikipedia.org/wiki/Network_effect",
+      "title": "Network effect - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": "network effects definition",
+      "visitCount": 4,
+      "firstVisit": "2026-09-24T14:00-04:00",
+      "lastVisit": "2026-11-03T22:26-05:00",
+      "visits": [
+        "2026-09-24T14:00-04:00",
+        "2026-10-02T11:57-04:00",
+        "2026-10-16T13:26-04:00",
+        "2026-11-03T22:26-05:00"
+      ],
+      "dwellSeconds": 660,
+      "excerpt": "In economics, a network effect is the phenomenon by which the value or utility a user derives from a good or service depends on the number of users of compatible products.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-network-effects-redirect",
+      "url": "https://en.wikipedia.org/wiki/Network_effects",
+      "title": "Network effect - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": "network effects economics",
+      "visitCount": 1,
+      "firstVisit": "2026-09-23T19:08-04:00",
+      "lastVisit": "2026-09-23T19:08-04:00",
+      "visits": [
+        "2026-09-23T19:08-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "In economics, a network effect is the phenomenon by which the value or utility a user derives from a good or service depends on the number of users of compatible products.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-two-sided-market",
+      "url": "https://en.wikipedia.org/wiki/Two-sided_market",
+      "title": "Two-sided market - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": "two sided market rochet tirole",
+      "visitCount": 4,
+      "firstVisit": "2026-09-24T21:17-04:00",
+      "lastVisit": "2026-11-02T15:29-05:00",
+      "visits": [
+        "2026-09-24T21:17-04:00",
+        "2026-10-09T22:19-04:00",
+        "2026-10-18T15:55-04:00",
+        "2026-11-02T15:29-05:00"
+      ],
+      "dwellSeconds": 840,
+      "excerpt": "A two-sided market, also called a two-sided network, is an intermediary economic platform having two distinct user groups that provide each other with network benefits.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-metcalfes-law",
+      "url": "https://en.wikipedia.org/wiki/Metcalfe%27s_law",
+      "title": "Metcalfe's law - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-09-24T19:03-04:00",
+      "lastVisit": "2026-09-24T19:03-04:00",
+      "visits": [
+        "2026-09-24T19:03-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "Metcalfe's law states that the financial value or influence of a telecommunications network is proportional to the square of the number of connected users of the system.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-critical-mass",
+      "url": "https://en.wikipedia.org/wiki/Critical_mass_(sociodynamics)",
+      "title": "Critical mass (sociodynamics) - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": "critical mass network adoption",
+      "visitCount": 2,
+      "firstVisit": "2026-10-03T14:27-04:00",
+      "lastVisit": "2026-11-02T18:16-05:00",
+      "visits": [
+        "2026-10-03T14:27-04:00",
+        "2026-11-02T18:16-05:00"
+      ],
+      "dwellSeconds": 360,
+      "excerpt": "In social dynamics, critical mass is a sufficient number of adopters of a new idea, technology or innovation in a social system so that the rate of adoption becomes self-sustaining and creates further growth.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-multihoming-ip",
+      "url": "https://en.wikipedia.org/wiki/Multihoming",
+      "title": "Multihoming - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": "multihoming",
+      "visitCount": 1,
+      "firstVisit": "2026-10-18T13:16-04:00",
+      "lastVisit": "2026-10-18T13:16-04:00",
+      "visits": [
+        "2026-10-18T13:16-04:00"
+      ],
+      "dwellSeconds": 18,
+      "excerpt": "Multihoming is the practice of connecting a host or a computer network to more than one network. This can be done in order to increase reliability or performance.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-jean-tirole",
+      "url": "https://en.wikipedia.org/wiki/Jean_Tirole",
+      "title": "Jean Tirole - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-09T13:41-04:00",
+      "lastVisit": "2026-10-09T13:41-04:00",
+      "visits": [
+        "2026-10-09T13:41-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "Jean Marcel Pierre Tirole is a French economist who is currently a professor of economics at Toulouse 1 Capitole University. He focuses on industrial organization and game theory.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-platform-economy",
+      "url": "https://en.wikipedia.org/wiki/Platform_economy",
+      "title": "Platform economy - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": "platform economy",
+      "visitCount": 1,
+      "firstVisit": "2026-09-23T19:41-04:00",
+      "lastVisit": "2026-09-23T19:41-04:00",
+      "visits": [
+        "2026-09-23T19:41-04:00"
+      ],
+      "dwellSeconds": 300,
+      "excerpt": "The platform economy encompasses economic and social activities facilitated by digital platforms. These platforms — such as Amazon, Airbnb, Uber, Microsoft and Google — serve as intermediaries between various groups of users, enabling interactions, transactions, collaboration, and innovation.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-sharing-economy",
+      "url": "https://en.wikipedia.org/wiki/Sharing_economy",
+      "title": "Sharing economy - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-09-23T14:01-04:00",
+      "lastVisit": "2026-09-23T14:01-04:00",
+      "visits": [
+        "2026-09-23T14:01-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "The sharing economy is a socio-economic system whereby consumers share in the creation, production, distribution, trade and consumption of goods, and services.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-craigslist",
+      "url": "https://en.wikipedia.org/wiki/Craigslist",
+      "title": "Craigslist - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": "craigslist unbundling",
+      "visitCount": 1,
+      "firstVisit": "2026-10-10T19:55-04:00",
+      "lastVisit": "2026-10-10T19:55-04:00",
+      "visits": [
+        "2026-10-10T19:55-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "Craigslist is a privately held American company operating a classified advertisements website with sections devoted to jobs, housing, for sale, items wanted, services, community service, gigs, résumés, and discussion forums.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-uber",
+      "url": "https://en.wikipedia.org/wiki/Uber",
+      "title": "Uber - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-18T10:25-04:00",
+      "lastVisit": "2026-10-18T10:25-04:00",
+      "visits": [
+        "2026-10-18T10:25-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "Uber Technologies, Inc. is an American multinational transportation company that provides ride-hailing services, courier services, food delivery, and freight transport. It is headquartered in San Francisco, California, and operates in approximately 70 countries and 15,000 cities worldwide.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-lyft",
+      "url": "https://en.wikipedia.org/wiki/Lyft",
+      "title": "Lyft - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-18T14:11-04:00",
+      "lastVisit": "2026-10-18T14:11-04:00",
+      "visits": [
+        "2026-10-18T14:11-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "Lyft, Inc. is an American company offering ride-hailing services, e-scooters, and bicycle-sharing systems in the United States and Canada, and, via its Freenow mobile app, Europe. Lyft is the second-largest ridesharing company in the United States after Uber.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-airbnb",
+      "url": "https://en.wikipedia.org/wiki/Airbnb",
+      "title": "Airbnb - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-09-25T13:52-04:00",
+      "lastVisit": "2026-09-25T13:52-04:00",
+      "visits": [
+        "2026-09-25T13:52-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "Airbnb, Inc. is an American company operating an online marketplace for short-and-long-term homestays, experiences and services in various countries and regions. It acts as a broker and charges a commission from each booking.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-bandwagon-effect",
+      "url": "https://en.wikipedia.org/wiki/Bandwagon_effect",
+      "title": "Bandwagon effect - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-03T20:14-04:00",
+      "lastVisit": "2026-10-03T20:14-04:00",
+      "visits": [
+        "2026-10-03T20:14-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "The bandwagon effect is a psychological phenomenon where people adopt certain behaviors, styles, or attitudes simply because others are doing so. More specifically, it is a cognitive bias by which public opinion or behaviours can alter due to particular actions and beliefs rallying amongst the...",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-switching-cost",
+      "url": "https://en.wikipedia.org/wiki/Switching_cost",
+      "title": "Switching barriers - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": "switching costs multi-homing",
+      "visitCount": 1,
+      "firstVisit": "2026-10-19T18:16-04:00",
+      "lastVisit": "2026-10-19T18:16-04:00",
+      "visits": [
+        "2026-10-19T18:16-04:00"
+      ],
+      "dwellSeconds": 300,
+      "excerpt": "Switching barriers or switching costs are terms used in microeconomics, strategic management, and marketing. They may be defined as the disadvantages or expenses consumers feel they experience, along with the economic and psychological costs of switching from one alternative to another.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-history-of-facebook",
+      "url": "https://en.wikipedia.org/wiki/History_of_Facebook",
+      "title": "History of Facebook - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": "facebook 2004 launch harvard then other colleges",
+      "visitCount": 2,
+      "firstVisit": "2026-10-20T11:54-04:00",
+      "lastVisit": "2026-11-03T14:54-05:00",
+      "visits": [
+        "2026-10-20T11:54-04:00",
+        "2026-11-03T14:54-05:00"
+      ],
+      "dwellSeconds": 540,
+      "excerpt": "The history of Facebook traces its growth from a college networking site to a global social networking service. It was launched as TheFacebook in 2004, and renamed Facebook in 2005.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-tinder",
+      "url": "https://en.wikipedia.org/wiki/Tinder_(app)",
+      "title": "Tinder (app) - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": "tinder usc launch campus",
+      "visitCount": 1,
+      "firstVisit": "2026-10-20T16:02-04:00",
+      "lastVisit": "2026-10-20T16:02-04:00",
+      "visits": [
+        "2026-10-20T16:02-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "Tinder operates a platform for online dating and geosocial networking accessible via Web site and mobile app. It was launched in 2012 and is owned by Match Group. It is available in 190 countries and 60 languages. It has a minimum age requirement of 18.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-chicken-or-egg",
+      "url": "https://en.wikipedia.org/wiki/Chicken_or_the_egg",
+      "title": "Chicken or the egg - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-09-24T14:04-04:00",
+      "lastVisit": "2026-09-24T14:04-04:00",
+      "visits": [
+        "2026-09-24T14:04-04:00"
+      ],
+      "dwellSeconds": 60,
+      "excerpt": "The chicken or the egg causality dilemma is commonly stated as the question, \"which came first: the chicken or the egg?\" The dilemma stems from the observation that all chickens hatch from eggs and all chicken eggs are laid by chickens.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-pg-do-things-that-dont-scale",
+      "url": "https://paulgraham.com/ds.html",
+      "title": "Do Things that Don't Scale",
+      "site": "paulgraham.com",
+      "space": "school",
+      "query": "paul graham do things that don't scale",
+      "visitCount": 1,
+      "firstVisit": "2026-09-25T18:12-04:00",
+      "lastVisit": "2026-09-25T18:12-04:00",
+      "visits": [
+        "2026-09-25T18:12-04:00"
+      ],
+      "dwellSeconds": 840,
+      "excerpt": "One of the most common types of advice we give at Y Combinator is to do things that don't scale. A lot of would-be founders believe that startups either take off or don't. You build something, make it available, and if you've made a better mousetrap, people beat a path to your door as promised.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-gurley-all-markets",
+      "url": "https://abovethecrowd.com/2012/11/13/all-markets-are-not-created-equal-10-factors-to-consider-when-evaluating-digital-marketplaces/",
+      "title": "All Markets Are Not Created Equal: 10 Factors To Consider When Evaluating Digital Marketplaces - Above the CrowdAbove the Crowd | By Bill Gurley",
+      "site": "abovethecrowd.com",
+      "space": "school",
+      "query": "bill gurley all markets are not created equal",
+      "visitCount": 2,
+      "firstVisit": "2026-09-26T22:31-04:00",
+      "lastVisit": "2026-10-10T22:53-04:00",
+      "visits": [
+        "2026-09-26T22:31-04:00",
+        "2026-10-10T22:53-04:00"
+      ],
+      "dwellSeconds": 1080,
+      "excerpt": "Since Benchmark’s investment in Ebay 15 years ago, we have been fascinated by online marketplaces. Entrepreneurs accurately recognize that the connective tissue of the Internet provides an opportunity to link the players in a particular market, reducing friction in both the buying and selling...",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-stratechery-aggregation-theory",
+      "url": "https://stratechery.com/2015/aggregation-theory/",
+      "title": "Aggregation Theory – Stratechery by Ben Thompson",
+      "site": "stratechery.com",
+      "space": "school",
+      "query": "aggregation theory ben thompson",
+      "visitCount": 1,
+      "firstVisit": "2026-09-29T16:05-04:00",
+      "lastVisit": "2026-09-29T16:05-04:00",
+      "visits": [
+        "2026-09-29T16:05-04:00"
+      ],
+      "dwellSeconds": 720,
+      "excerpt": "The disruption caused by the Internet in industry after industry has a common theoretical basis described by Aggregation Theory.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-nfx-network-effects-manual",
+      "url": "https://www.nfx.com/post/network-effects-manual",
+      "title": "The Network Effects Manual: 16 Different Network Effects (and counting)",
+      "site": "nfx.com",
+      "space": "school",
+      "query": "nfx network effects manual",
+      "visitCount": 2,
+      "firstVisit": "2026-09-30T20:45-04:00",
+      "lastVisit": "2026-10-16T19:27-04:00",
+      "visits": [
+        "2026-09-30T20:45-04:00",
+        "2026-10-16T19:27-04:00"
+      ],
+      "dwellSeconds": 900,
+      "excerpt": "The 16 Network Effects & How They Actually Work",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-nfx-chicken-or-egg-tactics",
+      "url": "https://www.nfx.com/post/19-marketplace-tactics-for-overcoming-the-chicken-or-egg-problem",
+      "title": "19 Tactics to Solve the Chicken-or-Egg Problem and Grow Your Marketplace",
+      "site": "nfx.com",
+      "space": "school",
+      "query": "marketplace chicken or egg problem tactics",
+      "visitCount": 2,
+      "firstVisit": "2026-11-03T17:23-05:00",
+      "lastVisit": "2026-11-04T14:08-05:00",
+      "visits": [
+        "2026-11-03T17:23-05:00",
+        "2026-11-04T14:08-05:00"
+      ],
+      "dwellSeconds": 960,
+      "excerpt": "An inside look at 19 tactics top marketplaces have used to solve the chicken-or-egg problem and kickstart growth.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-andrewchen-cold-start-social",
+      "url": "https://andrewchen.com/how-to-solve-the-cold-start-problem-for-social-products/",
+      "title": "How to solve the cold-start problem for social products at andrewchen",
+      "site": "andrewchen.com",
+      "space": "school",
+      "query": "andrew chen cold start problem",
+      "visitCount": 1,
+      "firstVisit": "2026-10-02T18:46-04:00",
+      "lastVisit": "2026-10-02T18:46-04:00",
+      "visits": [
+        "2026-10-02T18:46-04:00"
+      ],
+      "dwellSeconds": 420,
+      "excerpt": "Social products need mass before scaling growth I often write on the topic of how social products can scale growth, resulting in inbound emails to the effect of “how do I get my product to go viral?” The problem is, until you have a strong baseline of engagement, it’s nearly impossible to have a...",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-a16z-cold-start-book",
+      "url": "https://a16z.com/books/the-cold-start-problem/",
+      "title": "The Cold Start Problem | Andreessen Horowitz",
+      "site": "a16z.com",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-02T19:22-04:00",
+      "lastVisit": "2026-10-02T19:22-04:00",
+      "visits": [
+        "2026-10-02T19:22-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "Andrew Chen draws on expertise honed as both an investor at Andreessen Horowitz and as an Uber executive during the company’s high-growth, pre-IPO years—along with hundreds of interviews with the CEOs and founding teams of LinkedIn, Twitch, Zoom, Dropbox, Tinder, Uber, Airbnb, Pinterest, and...",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-lenny-kickstart-marketplace",
+      "url": "https://www.lennysnewsletter.com/p/how-to-kickstart-and-scale-a-marketplace",
+      "title": "How to kickstart and scale a marketplace business",
+      "site": "lennysnewsletter.com",
+      "space": "school",
+      "query": "how to kickstart a marketplace lenny",
+      "visitCount": 2,
+      "firstVisit": "2026-10-21T17:51-04:00",
+      "lastVisit": "2026-11-02T13:02-05:00",
+      "visits": [
+        "2026-10-21T17:51-04:00",
+        "2026-11-02T13:02-05:00"
+      ],
+      "dwellSeconds": 600,
+      "excerpt": "Insights from 17 of today's biggest marketplaces, including Airbnb, DoorDash, Thumbtack, Etsy, Uber and many more",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-nobel-tirole-facts",
+      "url": "https://www.nobelprize.org/prizes/economic-sciences/2014/tirole/facts/",
+      "title": "Jean Tirole – Facts - NobelPrize.org",
+      "site": "nobelprize.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-09T18:56-04:00",
+      "lastVisit": "2026-10-09T18:56-04:00",
+      "visits": [
+        "2026-10-09T18:56-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "The Sveriges Riksbank Prize in Economic Sciences in Memory of Alfred Nobel 2014 was awarded to Jean Tirole \"for his analysis of market power and regulation\"",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-nobel-2014-popular",
+      "url": "https://www.nobelprize.org/prizes/economic-sciences/2014/popular-information/",
+      "title": "The Prize in Economic Sciences 2014 - Popular information - NobelPrize.org",
+      "site": "nobelprize.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-09T20:18-04:00",
+      "lastVisit": "2026-10-09T20:18-04:00",
+      "visits": [
+        "2026-10-09T20:18-04:00"
+      ],
+      "dwellSeconds": 360,
+      "excerpt": "The Sveriges Riksbank Prize in Economic Sciences in Memory of Alfred Nobel 2014 was awarded to Jean Tirole \"for his analysis of market power and regulation\"",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-hbr-two-sided-strategies",
+      "url": "https://hbr.org/2006/10/strategies-for-two-sided-markets",
+      "title": "Strategies for Two-Sided Markets",
+      "site": "hbr.org",
+      "space": "school",
+      "query": "strategies for two-sided markets hbr eisenmann",
+      "visitCount": 1,
+      "firstVisit": "2026-10-09T10:16-04:00",
+      "lastVisit": "2026-10-09T10:16-04:00",
+      "visits": [
+        "2026-10-09T10:16-04:00"
+      ],
+      "dwellSeconds": 300,
+      "excerpt": "Two-sided networks, or platforms, often enjoy significantly greater returns at scale than traditional value chains. Despite these advantages, many companies struggle to develop these platforms in a sustainable way.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-nber-uber-flexible-work",
+      "url": "https://www.nber.org/papers/w23296",
+      "title": "The Value of Flexible Work: Evidence from Uber Drivers | NBER",
+      "site": "nber.org",
+      "space": "school",
+      "query": "uber drivers also drive for lyft evidence",
+      "visitCount": 2,
+      "firstVisit": "2026-10-19T18:25-04:00",
+      "lastVisit": "2026-11-03T22:54-05:00",
+      "visits": [
+        "2026-10-19T18:25-04:00",
+        "2026-11-03T22:54-05:00"
+      ],
+      "dwellSeconds": 480,
+      "excerpt": "Participation in non-traditional work arrangements has increased dramatically over the last decade, including in settings where new technologies lower the transaction costs of providing labor flexibly.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-nber-uber-consumer-surplus",
+      "url": "https://www.nber.org/papers/w22627",
+      "title": "Using Big Data to Estimate Consumer Surplus: The Case of Uber | NBER",
+      "site": "nber.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-19T10:01-04:00",
+      "lastVisit": "2026-10-19T10:01-04:00",
+      "visits": [
+        "2026-10-19T10:01-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "Estimating consumer surplus is challenging because it requires identification of the entire demand curve. We rely on Uber’s “surge” pricing algorithm and the richness of its individual level data to first estimate demand elasticities at several points along the demand curve.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-dynamic-pricing",
+      "url": "https://en.wikipedia.org/wiki/Dynamic_pricing",
+      "title": "Dynamic pricing - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-19T22:03-04:00",
+      "lastVisit": "2026-10-19T22:03-04:00",
+      "visits": [
+        "2026-10-19T22:03-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "Dynamic pricing, also referred to as surge pricing, demand pricing, time-based pricing and variable pricing, is a revenue management pricing strategy in which businesses set flexible prices for products or services based on current market demands.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-winner-take-all",
+      "url": "https://en.wikipedia.org/wiki/Winner-take-all_market",
+      "title": "Winner-take-all market - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-10T12:23-04:00",
+      "lastVisit": "2026-10-10T12:23-04:00",
+      "visits": [
+        "2026-10-10T12:23-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "In economics, a winner-take-all market is a market in which a product or service that is favored over the competitors, even if only slightly, receives a disproportionately large share of the revenues for that class of products or services.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-economies-of-scale",
+      "url": "https://en.wikipedia.org/wiki/Economies_of_scale",
+      "title": "Economies of scale - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-03T13:37-04:00",
+      "lastVisit": "2026-10-03T13:37-04:00",
+      "visits": [
+        "2026-10-03T13:37-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "In microeconomics, economies of scale are the cost advantages that enterprises obtain due to their scale of operation, and are typically measured by the amount of output produced per unit of cost.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-monopolistic-competition",
+      "url": "https://en.wikipedia.org/wiki/Monopolistic_competition",
+      "title": "Monopolistic competition - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-03T18:14-04:00",
+      "lastVisit": "2026-10-03T18:14-04:00",
+      "visits": [
+        "2026-10-03T18:14-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "Monopolistic competition is a type of imperfect competition such that there are many producers competing against each other but selling products that are differentiated from one another and hence not perfect substitutes.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-market-liquidity",
+      "url": "https://en.wikipedia.org/wiki/Market_liquidity",
+      "title": "Market liquidity - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": "marketplace liquidity definition",
+      "visitCount": 1,
+      "firstVisit": "2026-10-17T16:11-04:00",
+      "lastVisit": "2026-10-17T16:11-04:00",
+      "visits": [
+        "2026-10-17T16:11-04:00"
+      ],
+      "dwellSeconds": 30,
+      "excerpt": "In business, economics or investment, market liquidity is a market's feature whereby an individual or firm can quickly purchase or sell an asset without causing a drastic change in the asset's price.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-etsy",
+      "url": "https://en.wikipedia.org/wiki/Etsy",
+      "title": "Etsy - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-10T10:03-04:00",
+      "lastVisit": "2026-10-10T10:03-04:00",
+      "visits": [
+        "2026-10-10T10:03-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "Etsy, Inc. is an American e-commerce company focused on handmade or vintage items and craft supplies. Its marketplace includes categories such as jewelry, apparel, home decor, furniture, toys, and art. Items described as vintage must be at least 20 years old.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-ebay",
+      "url": "https://en.wikipedia.org/wiki/EBay",
+      "title": "eBay - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-10T14:57-04:00",
+      "lastVisit": "2026-10-10T14:57-04:00",
+      "visits": [
+        "2026-10-10T14:57-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "eBay Inc. is an American multinational e-commerce company based in San Jose, California, that allows users to buy or view items via retail sales through online marketplaces and websites in 190 markets worldwide.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-amazon-marketplace",
+      "url": "https://en.wikipedia.org/wiki/Amazon_Marketplace",
+      "title": "Amazon Marketplace - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-10T19:54-04:00",
+      "lastVisit": "2026-10-10T19:54-04:00",
+      "visits": [
+        "2026-10-10T19:54-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "Amazon Marketplace is the e-commerce platform of Amazon that enables third-party sellers to sell new or used products directly to consumers on a fixed-price online marketplace alongside Amazon's regular offerings.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-opentable",
+      "url": "https://en.wikipedia.org/wiki/OpenTable",
+      "title": "OpenTable - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": "opentable restaurant software before diners",
+      "visitCount": 1,
+      "firstVisit": "2026-10-21T11:01-04:00",
+      "lastVisit": "2026-10-21T11:01-04:00",
+      "visits": [
+        "2026-10-21T11:01-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "OpenTable is an online restaurant-reservation service company founded by Sid Gorham, Eric Moe and Chuck Templeton on July 2, 1998, and based in San Francisco, California.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-chicago-author-date",
+      "url": "https://www.chicagomanualofstyle.org/tools_citationguide/citation-guide-2.html",
+      "title": "Author-Date Style",
+      "site": "chicagomanualofstyle.org",
+      "space": "school",
+      "query": "chicago author date citation",
+      "visitCount": 1,
+      "firstVisit": "2026-11-02T12:49-05:00",
+      "lastVisit": "2026-11-02T12:49-05:00",
+      "visits": [
+        "2026-11-02T12:49-05:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "Find it. Write it. Cite it. The Chicago Manual of Style Online is the venerable, time-tested guide to style, usage, and grammar in an accessible online format.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-max-flow-min-cut",
+      "url": "https://en.wikipedia.org/wiki/Max-flow_min-cut_theorem",
+      "title": "Max-flow min-cut theorem - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": "max flow min cut proof",
+      "visitCount": 3,
+      "firstVisit": "2026-10-06T17:25-04:00",
+      "lastVisit": "2026-10-27T16:36-04:00",
+      "visits": [
+        "2026-10-06T17:25-04:00",
+        "2026-10-07T14:34-04:00",
+        "2026-10-27T16:36-04:00"
+      ],
+      "dwellSeconds": 720,
+      "excerpt": "In computer science and optimization theory, the max-flow min-cut theorem states that in a flow network, the maximum amount of flow passing from the source to the sink is equal to the total weight of the edges in a minimum cut, i.e., the smallest total weight of the edges which if removed would...",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-ford-fulkerson",
+      "url": "https://en.wikipedia.org/wiki/Ford%E2%80%93Fulkerson_algorithm",
+      "title": "Ford–Fulkerson algorithm - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 2,
+      "firstVisit": "2026-10-06T16:26-04:00",
+      "lastVisit": "2026-10-27T15:41-04:00",
+      "visits": [
+        "2026-10-06T16:26-04:00",
+        "2026-10-27T15:41-04:00"
+      ],
+      "dwellSeconds": 540,
+      "excerpt": "The Ford–Fulkerson method or Ford–Fulkerson algorithm (FFA) is a greedy algorithm that computes the maximum flow in a flow network. It is sometimes called a \"method\" instead of an \"algorithm\" as the approach to finding augmenting paths in a residual graph is not fully specified or it is specified...",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-flow-network",
+      "url": "https://en.wikipedia.org/wiki/Flow_network",
+      "title": "Flow network - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-06T20:46-04:00",
+      "lastVisit": "2026-10-06T20:46-04:00",
+      "visits": [
+        "2026-10-06T20:46-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "In graph theory, a flow network is a directed graph where each edge has a capacity and each edge receives a flow. The amount of flow on an edge cannot exceed the capacity of the edge.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-dijkstra",
+      "url": "https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm",
+      "title": "Dijkstra's algorithm - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-05T21:16-04:00",
+      "lastVisit": "2026-10-05T21:16-04:00",
+      "visits": [
+        "2026-10-05T21:16-04:00"
+      ],
+      "dwellSeconds": 300,
+      "excerpt": "Dijkstra's algorithm is an algorithm for finding the shortest paths between nodes in a weighted graph, which may represent, for example, a road network. It was conceived by computer scientist Edsger W. Dijkstra in 1956 and published three years later.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-stable-marriage",
+      "url": "https://en.wikipedia.org/wiki/Stable_marriage_problem",
+      "title": "Stable matching problem - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "school",
+      "query": "gale shapley proof",
+      "visitCount": 1,
+      "firstVisit": "2026-10-28T20:27-04:00",
+      "lastVisit": "2026-10-28T20:27-04:00",
+      "visits": [
+        "2026-10-28T20:27-04:00"
+      ],
+      "dwellSeconds": 480,
+      "excerpt": "In mathematics, economics, and computer science, the stable matching problem is the problem of finding a stable matching between two equally sized sets of elements given an ordering of preferences for each element.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-apple-swiftui",
+      "url": "https://developer.apple.com/documentation/swiftui",
+      "title": "SwiftUI | Apple Developer Documentation",
+      "site": "developer.apple.com",
+      "space": "swapshelf",
+      "query": null,
+      "visitCount": 3,
+      "firstVisit": "2026-09-27T13:59-04:00",
+      "lastVisit": "2026-10-11T23:38-04:00",
+      "visits": [
+        "2026-09-27T13:59-04:00",
+        "2026-10-04T20:21-04:00",
+        "2026-10-11T23:38-04:00"
+      ],
+      "dwellSeconds": 360,
+      "excerpt": "Declare the user interface and behavior for your app on every platform.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-apple-swiftui-list",
+      "url": "https://developer.apple.com/documentation/swiftui/list",
+      "title": "List | Apple Developer Documentation",
+      "site": "developer.apple.com",
+      "space": "swapshelf",
+      "query": "swiftui list performance large data",
+      "visitCount": 2,
+      "firstVisit": "2026-10-11T15:48-04:00",
+      "lastVisit": "2026-10-12T21:59-04:00",
+      "visits": [
+        "2026-10-11T15:48-04:00",
+        "2026-10-12T21:59-04:00"
+      ],
+      "dwellSeconds": 420,
+      "excerpt": "A container that presents rows of data arranged in a single column, optionally providing the ability to select one or more members.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-apple-launch-time",
+      "url": "https://developer.apple.com/documentation/xcode/reducing-your-app-s-launch-time",
+      "title": "Reducing your app’s launch time | Apple Developer Documentation",
+      "site": "developer.apple.com",
+      "space": "swapshelf",
+      "query": "ios cold launch time swiftui",
+      "visitCount": 1,
+      "firstVisit": "2026-10-23T20:50-04:00",
+      "lastVisit": "2026-10-23T20:50-04:00",
+      "visits": [
+        "2026-10-23T20:50-04:00"
+      ],
+      "dwellSeconds": 540,
+      "excerpt": "Create a more responsive experience with your app by minimizing time spent in startup.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-apple-testflight",
+      "url": "https://developer.apple.com/testflight/",
+      "title": "TestFlight - Apple Developer",
+      "site": "developer.apple.com",
+      "space": "swapshelf",
+      "query": "testflight external testers limit",
+      "visitCount": 2,
+      "firstVisit": "2026-10-29T13:27-04:00",
+      "lastVisit": "2026-11-02T17:18-05:00",
+      "visits": [
+        "2026-10-29T13:27-04:00",
+        "2026-11-02T17:18-05:00"
+      ],
+      "dwellSeconds": 300,
+      "excerpt": "TestFlight beta testing lets you invite users to beta test versions of your apps before you release them on the App Store.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-apple-review-guidelines",
+      "url": "https://developer.apple.com/app-store/review/guidelines/",
+      "title": "App Review Guidelines - Apple Developer",
+      "site": "developer.apple.com",
+      "space": "swapshelf",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-30T18:49-04:00",
+      "lastVisit": "2026-10-30T18:49-04:00",
+      "visits": [
+        "2026-10-30T18:49-04:00"
+      ],
+      "dwellSeconds": 360,
+      "excerpt": "The App Review Guidelines provide guidance and examples across a range of development topics, including user interface design, functionality, content, and the use of specific technologies. These guidelines are designed to help you prepare your apps for the approval process.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-apple-user-notifications",
+      "url": "https://developer.apple.com/documentation/usernotifications",
+      "title": "User Notifications | Apple Developer Documentation",
+      "site": "developer.apple.com",
+      "space": "swapshelf",
+      "query": "ios push notification swiftui",
+      "visitCount": 1,
+      "firstVisit": "2026-10-15T22:29-04:00",
+      "lastVisit": "2026-10-15T22:29-04:00",
+      "visits": [
+        "2026-10-15T22:29-04:00"
+      ],
+      "dwellSeconds": 300,
+      "excerpt": "Push user-facing notifications to the user’s device from a server, or generate them locally from your app.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-apple-hig-onboarding",
+      "url": "https://developer.apple.com/design/human-interface-guidelines/onboarding",
+      "title": "Onboarding | Apple Developer Documentation",
+      "site": "developer.apple.com",
+      "space": "swapshelf",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-14T20:22-04:00",
+      "lastVisit": "2026-10-14T20:22-04:00",
+      "visits": [
+        "2026-10-14T20:22-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "Onboarding can help people get a quick start using your app or game.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-apple-sf-symbols",
+      "url": "https://developer.apple.com/sf-symbols/",
+      "title": "SF Symbols - Apple Developer",
+      "site": "developer.apple.com",
+      "space": "swapshelf",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-04T20:46-04:00",
+      "lastVisit": "2026-10-04T20:46-04:00",
+      "visits": [
+        "2026-10-04T20:46-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "SF Symbols is a library of thousands of symbols designed to integrate seamlessly with San Francisco, the system font for Apple platforms.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-apple-mapkit",
+      "url": "https://developer.apple.com/documentation/mapkit",
+      "title": "MapKit | Apple Developer Documentation",
+      "site": "developer.apple.com",
+      "space": "swapshelf",
+      "query": "mapkit swiftui pin annotation",
+      "visitCount": 1,
+      "firstVisit": "2026-10-21T14:51-04:00",
+      "lastVisit": "2026-10-21T14:51-04:00",
+      "visits": [
+        "2026-10-21T14:51-04:00"
+      ],
+      "dwellSeconds": 360,
+      "excerpt": "Display map or satellite imagery within your app, call out points of interest, and determine placemark information for map coordinates.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-apple-swiftdata",
+      "url": "https://developer.apple.com/documentation/swiftdata",
+      "title": "SwiftData | Apple Developer Documentation",
+      "site": "developer.apple.com",
+      "space": "swapshelf",
+      "query": "swiftdata offline cache",
+      "visitCount": 1,
+      "firstVisit": "2026-10-13T23:08-04:00",
+      "lastVisit": "2026-10-13T23:08-04:00",
+      "visits": [
+        "2026-10-13T23:08-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "Write your model code declaratively to add managed persistence and efficient model fetching.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-supabase-auth",
+      "url": "https://supabase.com/docs/guides/auth",
+      "title": "Auth | Supabase Docs",
+      "site": "supabase.com",
+      "space": "swapshelf",
+      "query": null,
+      "visitCount": 2,
+      "firstVisit": "2026-10-01T13:36-04:00",
+      "lastVisit": "2026-10-02T20:37-04:00",
+      "visits": [
+        "2026-10-01T13:36-04:00",
+        "2026-10-02T20:37-04:00"
+      ],
+      "dwellSeconds": 480,
+      "excerpt": "Use Supabase to authenticate and authorize your users.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-supabase-rls",
+      "url": "https://supabase.com/docs/guides/database/postgres/row-level-security",
+      "title": "Row Level Security | Supabase Docs",
+      "site": "supabase.com",
+      "space": "swapshelf",
+      "query": "supabase row level security",
+      "visitCount": 2,
+      "firstVisit": "2026-10-02T18:17-04:00",
+      "lastVisit": "2026-10-16T17:48-04:00",
+      "visits": [
+        "2026-10-02T18:17-04:00",
+        "2026-10-16T17:48-04:00"
+      ],
+      "dwellSeconds": 540,
+      "excerpt": "Secure your data using Postgres Row Level Security.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-supabase-ios-quickstart",
+      "url": "https://supabase.com/docs/guides/getting-started/quickstarts/ios-swiftui",
+      "title": "Use Supabase with iOS and SwiftUI | Supabase Docs",
+      "site": "supabase.com",
+      "space": "swapshelf",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-09-30T13:11-04:00",
+      "lastVisit": "2026-09-30T13:11-04:00",
+      "visits": [
+        "2026-09-30T13:11-04:00"
+      ],
+      "dwellSeconds": 300,
+      "excerpt": "Learn how to create a Supabase project, add some sample data to your database, and query the data from an iOS app.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-supabase-realtime",
+      "url": "https://supabase.com/docs/guides/realtime",
+      "title": "Realtime | Supabase Docs",
+      "site": "supabase.com",
+      "space": "swapshelf",
+      "query": "supabase realtime chat",
+      "visitCount": 1,
+      "firstVisit": "2026-10-22T13:47-04:00",
+      "lastVisit": "2026-10-22T13:47-04:00",
+      "visits": [
+        "2026-10-22T13:47-04:00"
+      ],
+      "dwellSeconds": 300,
+      "excerpt": "Send and receive messages to connected clients.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-github-supabase-swift",
+      "url": "https://github.com/supabase/supabase-swift",
+      "title": "GitHub - supabase/supabase-swift: A Swift SDK for Supabase. Query your Supabase database, subscribe to realtime events, upload and download files, browse Swift examples, invoke postgres functions via rpc, invoke supabase edge functions, query pgvector. · GitHub",
+      "site": "github.com",
+      "space": "swapshelf",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-01T19:02-04:00",
+      "lastVisit": "2026-10-01T19:02-04:00",
+      "visits": [
+        "2026-10-01T19:02-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "A Swift SDK for Supabase. Query your Supabase database, subscribe to realtime events, upload and download files, browse Swift examples, invoke postgres functions via rpc, invoke supabase edge funct...",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-postgres-constraints",
+      "url": "https://www.postgresql.org/docs/current/ddl-constraints.html",
+      "title": "PostgreSQL: Documentation: 18: 5.5. Constraints",
+      "site": "postgresql.org",
+      "space": "swapshelf",
+      "query": "postgres unique constraint two columns",
+      "visitCount": 1,
+      "firstVisit": "2026-10-16T14:53-04:00",
+      "lastVisit": "2026-10-16T14:53-04:00",
+      "visits": [
+        "2026-10-16T14:53-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "5.5. Constraints # 5.5.1. Check Constraints 5.5.2. Not-Null Constraints 5.5.3. Unique Constraints 5.5.4. Primary Keys 5.5.5. Foreign Keys 5.5.6. Exclusion Constraints …",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-swift-api-guidelines",
+      "url": "https://www.swift.org/documentation/api-design-guidelines/",
+      "title": "API Design Guidelines | Swift.org",
+      "site": "swift.org",
+      "space": "swapshelf",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-09-28T22:11-04:00",
+      "lastVisit": "2026-09-28T22:11-04:00",
+      "visits": [
+        "2026-09-28T22:11-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "Swift is a general-purpose programming language built using a modern approach to safety, performance, and software design patterns.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-hws-async-await",
+      "url": "https://www.hackingwithswift.com/swift/5.5/async-await",
+      "title": "Async await – available from Swift 5.5",
+      "site": "hackingwithswift.com",
+      "space": "swapshelf",
+      "query": "swift async await mainactor",
+      "visitCount": 1,
+      "firstVisit": "2026-10-12T22:38-04:00",
+      "lastVisit": "2026-10-12T22:38-04:00",
+      "visits": [
+        "2026-10-12T22:38-04:00"
+      ],
+      "dwellSeconds": 480,
+      "excerpt": "SE-0296 introduced asynchronous (async) functions into Swift, allowing us to run complex asynchronous code almost is if it were synchronous. This is done in two steps: marking async functions with the new async keyword, then calling them using the await keyword, similar to other languages such as...",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-pg-startup-ideas",
+      "url": "https://paulgraham.com/startupideas.html",
+      "title": "How to Get Startup Ideas",
+      "site": "paulgraham.com",
+      "space": "swapshelf",
+      "query": "how to get startup ideas paul graham",
+      "visitCount": 1,
+      "firstVisit": "2026-09-23T19:28-04:00",
+      "lastVisit": "2026-09-23T19:28-04:00",
+      "visits": [
+        "2026-09-23T19:28-04:00"
+      ],
+      "dwellSeconds": 780,
+      "excerpt": "The way to get startup ideas is not to try to think of startup ideas. It's to look for problems, preferably problems you have yourself. The very best startup ideas tend to have three things in common: they're something the founders themselves want, that they themselves can build, and that few...",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-pg-growth",
+      "url": "https://paulgraham.com/growth.html",
+      "title": "Startup = Growth",
+      "site": "paulgraham.com",
+      "space": "swapshelf",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-25T15:05-04:00",
+      "lastVisit": "2026-10-25T15:05-04:00",
+      "visits": [
+        "2026-10-25T15:05-04:00"
+      ],
+      "dwellSeconds": 540,
+      "excerpt": "A startup is a company designed to grow fast. Being newly founded does not in itself make a company a startup. Nor is it necessary for a startup to work on technology, or take venture funding, or have some sort of \"exit.\" The only essential thing is growth.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-pg-schlep",
+      "url": "https://www.paulgraham.com/schlep.html",
+      "title": "Schlep Blindness",
+      "site": "paulgraham.com",
+      "space": "swapshelf",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-09-23T23:55-04:00",
+      "lastVisit": "2026-09-23T23:55-04:00",
+      "visits": [
+        "2026-09-23T23:55-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "There are great startup ideas lying around unexploited right under our noses. One reason we don't see them is a phenomenon I call schlep blindness. Schlep was originally a Yiddish word but has passed into general use in the US. It means a tedious, unpleasant task.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-pg-13-sentences",
+      "url": "https://www.paulgraham.com/13sentences.html",
+      "title": "Startups in 13 Sentences",
+      "site": "paulgraham.com",
+      "space": "swapshelf",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-26T21:07-04:00",
+      "lastVisit": "2026-10-26T21:07-04:00",
+      "visits": [
+        "2026-10-26T21:07-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "One of the things I always tell startups is a principle I learned from Paul Buchheit: it's better to make a few people really happy than to make a lot of people semi-happy. I was saying recently to a reporter that if I could only tell startups 10 things, this would be one of them.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-mvp",
+      "url": "https://en.wikipedia.org/wiki/Minimum_viable_product",
+      "title": "Minimum viable product - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "swapshelf",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-09-24T15:55-04:00",
+      "lastVisit": "2026-09-24T15:55-04:00",
+      "visits": [
+        "2026-09-24T15:55-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "A minimum viable product (MVP) is a version of a product with just enough features to be usable by early customers who can then provide feedback for future product development.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-mom-test",
+      "url": "https://www.momtestbook.com/",
+      "title": "The Mom Test by Rob Fitzpatrick",
+      "site": "momtestbook.com",
+      "space": "swapshelf",
+      "query": "the mom test customer interviews",
+      "visitCount": 1,
+      "firstVisit": "2026-10-04T16:31-04:00",
+      "lastVisit": "2026-10-04T16:31-04:00",
+      "visits": [
+        "2026-10-04T16:31-04:00"
+      ],
+      "dwellSeconds": 300,
+      "excerpt": "How to talk to customers & learn if your business is a good idea when everyone is lying to you.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-nps",
+      "url": "https://en.wikipedia.org/wiki/Net_promoter_score",
+      "title": "Net promoter score - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "swapshelf",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-30T20:57-04:00",
+      "lastVisit": "2026-10-30T20:57-04:00",
+      "visits": [
+        "2026-10-30T20:57-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "Net promoter score (NPS) or Customer Net Promoter Score (cNPS) is a market research metric that is based on a single survey question asking respondents to rate the likelihood that they would recommend a company, product, or a service to a friend or colleague.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-cohort-analysis",
+      "url": "https://en.wikipedia.org/wiki/Cohort_analysis",
+      "title": "Cohort analysis - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "swapshelf",
+      "query": "cohort retention analysis",
+      "visitCount": 1,
+      "firstVisit": "2026-10-30T15:38-04:00",
+      "lastVisit": "2026-10-30T15:38-04:00",
+      "visits": [
+        "2026-10-30T15:38-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "Cohort analysis is a kind of behavioral analytics that breaks the data in a data set into related groups before analysis. These groups, or cohorts, usually share common characteristics or experiences within a defined time-span.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-lenny-good-retention",
+      "url": "https://www.lennysnewsletter.com/p/what-is-good-retention-issue-29",
+      "title": "What is good retention - by Lenny Rachitsky",
+      "site": "lennysnewsletter.com",
+      "space": "swapshelf",
+      "query": "what is good retention consumer app",
+      "visitCount": 2,
+      "firstVisit": "2026-10-30T18:11-04:00",
+      "lastVisit": "2026-11-03T19:01-05:00",
+      "visits": [
+        "2026-10-30T18:11-04:00",
+        "2026-11-03T19:01-05:00"
+      ],
+      "dwellSeconds": 540,
+      "excerpt": "Although retention is widely considered to be the most important metric to get right when building (or investing in) a business, it’s also one of the least understood. Why?",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-yale-residential-colleges",
+      "url": "https://en.wikipedia.org/wiki/Residential_colleges_of_Yale_University",
+      "title": "Residential colleges of Yale University - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "swapshelf",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-20T15:31-04:00",
+      "lastVisit": "2026-10-20T15:31-04:00",
+      "visits": [
+        "2026-10-20T15:31-04:00"
+      ],
+      "dwellSeconds": 300,
+      "excerpt": "Yale University has a system of fourteen residential colleges with which all Yale undergraduate students and many faculty are affiliated. Inaugurated in 1933, the college system is considered the defining feature of undergraduate life at Yale College, and the residential colleges serve as the...",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-branford-college",
+      "url": "https://en.wikipedia.org/wiki/Branford_College",
+      "title": "Branford College - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "swapshelf",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-20T15:43-04:00",
+      "lastVisit": "2026-10-20T15:43-04:00",
+      "visits": [
+        "2026-10-20T15:43-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "Branford College is one of the 14 residential colleges at Yale University.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-saybrook-college",
+      "url": "https://en.wikipedia.org/wiki/Saybrook_College",
+      "title": "Saybrook College - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "swapshelf",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-20T20:14-04:00",
+      "lastVisit": "2026-10-20T20:14-04:00",
+      "visits": [
+        "2026-10-20T20:14-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "Saybrook College is one of the 14 residential colleges at Yale University.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-textbook",
+      "url": "https://en.wikipedia.org/wiki/Textbook",
+      "title": "Textbook - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "swapshelf",
+      "query": "textbook prices college students",
+      "visitCount": 1,
+      "firstVisit": "2026-09-24T15:40-04:00",
+      "lastVisit": "2026-09-24T15:40-04:00",
+      "visits": [
+        "2026-09-24T15:40-04:00"
+      ],
+      "dwellSeconds": 360,
+      "excerpt": "A textbook is a book containing a comprehensive compilation of content in a branch of study serving to explain the subject. Textbooks are produced to meet the needs of educators, usually at educational institutions, as well as learners. Schoolbooks are textbooks and other books used in schools.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-freecycle",
+      "url": "https://en.wikipedia.org/wiki/The_Freecycle_Network",
+      "title": "The Freecycle Network - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "swapshelf",
+      "query": "freecycle how it works",
+      "visitCount": 1,
+      "firstVisit": "2026-09-26T23:46-04:00",
+      "lastVisit": "2026-09-26T23:46-04:00",
+      "visits": [
+        "2026-09-26T23:46-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "The Freecycle Network (TFN) is a private, nonprofit organization registered in Arizona, US and is a charity in the United Kingdom. TFN coordinates a worldwide network of \"gifting\" groups to divert reusable goods from landfills.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-online-marketplace",
+      "url": "https://en.wikipedia.org/wiki/Online_marketplace",
+      "title": "Online marketplace - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "swapshelf",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-09-26T22:24-04:00",
+      "lastVisit": "2026-09-26T22:24-04:00",
+      "visits": [
+        "2026-09-26T22:24-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "An online marketplace is a type of e-commerce website where product or service information is provided by multiple third parties. Online marketplaces are the primary type of multichannel ecommerce and can be a way to streamline the production process.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-buy-nothing",
+      "url": "https://en.wikipedia.org/wiki/Buy_Nothing_Project",
+      "title": "Buy Nothing Project - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "swapshelf",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-09-26T15:49-04:00",
+      "lastVisit": "2026-09-26T15:49-04:00",
+      "visits": [
+        "2026-09-26T15:49-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "The Buy Nothing Project is a global conglomeration of community-based groups, founded in Bainbridge Island, Washington, in 2013, that encourages giving of consumer goods and services in preference to conventional commerce.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-product-manager",
+      "url": "https://en.wikipedia.org/wiki/Product_manager",
+      "title": "Product manager - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-09-23T15:21-04:00",
+      "lastVisit": "2026-09-23T15:21-04:00",
+      "visits": [
+        "2026-09-23T15:21-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "A product manager (PM) is a professional role that is responsible for the development of products for an organization, known as the practice of product management. Product managers own the product strategy behind a product, specify its functional requirements, and manage feature releases.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-product-management",
+      "url": "https://en.wikipedia.org/wiki/Product_management",
+      "title": "Product management - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-09-23T14:09-04:00",
+      "lastVisit": "2026-09-23T14:09-04:00",
+      "visits": [
+        "2026-09-23T14:09-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "Product management is the business process of planning, developing, launching, and managing a product or service. It includes the entire lifecycle of a product, from ideation to development to go to market.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-star-method",
+      "url": "https://en.wikipedia.org/wiki/Situation,_task,_action,_result",
+      "title": "Situation, task, action, result - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": "STAR method behavioral interview",
+      "visitCount": 2,
+      "firstVisit": "2026-10-23T11:54-04:00",
+      "lastVisit": "2026-11-03T09:52-05:00",
+      "visits": [
+        "2026-10-23T11:54-04:00",
+        "2026-11-03T09:52-05:00"
+      ],
+      "dwellSeconds": 300,
+      "excerpt": "The situation, task, action, result (STAR) method is an interviewing technique used by employers to evaluate job candidates by how they respond to behavioral and situational based interview questions.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-fermi-problem",
+      "url": "https://en.wikipedia.org/wiki/Fermi_problem",
+      "title": "Fermi problem - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": "fermi estimation interview",
+      "visitCount": 1,
+      "firstVisit": "2026-10-24T13:11-04:00",
+      "lastVisit": "2026-10-24T13:11-04:00",
+      "visits": [
+        "2026-10-24T13:11-04:00"
+      ],
+      "dwellSeconds": 360,
+      "excerpt": "A Fermi problem, also known as an order-of-magnitude problem, is an estimation problem in physics or engineering education, designed to teach dimensional analysis or approximation of extreme scientific calculations. Fermi problems are usually back-of-the-envelope calculations.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-odi",
+      "url": "https://en.wikipedia.org/wiki/Outcome-Driven_Innovation",
+      "title": "Outcome-driven innovation - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": "jobs to be done framework",
+      "visitCount": 1,
+      "firstVisit": "2026-10-22T17:49-04:00",
+      "lastVisit": "2026-10-22T17:49-04:00",
+      "visits": [
+        "2026-10-22T17:49-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "Outcome-driven innovation (ODI) is a strategy and innovation process developed by Anthony W. Ulwick. It is built around the theory that people buy products and services to get jobs done. As people complete these jobs, they have certain measurable outcomes that they are attempting to achieve.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-norton-how-to-hire-pm",
+      "url": "https://www.bringthedonuts.com/essays/productmanager.html",
+      "title": "How to Hire a Product Manager: the Classic Essay | Ken Norton",
+      "site": "bringthedonuts.com",
+      "space": "job-hunt",
+      "query": "ken norton how to hire a product manager",
+      "visitCount": 1,
+      "firstVisit": "2026-09-28T15:06-04:00",
+      "lastVisit": "2026-09-28T15:06-04:00",
+      "visits": [
+        "2026-09-28T15:06-04:00"
+      ],
+      "dwellSeconds": 660,
+      "excerpt": "What makes a great product manager and how do you become one?",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-a16z-good-pm-bad-pm",
+      "url": "https://a16z.com/good-product-manager-bad-product-manager/",
+      "title": "Good Product Manager/Bad Product Manager | Andreessen Horowitz",
+      "site": "a16z.com",
+      "space": "job-hunt",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-09-28T13:37-04:00",
+      "lastVisit": "2026-09-28T13:37-04:00",
+      "visits": [
+        "2026-09-28T13:37-04:00"
+      ],
+      "dwellSeconds": 360,
+      "excerpt": "Warning: This document was written 15 years ago and is probably not relevant for today’s product managers. I present it here merely as an example of a useful training document.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-svpg-product-vs-feature-teams",
+      "url": "https://www.svpg.com/product-vs-feature-teams/",
+      "title": "Article: Product vs Feature Teams : Silicon Valley Product Group",
+      "site": "svpg.com",
+      "space": "job-hunt",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-26T09:08-04:00",
+      "lastVisit": "2026-10-26T09:08-04:00",
+      "visits": [
+        "2026-10-26T09:08-04:00"
+      ],
+      "dwellSeconds": 540,
+      "excerpt": "A partnership dedicated to teaching best practices to product teams and product leaders",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-productplan-rice",
+      "url": "https://www.productplan.com/glossary/rice-scoring-model/",
+      "title": "RICE Scoring Model | Glossary | ProductPlan",
+      "site": "productplan.com",
+      "space": "job-hunt",
+      "query": "RICE prioritization",
+      "visitCount": 1,
+      "firstVisit": "2026-10-22T17:32-04:00",
+      "lastVisit": "2026-10-22T17:32-04:00",
+      "visits": [
+        "2026-10-22T17:32-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "What is RICE Scoring Model? Learn more about RICE Scoring Model and other prioritization techniques in our resources library.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-moscow",
+      "url": "https://en.wikipedia.org/wiki/MoSCoW_method",
+      "title": "MoSCoW method - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-22T14:07-04:00",
+      "lastVisit": "2026-10-22T14:07-04:00",
+      "visits": [
+        "2026-10-22T14:07-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "The MoSCoW method is a prioritization technique. It is used in software development, management, business analysis, and project management to reach a common understanding with stakeholders on the importance they place on the delivery of each requirement; it is also known as MoSCoW prioritization...",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-kano",
+      "url": "https://en.wikipedia.org/wiki/Kano_model",
+      "title": "Kano model - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-22T17:53-04:00",
+      "lastVisit": "2026-10-22T17:53-04:00",
+      "visits": [
+        "2026-10-22T17:53-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "The Kano model is a theory for product development and customer satisfaction developed in the 1980s by Noriaki Kano. This model provides a framework for understanding how different features of a product or service impact customer satisfaction, allowing organizations to prioritize development...",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-amplitude-north-star",
+      "url": "https://amplitude.com/blog/product-north-star-metric",
+      "title": "Every Product Needs a North Star Metric: Here’s How to Find Yours",
+      "site": "amplitude.com",
+      "space": "job-hunt",
+      "query": "north star metric examples",
+      "visitCount": 2,
+      "firstVisit": "2026-10-22T16:19-04:00",
+      "lastVisit": "2026-10-31T17:03-04:00",
+      "visits": [
+        "2026-10-22T16:19-04:00",
+        "2026-10-31T17:03-04:00"
+      ],
+      "dwellSeconds": 420,
+      "excerpt": "Get an introduction to product strategy with examples of North Star Metrics across industries.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-yale-ocs",
+      "url": "https://ocs.yale.edu/",
+      "title": "Office of Career Strategy – Yale University",
+      "site": "ocs.yale.edu",
+      "space": "job-hunt",
+      "query": null,
+      "visitCount": 2,
+      "firstVisit": "2026-09-23T17:00-04:00",
+      "lastVisit": "2026-10-01T12:15-04:00",
+      "visits": [
+        "2026-09-23T17:00-04:00",
+        "2026-10-01T12:15-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "Use the OCS Web Bot, bottom right of each page, for natural language searching. Log in with NetID for unlimited searches.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-informational-interview",
+      "url": "https://en.wikipedia.org/wiki/Informational_interview",
+      "title": "Informational interview - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": "informational interview questions",
+      "visitCount": 1,
+      "firstVisit": "2026-10-05T14:18-04:00",
+      "lastVisit": "2026-10-05T14:18-04:00",
+      "visits": [
+        "2026-10-05T14:18-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "An Informational Interview is a conversation in which a person seeks insights on a career path, an industry, a company and/or general career advice from someone with experience and knowledge in the areas of interest.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-cover-letter",
+      "url": "https://en.wikipedia.org/wiki/Cover_letter",
+      "title": "Cover letter - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-02T16:36-04:00",
+      "lastVisit": "2026-10-02T16:36-04:00",
+      "visits": [
+        "2026-10-02T16:36-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "A cover letter, covering letter, motivation letter, motivational letter, or a letter of motivation is a letter of introduction attached to or accompanying another document such as a résumé or a curriculum vitae.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-resume",
+      "url": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+      "title": "Résumé - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-09-29T09:09-04:00",
+      "lastVisit": "2026-09-29T09:09-04:00",
+      "visits": [
+        "2026-09-29T09:09-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "A résumé or resume is a document created and used by an individual to present their background, skills, and accomplishments. Résumés are most often used to apply for a job, whether in the same organization or another.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-inkandswitch-local-first",
+      "url": "https://www.inkandswitch.com/essay/local-first/",
+      "title": "Local-first software: You own your data, in spite of the cloud",
+      "site": "inkandswitch.com",
+      "space": "job-hunt",
+      "query": "local-first software ink and switch",
+      "visitCount": 2,
+      "firstVisit": "2026-10-25T09:42-04:00",
+      "lastVisit": "2026-10-26T10:54-04:00",
+      "visits": [
+        "2026-10-25T09:42-04:00",
+        "2026-10-26T10:54-04:00"
+      ],
+      "dwellSeconds": 1320,
+      "excerpt": "A new generation of collaborative software that allows users to retain ownership of their data.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-matuschak-evergreen-notes",
+      "url": "https://notes.andymatuschak.org/z5E5QawiXCMbtNtupvxeoEX",
+      "title": "Evergreen notes",
+      "site": "notes.andymatuschak.org",
+      "space": "job-hunt",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-25T09:41-04:00",
+      "lastVisit": "2026-10-25T09:41-04:00",
+      "visits": [
+        "2026-10-25T09:41-04:00"
+      ],
+      "dwellSeconds": 480,
+      "excerpt": "Evergreen notes are written and organized to evolve, contribute, and accumulate over time, across projects. This is an unusual way to think about writing notes: Most people take only transient notes.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-zettelkasten",
+      "url": "https://en.wikipedia.org/wiki/Zettelkasten",
+      "title": "Zettelkasten - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-25T11:41-04:00",
+      "lastVisit": "2026-10-25T11:41-04:00",
+      "visits": [
+        "2026-10-25T11:41-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "A Zettelkasten or card file consists of small items of information stored on Zetteln, paper slips or cards, that may be linked to each other through subject headings or other metadata such as numbers and tags.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-pkm",
+      "url": "https://en.wikipedia.org/wiki/Personal_knowledge_management",
+      "title": "Personal knowledge management - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-25T10:28-04:00",
+      "lastVisit": "2026-10-25T10:28-04:00",
+      "visits": [
+        "2026-10-25T10:28-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "Personal knowledge management (PKM) is a process of collecting information that a person uses to gather, classify, store, search, retrieve and share knowledge in their daily activities and the way in which these processes support work activities.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-crdt",
+      "url": "https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type",
+      "title": "Conflict-free replicated data type - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": "CRDT explained",
+      "visitCount": 1,
+      "firstVisit": "2026-10-26T09:41-04:00",
+      "lastVisit": "2026-10-26T09:41-04:00",
+      "visits": [
+        "2026-10-26T09:41-04:00"
+      ],
+      "dwellSeconds": 420,
+      "excerpt": "In distributed computing, a conflict-free replicated data type (CRDT) is a data structure that is replicated across multiple computers in a network, with the following features:The application can update any replica independently, concurrently and without coordinating with other replicas.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-obsidian",
+      "url": "https://obsidian.md/",
+      "title": "Obsidian - Sharpen your thinking",
+      "site": "obsidian.md",
+      "space": "job-hunt",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-26T12:03-04:00",
+      "lastVisit": "2026-10-26T12:03-04:00",
+      "visits": [
+        "2026-10-26T12:03-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "The free and flexible app for your private thoughts.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-gig-economy",
+      "url": "https://en.wikipedia.org/wiki/Gig_economy",
+      "title": "Gig economy - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-12T10:47-04:00",
+      "lastVisit": "2026-10-12T10:47-04:00",
+      "visits": [
+        "2026-10-12T10:47-04:00"
+      ],
+      "dwellSeconds": 300,
+      "excerpt": "The gig economy is the economic system by which a workforce of people engage in freelance or side-employment by corporate entities. This sector of the economy, which is now often performed through digital platforms, has been on the rise in the 21st century.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-gig-worker",
+      "url": "https://en.wikipedia.org/wiki/Gig_worker",
+      "title": "Gig worker - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-12T10:27-04:00",
+      "lastVisit": "2026-10-12T10:27-04:00",
+      "visits": [
+        "2026-10-12T10:27-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "Gig workers are independent contractors, online platform workers, contract firm workers, on-demand workers, and temporary workers. Gig workers enter into formal agreements with on-demand companies to provide services to the company's clients. They are part of the gig economy.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-taskrabbit",
+      "url": "https://en.wikipedia.org/wiki/TaskRabbit",
+      "title": "Taskrabbit - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": "errandly competitors taskrabbit",
+      "visitCount": 1,
+      "firstVisit": "2026-10-12T09:55-04:00",
+      "lastVisit": "2026-10-12T09:55-04:00",
+      "visits": [
+        "2026-10-12T09:55-04:00"
+      ],
+      "dwellSeconds": 300,
+      "excerpt": "Taskrabbit, Inc. d/b/a Taskrabbit operates an online marketplace that matches freelance labor with local demand, allowing people to find help with tasks including personal assistance, furniture assembly, moving, delivery, and handyman work.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-doordash",
+      "url": "https://en.wikipedia.org/wiki/DoorDash",
+      "title": "DoorDash - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-13T12:08-04:00",
+      "lastVisit": "2026-10-13T12:08-04:00",
+      "visits": [
+        "2026-10-13T12:08-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "DoorDash, Inc. is an American company operating online food ordering and food delivery. It trades under the symbol DASH. With a 56% market share, DoorDash is the largest food delivery platform in the United States. It also has a 60% market share in the convenience delivery category.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-instacart",
+      "url": "https://en.wikipedia.org/wiki/Instacart",
+      "title": "Instacart - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-13T11:29-04:00",
+      "lastVisit": "2026-10-13T11:29-04:00",
+      "visits": [
+        "2026-10-13T11:29-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "Maplebear Inc., doing business as Instacart, is an American retail media and delivery company based in San Francisco that operates a grocery delivery and pick-up service in the United States and Canada accessible via a website and mobile app.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-design-thinking",
+      "url": "https://en.wikipedia.org/wiki/Design_thinking",
+      "title": "Design thinking - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-21T10:22-04:00",
+      "lastVisit": "2026-10-21T10:22-04:00",
+      "visits": [
+        "2026-10-21T10:22-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "Design thinking refers to the set of cognitive, strategic and practical procedures used by designers in the process of designing, and to the body of knowledge that has been developed about how people reason when engaging with design problems.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-ab-testing",
+      "url": "https://en.wikipedia.org/wiki/A/B_testing",
+      "title": "A/B testing - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "job-hunt",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-24T13:12-04:00",
+      "lastVisit": "2026-10-24T13:12-04:00",
+      "visits": [
+        "2026-10-24T13:12-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "A/B testing is a user-experience research method. A/B tests consist of a randomized experiment that usually involves two variants, although the concept can be also extended to multiple variants of the same variable.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-fushimi-inari",
+      "url": "https://en.wikipedia.org/wiki/Fushimi_Inari-taisha",
+      "title": "Fushimi Inari-taisha - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 2,
+      "firstVisit": "2026-10-25T18:12-04:00",
+      "lastVisit": "2026-11-01T19:17-05:00",
+      "visits": [
+        "2026-10-25T18:12-04:00",
+        "2026-11-01T19:17-05:00"
+      ],
+      "dwellSeconds": 300,
+      "excerpt": "Fushimi Inari-taisha is the head shrine of the kami Inari, located in Fushimi-ku, Kyoto, Japan. The shrine sits at the base of a mountain, also named Inari, which is 233 metres (764 ft) above sea level, and includes trails up the mountain to many smaller shrines which span 4 kilometres (2.5 mi)...",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-kiyomizu-dera",
+      "url": "https://en.wikipedia.org/wiki/Kiyomizu-dera",
+      "title": "Kiyomizu-dera - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-25T20:03-04:00",
+      "lastVisit": "2026-10-25T20:03-04:00",
+      "visits": [
+        "2026-10-25T20:03-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "Kiyomizu-dera is a Buddhist temple located in eastern Kyoto, Japan. It belongs to the Kita-Hosso sect of Japanese Buddhism and its honzon is a hibutsu statue of Jūichimen Kannon. The temple's full name is Otowa-san Kiyomizu-dera. The temple is the 16th stop on the Saigoku Kannon Pilgrimage route.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-kinkaku-ji",
+      "url": "https://en.wikipedia.org/wiki/Kinkaku-ji",
+      "title": "Kinkaku-ji - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-25T21:46-04:00",
+      "lastVisit": "2026-10-25T21:46-04:00",
+      "visits": [
+        "2026-10-25T21:46-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "Kinkaku-ji, officially named Rokuon-ji, is a Zen Buddhist temple in Kyoto, Japan and a tourist attraction. It is designated as a World Heritage Site, a National Special Historic Site, a National Special Landscape, and one of the 17 Historic Monuments of Ancient Kyoto.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-arashiyama",
+      "url": "https://en.wikipedia.org/wiki/Arashiyama",
+      "title": "Arashiyama - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": "arashiyama bamboo grove early morning",
+      "visitCount": 1,
+      "firstVisit": "2026-10-25T21:16-04:00",
+      "lastVisit": "2026-10-25T21:16-04:00",
+      "visits": [
+        "2026-10-25T21:16-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "Arashiyama is a district on the western outskirts of Kyoto, Japan. It also refers to the mountain across the Ōi River, which forms a backdrop to the district. Arashiyama is a nationally designated historic site and place of scenic beauty.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-nara-park",
+      "url": "https://en.wikipedia.org/wiki/Nara_Park",
+      "title": "Nara Park - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": "nara day trip from kyoto",
+      "visitCount": 1,
+      "firstVisit": "2026-11-03T22:45-05:00",
+      "lastVisit": "2026-11-03T22:45-05:00",
+      "visits": [
+        "2026-11-03T22:45-05:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "Nara Park is a public park located in the city of Nara, Japan, at the foot of Mount Wakakusa. Established in 1880, it is one of the oldest parks in Japan. Administratively, the park is under the control of Nara Prefecture.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-todai-ji",
+      "url": "https://en.wikipedia.org/wiki/T%C5%8Ddai-ji",
+      "title": "Tōdai-ji - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-11-03T18:25-05:00",
+      "lastVisit": "2026-11-03T18:25-05:00",
+      "visits": [
+        "2026-11-03T18:25-05:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "Tōdai-ji is a Buddhist temple complex that was once one of the powerful Seven Great Temples, located in the city of Nara, Japan. The construction of the temple was an attempt to imitate Chinese temples from the much-admired Tang dynasty.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-shinkansen",
+      "url": "https://en.wikipedia.org/wiki/Shinkansen",
+      "title": "Shinkansen - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-24T22:00-04:00",
+      "lastVisit": "2026-10-24T22:00-04:00",
+      "visits": [
+        "2026-10-24T22:00-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "The Shinkansen, colloquially known in English as the bullet train, is a network of primarily high-speed railway lines in Japan. The system was developed to provide connections between Tokyo and other regions of the country.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-japan-rail-pass",
+      "url": "https://en.wikipedia.org/wiki/Japan_Rail_Pass",
+      "title": "Japan Rail Pass - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": "jr pass worth it 2026",
+      "visitCount": 2,
+      "firstVisit": "2026-10-24T20:16-04:00",
+      "lastVisit": "2026-10-31T20:59-04:00",
+      "visits": [
+        "2026-10-24T20:16-04:00",
+        "2026-10-31T20:59-04:00"
+      ],
+      "dwellSeconds": 360,
+      "excerpt": "The Japan Rail Pass, also called the JR Pass, is a rail pass sold by the Japan Railways Group exclusively for overseas visitors. It is valid for travel on all major forms of transportation provided by the JR Group in Japan, with a few exceptions.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-jrpass-official",
+      "url": "https://japanrailpass.net/en/",
+      "title": "JAPAN RAIL PASS",
+      "site": "japanrailpass.net",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-31T21:04-04:00",
+      "lastVisit": "2026-10-31T21:04-04:00",
+      "visits": [
+        "2026-10-31T21:04-04:00"
+      ],
+      "dwellSeconds": 300,
+      "excerpt": "JAPAN RAIL PASS, which is essential for sightseeing in Japan, is a pass offered jointly by the six JR Group companies.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-japan-travel",
+      "url": "https://www.japan.travel/en/us/",
+      "title": "JNTO - Official Tourism Guide for Japan Travel",
+      "site": "japan.travel",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-24T18:27-04:00",
+      "lastVisit": "2026-10-24T18:27-04:00",
+      "visits": [
+        "2026-10-24T18:27-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "Official Japan National Tourism Organization, providing free advice and information to Travelers",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-shinjuku",
+      "url": "https://en.wikipedia.org/wiki/Shinjuku",
+      "title": "Shinjuku - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-27T19:18-04:00",
+      "lastVisit": "2026-10-27T19:18-04:00",
+      "visits": [
+        "2026-10-27T19:18-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "Shinjuku, officially called Shinjuku City, is one of the 23 special wards of Tokyo.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-shibuya",
+      "url": "https://en.wikipedia.org/wiki/Shibuya",
+      "title": "Shibuya - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-27T21:56-04:00",
+      "lastVisit": "2026-10-27T21:56-04:00",
+      "visits": [
+        "2026-10-27T21:56-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "Shibuya is a special ward in Tokyo, Japan. A major commercial center, Shibuya houses two of the busiest railway stations in the world, Shibuya Station and Shinjuku Station.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-tsukiji",
+      "url": "https://en.wikipedia.org/wiki/Tsukiji_fish_market",
+      "title": "Tsukiji fish market - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": "tsukiji outer market breakfast",
+      "visitCount": 1,
+      "firstVisit": "2026-10-27T21:52-04:00",
+      "lastVisit": "2026-10-27T21:52-04:00",
+      "visits": [
+        "2026-10-27T21:52-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "Tsukiji Market is a former seafood market and major tourist attraction in Tokyo. Located in Tsukiji in central Tokyo between the Sumida River and the upmarket Ginza shopping district, the area contains retail markets, restaurants, and associated restaurant supply stores.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-tsukemen",
+      "url": "https://en.wikipedia.org/wiki/Tsukemen",
+      "title": "Tsukemen - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": "fuunji tsukemen shinjuku",
+      "visitCount": 1,
+      "firstVisit": "2026-10-14T20:21-04:00",
+      "lastVisit": "2026-10-14T20:21-04:00",
+      "visits": [
+        "2026-10-14T20:21-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "Tsukemen is a ramen dish in Japanese cuisine consisting of noodles that are eaten after being dipped in a separate bowl of soup or broth. The dish was invented in 1961 by Kazuo Yamagishi, a restaurateur in Tokyo, Japan.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-ramen",
+      "url": "https://en.wikipedia.org/wiki/Ramen",
+      "title": "Ramen - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-27T22:01-04:00",
+      "lastVisit": "2026-10-27T22:01-04:00",
+      "visits": [
+        "2026-10-27T22:01-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "Ramen is a Japanese-Chinese fusion noodle dish. It includes Chinese-style alkaline wheat noodles served in several flavors of hot broth. Common flavors are soy sauce and miso, with typical toppings including sliced pork, nori, lacto-fermented bamboo shoots (menma), narutomaki, and scallions.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-suica",
+      "url": "https://en.wikipedia.org/wiki/Suica",
+      "title": "Suica - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": "suica card iphone wallet",
+      "visitCount": 1,
+      "firstVisit": "2026-10-31T20:23-04:00",
+      "lastVisit": "2026-10-31T20:23-04:00",
+      "visits": [
+        "2026-10-31T20:23-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "Suica is a prepaid, rechargeable, contactless smart card and electronic money system used as a fare card on train lines and other public transport systems in Japan, launched on November 18, 2001, by the East Japan Railway Company.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-narita",
+      "url": "https://en.wikipedia.org/wiki/Narita_International_Airport",
+      "title": "Narita International Airport - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-28T20:10-04:00",
+      "lastVisit": "2026-10-28T20:10-04:00",
+      "visits": [
+        "2026-10-28T20:10-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "Narita International Airport, originally known as New Tokyo International Airport, is an international airport serving the Greater Tokyo Area. It is located approximately 60 kilometers east of central Tokyo in Narita, Chiba.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-haneda",
+      "url": "https://en.wikipedia.org/wiki/Haneda_Airport",
+      "title": "Haneda Airport - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": "haneda vs narita to shinjuku",
+      "visitCount": 1,
+      "firstVisit": "2026-10-28T20:03-04:00",
+      "lastVisit": "2026-10-28T20:03-04:00",
+      "visits": [
+        "2026-10-28T20:03-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "Haneda Airport, officially Tokyo International Airport and sometimes abbreviated to Tokyo-Haneda, is a Japanese international airport, the busier of the two serving the Greater Tokyo Area, the other being Narita International Airport (NRT).",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-gion",
+      "url": "https://en.wikipedia.org/wiki/Gion",
+      "title": "Gion - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-25T18:57-04:00",
+      "lastVisit": "2026-10-25T18:57-04:00",
+      "visits": [
+        "2026-10-25T18:57-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "Gion (祇園) is a district of Higashiyama-ku, Kyoto, Japan, originating as an entertainment district in the Sengoku period, in front of Yasaka Shrine. The district was built to accommodate the needs of travellers and visitors to the shrine.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-philosophers-walk",
+      "url": "https://en.wikipedia.org/wiki/Philosopher%27s_Walk",
+      "title": "Philosopher's Walk - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-25T20:36-04:00",
+      "lastVisit": "2026-10-25T20:36-04:00",
+      "visits": [
+        "2026-10-25T20:36-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "The Philosopher's Walk is a pedestrian path that follows a cherry-tree-lined canal in Kyoto, Japan between Ginkaku-ji and Nanzen-ji. First opened in 1890 and extended again in 1912, the path follows the course of a shallow irrigation channel bringing water from the Lake Biwa Canal.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-nishiki-market",
+      "url": "https://en.wikipedia.org/wiki/Nishiki_Market",
+      "title": "Nishiki Market - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-27T19:43-04:00",
+      "lastVisit": "2026-10-27T19:43-04:00",
+      "visits": [
+        "2026-10-27T19:43-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "Nishiki Market is a marketplace in downtown Kyoto, located on the east end of Nishikikōji Street, one block north and parallel to Shijō Street and west of Teramachi Street. Rich with history and tradition, the market is renowned as the place to obtain many of Kyoto's famous foods and goods.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-hakone",
+      "url": "https://en.wikipedia.org/wiki/Hakone",
+      "title": "Hakone - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": "hakone onsen day trip from tokyo",
+      "visitCount": 1,
+      "firstVisit": "2026-11-01T18:24-05:00",
+      "lastVisit": "2026-11-01T18:24-05:00",
+      "visits": [
+        "2026-11-01T18:24-05:00"
+      ],
+      "dwellSeconds": 300,
+      "excerpt": "Hakone is a town in Kanagawa Prefecture, Japan. As of 1 October 2023, the city had a population of 10,965, and total area of 92.82 km2 (35.84 sq mi).",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-onsen",
+      "url": "https://en.wikipedia.org/wiki/Onsen",
+      "title": "Onsen - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-11-01T21:05-05:00",
+      "lastVisit": "2026-11-01T21:05-05:00",
+      "visits": [
+        "2026-11-01T21:05-05:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "In Japan, onsen are hot springs and the bathing facilities and traditional inns around them. There are approximately 25,000 hot spring sources throughout Japan, and approximately 3,000 onsen establishments use naturally hot water from these geothermally heated springs.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-ryokan",
+      "url": "https://en.wikipedia.org/wiki/Ryokan",
+      "title": "Ryokan - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-11-01T21:42-05:00",
+      "lastVisit": "2026-11-01T21:42-05:00",
+      "visits": [
+        "2026-11-01T21:42-05:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "A ryokan is a type of traditional Japanese inn that typically features tatami-matted rooms, communal baths, and other public areas where visitors may wear nemaki and talk with the owner.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-kaiseki",
+      "url": "https://en.wikipedia.org/wiki/Kaiseki",
+      "title": "Kaiseki - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-11-01T20:21-05:00",
+      "lastVisit": "2026-11-01T20:21-05:00",
+      "visits": [
+        "2026-11-01T20:21-05:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "Kaiseki (懐石) or kaiseki-ryōri is a traditional multi-course Japanese dinner. The term also refers to the collection of skills and techniques that allow the preparation of such meals and is analogous to Western haute cuisine.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-tokyo",
+      "url": "https://en.wikipedia.org/wiki/Tokyo",
+      "title": "Tokyo - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": "tokyo weather january",
+      "visitCount": 1,
+      "firstVisit": "2026-11-02T18:33-05:00",
+      "lastVisit": "2026-11-02T18:33-05:00",
+      "visits": [
+        "2026-11-02T18:33-05:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "Tokyo, officially the Tokyo Metropolis, is the capital and most populous city of Japan. The population of the city proper was over 14 million as of 2023.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-tokyo-metro",
+      "url": "https://en.wikipedia.org/wiki/Tokyo_Metro",
+      "title": "Tokyo Metro - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-28T21:34-04:00",
+      "lastVisit": "2026-10-28T21:34-04:00",
+      "visits": [
+        "2026-10-28T21:34-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "The Tokyo Metro is a major rapid transit system in Tokyo, Japan, operated by the Tokyo Metro Co., Ltd. The system opened in 1927 as the Tokyo Underground Railway, becoming the first subway system in Asia.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-tokyo-metro-official",
+      "url": "https://www.tokyometro.jp/en/index.html",
+      "title": "Tokyo Metro Home",
+      "site": "tokyometro.jp",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-28T19:25-04:00",
+      "lastVisit": "2026-10-28T19:25-04:00",
+      "visits": [
+        "2026-10-28T19:25-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "Tokyo Metro's official English site, with the route map, fares, ticket types and service updates.",
+      "excerptSource": "written"
+    },
+    {
+      "id": "web-wiki-meiji-shrine",
+      "url": "https://en.wikipedia.org/wiki/Meiji_Shrine",
+      "title": "Meiji Shrine - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-27T22:15-04:00",
+      "lastVisit": "2026-10-27T22:15-04:00",
+      "visits": [
+        "2026-10-27T22:15-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "Meiji Shrine is a Shinto shrine in Shibuya, Tokyo, that is dedicated to the deified spirits of Emperor Meiji and his wife, Empress Shōken. The shrine does not contain the emperor's grave, which is located at Fushimi-momoyama, south of Kyoto.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-shibuya-crossing",
+      "url": "https://en.wikipedia.org/wiki/Shibuya_Crossing",
+      "title": "Shibuya Crossing - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-27T20:54-04:00",
+      "lastVisit": "2026-10-27T20:54-04:00",
+      "visits": [
+        "2026-10-27T20:54-04:00"
+      ],
+      "dwellSeconds": 60,
+      "excerpt": "Shibuya Scramble Crossing, commonly known as Shibuya Crossing, is a scramble crossing in Shibuya, Tokyo, Japan. It is located near Shibuya Station in Shibuya, a major commercial and entertainment district in Tokyo.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-ana",
+      "url": "https://en.wikipedia.org/wiki/All_Nippon_Airways",
+      "title": "All Nippon Airways - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": "jfk to haneda nonstop january",
+      "visitCount": 1,
+      "firstVisit": "2026-10-28T22:30-04:00",
+      "lastVisit": "2026-10-28T22:30-04:00",
+      "visits": [
+        "2026-10-28T22:30-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "All Nippon Airways (ANA) is a Japanese airline headquartered in Minato, Tokyo. ANA operates services to over 100 both domestic and international destinations with its main hub at Haneda and Narita, both airports located in Tokyo.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-jal",
+      "url": "https://en.wikipedia.org/wiki/Japan_Airlines",
+      "title": "Japan Airlines - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-28T22:29-04:00",
+      "lastVisit": "2026-10-28T22:29-04:00",
+      "visits": [
+        "2026-10-28T22:29-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "Japan Airlines (JAL) is the flag carrier of Japan, headquartered in Shinagawa, Tokyo. The airline's main hubs are Tokyo's Narita and Haneda airports, as well as secondary hubs in Osaka's Kansai and Itami airports.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-jfk",
+      "url": "https://en.wikipedia.org/wiki/John_F._Kennedy_International_Airport",
+      "title": "John F. Kennedy International Airport - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-28T20:01-04:00",
+      "lastVisit": "2026-10-28T20:01-04:00",
+      "visits": [
+        "2026-10-28T20:01-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "John F. Kennedy International Airport is the primary international airport serving the New York metropolitan area. It is located on the southwestern shore of Long Island, in Queens, New York City, bordering Jamaica Bay.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-hiragana",
+      "url": "https://en.wikipedia.org/wiki/Hiragana",
+      "title": "Hiragana - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 2,
+      "firstVisit": "2026-10-29T21:12-04:00",
+      "lastVisit": "2026-11-02T22:52-05:00",
+      "visits": [
+        "2026-10-29T21:12-04:00",
+        "2026-11-02T22:52-05:00"
+      ],
+      "dwellSeconds": 360,
+      "excerpt": "Hiragana is a Japanese syllabary, part of the Japanese writing system, along with katakana as well as kanji.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-spaced-repetition",
+      "url": "https://en.wikipedia.org/wiki/Spaced_repetition",
+      "title": "Spaced repetition - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": "anki japanese beginner deck",
+      "visitCount": 1,
+      "firstVisit": "2026-10-29T22:06-04:00",
+      "lastVisit": "2026-10-29T22:06-04:00",
+      "visits": [
+        "2026-10-29T22:06-04:00"
+      ],
+      "dwellSeconds": 240,
+      "excerpt": "Spaced repetition is an evidence-based learning technique that is usually performed with flashcards. Newly introduced and more difficult flashcards are shown more frequently, while older and less difficult flashcards are shown less frequently in order to exploit the psychological spacing effect.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-half-marathon",
+      "url": "https://en.wikipedia.org/wiki/Half_marathon",
+      "title": "Half marathon - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-09-27T21:22-04:00",
+      "lastVisit": "2026-09-27T21:22-04:00",
+      "visits": [
+        "2026-09-27T21:22-04:00"
+      ],
+      "dwellSeconds": 180,
+      "excerpt": "A half marathon is a road running event of 21.0975 kilometres —half the distance of a marathon. It is common for a half marathon event to be held concurrently with a marathon or a 5K race, using almost the same course with a late start, an early finish, or shortcuts.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-negative-split",
+      "url": "https://en.wikipedia.org/wiki/Negative_split",
+      "title": "Negative split - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": "negative split pacing",
+      "visitCount": 1,
+      "firstVisit": "2026-10-04T20:07-04:00",
+      "lastVisit": "2026-10-04T20:07-04:00",
+      "visits": [
+        "2026-10-04T20:07-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "A negative split is a racing strategy that involves completing the second half of a race faster than the first half. It is defined by the intentional setting of a slower initial pace, followed by a gradual or sudden increase of speed towards the end of the race.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-fartlek",
+      "url": "https://en.wikipedia.org/wiki/Fartlek",
+      "title": "Fartlek - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-11T22:03-04:00",
+      "lastVisit": "2026-10-11T22:03-04:00",
+      "visits": [
+        "2026-10-11T22:03-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "Fartlek is a middle and long-distance runner's training approach developed in the late 1930s by Swedish Olympian Gösta Holmér. It has been described as a relatively unscientific blending of continuous training, with its steady pace of moderate-high intensity aerobic intensity, and interval...",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-wiki-lsd",
+      "url": "https://en.wikipedia.org/wiki/Long_slow_distance",
+      "title": "Long slow distance - Wikipedia",
+      "site": "en.wikipedia.org",
+      "space": "personal",
+      "query": null,
+      "visitCount": 1,
+      "firstVisit": "2026-10-18T20:33-04:00",
+      "lastVisit": "2026-10-18T20:33-04:00",
+      "visits": [
+        "2026-10-18T20:33-04:00"
+      ],
+      "dwellSeconds": 120,
+      "excerpt": "Long slow distance (LSD) is a form of aerobic endurance training used in sports including running, rowing, skiing and cycling. It is also known as aerobic endurance training, base training and Zone 2 training.",
+      "excerptSource": "page"
+    },
+    {
+      "id": "web-hacker-news",
+      "url": "https://news.ycombinator.com/",
+      "title": "Hacker News",
+      "site": "news.ycombinator.com",
+      "space": "personal",
+      "query": null,
+      "visitCount": 8,
+      "firstVisit": "2026-09-24T22:28-04:00",
+      "lastVisit": "2026-11-04T12:25-05:00",
+      "visits": [
+        "2026-09-24T22:28-04:00",
+        "2026-09-30T20:52-04:00",
+        "2026-10-07T22:24-04:00",
+        "2026-10-14T18:17-04:00",
+        "2026-10-21T20:07-04:00",
+        "2026-10-28T20:03-04:00",
+        "2026-11-02T20:17-05:00",
+        "2026-11-04T12:25-05:00"
+      ],
+      "dwellSeconds": 1200,
+      "excerpt": "The Hacker News front page: links ranked by votes, with discussion threads. It changes all day.",
+      "excerptSource": "written"
+    }
+  ],
+  "searches": [
+    {
+      "query": "network effects economics",
+      "at": "2026-09-23T19:07-04:00",
+      "led_to": "web-wiki-network-effects-redirect"
+    },
+    {
+      "query": "how to get startup ideas paul graham",
+      "at": "2026-09-23T19:27-04:00",
+      "led_to": "web-pg-startup-ideas"
+    },
+    {
+      "query": "platform economy",
+      "at": "2026-09-23T19:39-04:00",
+      "led_to": "web-wiki-platform-economy"
+    },
+    {
+      "query": "network effects definition",
+      "at": "2026-09-24T13:59-04:00",
+      "led_to": "web-wiki-network-effect"
+    },
+    {
+      "query": "textbook prices college students",
+      "at": "2026-09-24T15:39-04:00",
+      "led_to": "web-wiki-textbook"
+    },
+    {
+      "query": "two sided market rochet tirole",
+      "at": "2026-09-24T21:16-04:00",
+      "led_to": "web-wiki-two-sided-market"
+    },
+    {
+      "query": "paul graham do things that don't scale",
+      "at": "2026-09-25T18:11-04:00",
+      "led_to": "web-pg-do-things-that-dont-scale"
+    },
+    {
+      "query": "bill gurley all markets are not created equal",
+      "at": "2026-09-26T22:30-04:00",
+      "led_to": "web-gurley-all-markets"
+    },
+    {
+      "query": "freecycle how it works",
+      "at": "2026-09-26T23:45-04:00",
+      "led_to": "web-wiki-freecycle"
+    },
+    {
+      "query": "swapshelf app name taken",
+      "at": "2026-09-27T23:40:00-04:00",
+      "led_to": null
+    },
+    {
+      "query": "ken norton how to hire a product manager",
+      "at": "2026-09-28T15:04-04:00",
+      "led_to": "web-norton-how-to-hire-pm"
+    },
+    {
+      "query": "aggregation theory ben thompson",
+      "at": "2026-09-29T16:03-04:00",
+      "led_to": "web-stratechery-aggregation-theory"
+    },
+    {
+      "query": "nfx network effects manual",
+      "at": "2026-09-30T20:43-04:00",
+      "led_to": "web-nfx-network-effects-manual"
+    },
+    {
+      "query": "supabase row level security",
+      "at": "2026-10-02T18:16-04:00",
+      "led_to": "web-supabase-rls"
+    },
+    {
+      "query": "andrew chen cold start problem",
+      "at": "2026-10-02T18:45-04:00",
+      "led_to": "web-andrewchen-cold-start-social"
+    },
+    {
+      "query": "mapleframe apm program",
+      "at": "2026-10-03T11:30:00-04:00",
+      "led_to": null
+    },
+    {
+      "query": "critical mass network adoption",
+      "at": "2026-10-03T14:26-04:00",
+      "led_to": "web-wiki-critical-mass"
+    },
+    {
+      "query": "the mom test customer interviews",
+      "at": "2026-10-04T16:30-04:00",
+      "led_to": "web-mom-test"
+    },
+    {
+      "query": "negative split pacing",
+      "at": "2026-10-04T20:06-04:00",
+      "led_to": "web-wiki-negative-split"
+    },
+    {
+      "query": "informational interview questions",
+      "at": "2026-10-05T14:17-04:00",
+      "led_to": "web-wiki-informational-interview"
+    },
+    {
+      "query": "max flow min cut proof",
+      "at": "2026-10-06T17:24-04:00",
+      "led_to": "web-wiki-max-flow-min-cut"
+    },
+    {
+      "query": "strategies for two-sided markets hbr eisenmann",
+      "at": "2026-10-09T10:15-04:00",
+      "led_to": "web-hbr-two-sided-strategies"
+    },
+    {
+      "query": "rochet tirole 2003 pdf",
+      "at": "2026-10-09T14:12:00-04:00",
+      "led_to": null
+    },
+    {
+      "query": "craigslist unbundling",
+      "at": "2026-10-10T19:53-04:00",
+      "led_to": "web-wiki-craigslist"
+    },
+    {
+      "query": "swiftui list performance large data",
+      "at": "2026-10-11T15:47-04:00",
+      "led_to": "web-apple-swiftui-list"
+    },
+    {
+      "query": "errandly competitors taskrabbit",
+      "at": "2026-10-12T09:54-04:00",
+      "led_to": "web-wiki-taskrabbit"
+    },
+    {
+      "query": "errandly series b",
+      "at": "2026-10-12T16:20:00-04:00",
+      "led_to": null
+    },
+    {
+      "query": "swift async await mainactor",
+      "at": "2026-10-12T22:37-04:00",
+      "led_to": "web-hws-async-await"
+    },
+    {
+      "query": "swiftdata offline cache",
+      "at": "2026-10-13T23:07-04:00",
+      "led_to": "web-apple-swiftdata"
+    },
+    {
+      "query": "fuunji tsukemen shinjuku",
+      "at": "2026-10-14T20:20-04:00",
+      "led_to": "web-wiki-tsukemen"
+    },
+    {
+      "query": "ios push notification swiftui",
+      "at": "2026-10-15T22:28-04:00",
+      "led_to": "web-apple-user-notifications"
+    },
+    {
+      "query": "postgres unique constraint two columns",
+      "at": "2026-10-16T14:51-04:00",
+      "led_to": "web-postgres-constraints"
+    },
+    {
+      "query": "marketplace liquidity definition",
+      "at": "2026-10-17T16:10-04:00",
+      "led_to": "web-wiki-market-liquidity"
+    },
+    {
+      "query": "multihoming",
+      "at": "2026-10-18T13:15-04:00",
+      "led_to": "web-wiki-multihoming-ip"
+    },
+    {
+      "query": "switching costs multi-homing",
+      "at": "2026-10-19T18:15-04:00",
+      "led_to": "web-wiki-switching-cost"
+    },
+    {
+      "query": "uber drivers also drive for lyft evidence",
+      "at": "2026-10-19T18:24-04:00",
+      "led_to": "web-nber-uber-flexible-work"
+    },
+    {
+      "query": "facebook 2004 launch harvard then other colleges",
+      "at": "2026-10-20T11:52-04:00",
+      "led_to": "web-wiki-history-of-facebook"
+    },
+    {
+      "query": "tinder usc launch campus",
+      "at": "2026-10-20T16:01-04:00",
+      "led_to": "web-wiki-tinder"
+    },
+    {
+      "query": "opentable restaurant software before diners",
+      "at": "2026-10-21T11:00-04:00",
+      "led_to": "web-wiki-opentable"
+    },
+    {
+      "query": "mapkit swiftui pin annotation",
+      "at": "2026-10-21T14:50-04:00",
+      "led_to": "web-apple-mapkit"
+    },
+    {
+      "query": "how to kickstart a marketplace lenny",
+      "at": "2026-10-21T17:50-04:00",
+      "led_to": "web-lenny-kickstart-marketplace"
+    },
+    {
+      "query": "supabase realtime chat",
+      "at": "2026-10-22T13:46-04:00",
+      "led_to": "web-supabase-realtime"
+    },
+    {
+      "query": "north star metric examples",
+      "at": "2026-10-22T16:18-04:00",
+      "led_to": "web-amplitude-north-star"
+    },
+    {
+      "query": "RICE prioritization",
+      "at": "2026-10-22T17:31-04:00",
+      "led_to": "web-productplan-rice"
+    },
+    {
+      "query": "jobs to be done framework",
+      "at": "2026-10-22T17:48-04:00",
+      "led_to": "web-wiki-odi"
+    },
+    {
+      "query": "STAR method behavioral interview",
+      "at": "2026-10-23T11:52-04:00",
+      "led_to": "web-wiki-star-method"
+    },
+    {
+      "query": "ios cold launch time swiftui",
+      "at": "2026-10-23T20:48-04:00",
+      "led_to": "web-apple-launch-time"
+    },
+    {
+      "query": "fermi estimation interview",
+      "at": "2026-10-24T13:10-04:00",
+      "led_to": "web-wiki-fermi-problem"
+    },
+    {
+      "query": "jr pass worth it 2026",
+      "at": "2026-10-24T20:15-04:00",
+      "led_to": "web-wiki-japan-rail-pass"
+    },
+    {
+      "query": "local-first software ink and switch",
+      "at": "2026-10-25T09:41-04:00",
+      "led_to": "web-inkandswitch-local-first"
+    },
+    {
+      "query": "quillstone notes app review",
+      "at": "2026-10-25T15:02:00-04:00",
+      "led_to": null
+    },
+    {
+      "query": "kyoto in january crowds",
+      "at": "2026-10-25T20:44:00-04:00",
+      "led_to": null
+    },
+    {
+      "query": "arashiyama bamboo grove early morning",
+      "at": "2026-10-25T21:15-04:00",
+      "led_to": "web-wiki-arashiyama"
+    },
+    {
+      "query": "CRDT explained",
+      "at": "2026-10-26T09:40-04:00",
+      "led_to": "web-wiki-crdt"
+    },
+    {
+      "query": "yale reading period fall 2026",
+      "at": "2026-10-26T21:05:00-04:00",
+      "led_to": null
+    },
+    {
+      "query": "tsukiji outer market breakfast",
+      "at": "2026-10-27T21:51-04:00",
+      "led_to": "web-wiki-tsukiji"
+    },
+    {
+      "query": "haneda vs narita to shinjuku",
+      "at": "2026-10-28T20:02-04:00",
+      "led_to": "web-wiki-haneda"
+    },
+    {
+      "query": "gale shapley proof",
+      "at": "2026-10-28T20:25-04:00",
+      "led_to": "web-wiki-stable-marriage"
+    },
+    {
+      "query": "jfk to haneda nonstop january",
+      "at": "2026-10-28T22:28-04:00",
+      "led_to": "web-wiki-ana"
+    },
+    {
+      "query": "testflight external testers limit",
+      "at": "2026-10-29T13:26-04:00",
+      "led_to": "web-apple-testflight"
+    },
+    {
+      "query": "anki japanese beginner deck",
+      "at": "2026-10-29T22:05-04:00",
+      "led_to": "web-wiki-spaced-repetition"
+    },
+    {
+      "query": "cohort retention analysis",
+      "at": "2026-10-30T15:37-04:00",
+      "led_to": "web-wiki-cohort-analysis"
+    },
+    {
+      "query": "what is good retention consumer app",
+      "at": "2026-10-30T18:09-04:00",
+      "led_to": "web-lenny-good-retention"
+    },
+    {
+      "query": "suica card iphone wallet",
+      "at": "2026-10-31T20:22-04:00",
+      "led_to": "web-wiki-suica"
+    },
+    {
+      "query": "hakone onsen day trip from tokyo",
+      "at": "2026-11-01T18:23-05:00",
+      "led_to": "web-wiki-hakone"
+    },
+    {
+      "query": "chicago author date citation",
+      "at": "2026-11-02T12:48-05:00",
+      "led_to": "web-chicago-author-date"
+    },
+    {
+      "query": "tokyo weather january",
+      "at": "2026-11-02T18:32-05:00",
+      "led_to": "web-wiki-tokyo"
+    },
+    {
+      "query": "how long does testflight review take",
+      "at": "2026-11-02T22:10:00-05:00",
+      "led_to": null
+    },
+    {
+      "query": "marketplace chicken or egg problem tactics",
+      "at": "2026-11-03T17:21-05:00",
+      "led_to": "web-nfx-chicken-or-egg-tactics"
+    },
+    {
+      "query": "nara day trip from kyoto",
+      "at": "2026-11-03T22:44-05:00",
+      "led_to": "web-wiki-nara-park"
+    }
+  ]
+}

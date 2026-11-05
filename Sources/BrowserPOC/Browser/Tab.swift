@@ -225,7 +225,8 @@ final class Tab: ObservableObject, Identifiable {
 
     /// Reads title, description and main text in an isolated script world, away from the page's own scripts.
     func extract(_ done: @escaping @MainActor (PageExtract?) -> Void) {
-        guard let wv = webView, let u = wv.url, URLKey.isIndexableWeb(u) else { done(nil); return }
+        // Demo pages give Related their text like any page. Capture stays http only.
+        guard let wv = webView, let u = wv.url, URLKey.isIndexableWeb(u) || DemoScheme.handles(u) else { done(nil); return }
         wv.evaluateJavaScript(Self.extractJS, in: nil, in: .defaultClient) { result in
             MainActor.assumeIsolated {
                 guard case .success(let value) = result, let dict = value as? [String: Any] else { done(nil); return }
@@ -254,7 +255,7 @@ final class WebCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDown
         guard let url = navigationAction.request.url else { decisionHandler(.allow); return }
         let scheme = url.scheme?.lowercased() ?? ""
         if navigationAction.shouldPerformDownload { decisionHandler(.download); return }
-        if !["http", "https", "about", "data", "blob", "file", "javascript"].contains(scheme) {
+        if !["http", "https", "about", "data", "blob", "file", "javascript", DemoScheme.scheme].contains(scheme) {
             NSWorkspace.shared.open(url)
             decisionHandler(.cancel)
             return
