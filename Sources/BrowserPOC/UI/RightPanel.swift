@@ -12,6 +12,7 @@ struct RightPanel: View {
 struct RightPanelContent: View {
     @ObservedObject var resurfacer: Resurfacer
     @ObservedObject var settings = Settings.shared
+    @ObservedObject var gate = RelatedGate.shared
     @EnvironmentObject var model: BrowserModel
 
     var body: some View {
@@ -83,9 +84,15 @@ struct RightPanelContent: View {
         .padding(.horizontal, Theme.Space.windowMargin)
     }
 
-    var emptyTitle: String { resurfacer.hasContext ? "Nothing related yet" : "Nothing open" }
+    var powerPause: RelatedPause? { gate.pause.flatMap { $0.isPower ? $0 : nil } }
+
+    var emptyTitle: String {
+        if let p = powerPause { return p.title }
+        return resurfacer.hasContext ? "Nothing related yet" : "Nothing open"
+    }
 
     var emptyText: String {
+        if let p = powerPause { return p.detail }
         if !resurfacer.hasContext { return "Open a page or a note. Things you've seen before that relate to it show up here." }
         return "Cards show up when something you've seen before matches what's open."
     }

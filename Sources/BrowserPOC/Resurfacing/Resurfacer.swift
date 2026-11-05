@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import SwiftUI
 
@@ -13,6 +14,10 @@ struct Card: Identifiable {
 /// screen and shows the cards the reranker is sure about within a second or two. The second
 /// adds the on-device model's description of what Felix is doing, and its judgment on
 /// borderline cards. Cards already on screen stay put while they still qualify.
+///
+/// In the real app both passes wait for the item to stay in front for a while (first and second
+/// dwell), and nothing runs while `RelatedGate` says Related is paused: the power setting, the
+/// shelf or panel hidden, or the window out of sight.
 @MainActor
 final class Resurfacer: ObservableObject {
     @Published private(set) var siteCards: [Card] = []
@@ -36,6 +41,14 @@ final class Resurfacer: ObservableObject {
     private var modelsObserver: NSObjectProtocol?
     private var settingsWork: DispatchWorkItem?
     private var typingWork: DispatchWorkItem?
+    private var gateWatch: AnyCancellable?
+    /// A run is owed for the current context: it was skipped while Related was paused, or cut short.
+    private var owed = false
+    /// When the current item came to the front, for the dwell.
+    private var contextSince = Date()
+    /// The item waiting for its dwell or for the gate to open.
+    private var waitingKey: String?
+    private var dwellWork: DispatchWorkItem?
 
     /// Cards per context, so switching focus back to a pane doesn't refetch.
     private struct Cached { let sites: [Card]; let docs: [Card]; let terms: [String]; let at: Date }
@@ -59,6 +72,10 @@ final class Resurfacer: ObservableObject {
         }
         modelsObserver = NotificationCenter.default.addObserver(forName: .modelsChanged, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.indexDidChange() }
+        }
+        // @Published sends before the value changes, so read the gate on the next turn.
+        gateWatch = RelatedGate.shared.$pause.dropFirst().sink { [weak self] _ in
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.gateChanged() } }
         }
         // Background upkeep for the real app; both do nothing in tests.
         ModelStore.shared.autoStart()
@@ -109,6 +126,9 @@ final class Resurfacer: ObservableObject {
         }
         guard let input, (input.title.count + input.text.count) >= 40 else {
             generation += 1
+            dwellWork?.cancel()
+            waitingKey = nil
+            owed = false
             context = input
             hasContext = input != nil
             if input == nil || input?.key != lastKey { siteCards = []; docCards = []; lastTerms = []; lastKey = input?.key; work = nil }
@@ -116,6 +136,13 @@ final class Resurfacer: ObservableObject {
         }
         noteActivity(input)
         let words = Self.words(input)
+        if input.key == waitingKey, context != nil {
+            // The item already waiting for its dwell or the gate, read again: keep waiting, with
+            // the newer text.
+            context = input
+            lastWords = words
+            return
+        }
         if input.key == lastKey, context != nil {
             // Same item, text changed: skip tiny edits, and wait for a pause in typing.
             if Self.jaccard(words, lastWords) >= 0.97 { context = input; return }
@@ -126,7 +153,7 @@ final class Resurfacer: ObservableObject {
                     guard let self, let c = self.context, c.key == input.key else { return }
                     self.generation += 1
                     self.lastWords = Self.words(c)
-                    self.run(c, replace: false)
+                    self.schedule(c, replace: false)
                 }
             }
             typingWork = w
@@ -135,19 +162,80 @@ final class Resurfacer: ObservableObject {
         }
         generation += 1
         typingWork?.cancel()
+        dwellWork?.cancel()
         context = input
         hasContext = true
         lastWords = words
-        if input.key != lastKey, let c = cache[input.key], Date().timeIntervalSince(c.at) < 180 {
+        contextSince = Date()
+        let powerPaused = RelatedGate.shared.pause?.isPower == true
+        if !powerPaused, input.key != lastKey, let c = cache[input.key], Date().timeIntervalSince(c.at) < 180 {
             siteCards = c.sites
             docCards = c.docs
             contextTerms = c.terms
             lastTerms = Set(c.terms)
             lastKey = input.key
             work = summaries[input.key]?.summary
+            waitingKey = nil
+            owed = false
             return
         }
-        run(input, replace: false)
+        schedule(input, replace: false)
+    }
+
+    /// Runs the context once Related may run and the item has been in front long enough.
+    private func schedule(_ input: ContextInput, replace: Bool) {
+        dwellWork?.cancel()
+        if let p = RelatedGate.shared.pause {
+            owed = true
+            waitingKey = input.key
+            isWorking = false
+            // Off means nothing shows. Hidden only waits, but cards for another item go.
+            if p.isPower || input.key != lastKey { clearCards() }
+            return
+        }
+        let wait = RelatedGate.firstDwellNow - Date().timeIntervalSince(contextSince)
+        if wait > 0.01 {
+            waitingKey = input.key
+            // The last item's cards don't stay up on this one while it waits.
+            if input.key != lastKey { clearCards() }
+            let gen = generation
+            let w = DispatchWorkItem { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self, gen == self.generation, let c = self.context, c.key == input.key else { return }
+                    self.schedule(c, replace: replace)
+                }
+            }
+            dwellWork = w
+            DispatchQueue.main.asyncAfter(deadline: .now() + wait, execute: w)
+            return
+        }
+        run(input, replace: replace)
+    }
+
+    private func clearCards() {
+        if !siteCards.isEmpty { siteCards = [] }
+        if !docCards.isEmpty { docCards = [] }
+        pending = [:]
+        reserve = [:]
+        work = nil
+    }
+
+    /// The gate opened or closed: the power setting, the shelf or panel shown or hidden, or the
+    /// window coming into or out of sight.
+    private func gateChanged() {
+        if let p = RelatedGate.shared.pause {
+            // Stop what's running. The judgments and the second pass check the generation.
+            if isWorking || waitingKey != nil || !judgingIdle || p.isPower { owed = true }
+            generation += 1
+            dwellWork?.cancel()
+            isWorking = false
+            if owed, let c = context { waitingKey = c.key }
+            if p.isPower { clearCards() }
+            return
+        }
+        guard owed, let c = context, (c.title.count + c.text.count) >= 40 else { return }
+        generation += 1
+        schedule(c, replace: false)
     }
 
     private var indexWork: DispatchWorkItem?
@@ -175,7 +263,7 @@ final class Resurfacer: ObservableObject {
     func refresh(replace: Bool) {
         guard let c = context, (c.title.count + c.text.count) >= 40 else { return }
         generation += 1
-        run(c, replace: replace)
+        schedule(c, replace: replace)
     }
 
     func settingsChanged() {
@@ -188,6 +276,8 @@ final class Resurfacer: ObservableObject {
 
     private func run(_ input: ContextInput, replace: Bool) {
         let gen = generation
+        waitingKey = nil
+        owed = false
         var params = RankParams.fromSettings(Settings.shared.value)
         // Only cards shown for this same item get to stay. A new item starts from its own ranking.
         params.keepIDs = (replace || input.key != lastKey) ? [] : Set(cards.map { $0.id })
@@ -212,6 +302,15 @@ final class Resurfacer: ObservableObject {
             await self.judgePending(input: input, gen: gen, work: cachedSummary)
             // Pass 2: ask the model what Felix is doing, then retrieve again with its queries.
             guard cachedSummary == nil, ContextReader.isAvailable else { return }
+            // It waits until the item has been in front a while longer, so a page you only
+            // glance at never gets it.
+            let wait = await MainActor.run { RelatedGate.secondDwellNow - Date().timeIntervalSince(self.contextSince) }
+            if wait > 0 {
+                await MainActor.run { if gen == self.generation { self.isWorking = false } }
+                try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+                guard await MainActor.run(body: { gen == self.generation && RelatedGate.shared.canRun }) else { return }
+                await MainActor.run { self.isWorking = true }
+            }
             guard await MainActor.run(body: { gen == self.generation }) else { return }
             guard let summary = await ContextReader.describe(input) else {
                 await MainActor.run { if gen == self.generation { self.isWorking = false } }

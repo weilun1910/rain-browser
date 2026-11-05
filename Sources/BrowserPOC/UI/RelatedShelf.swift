@@ -711,27 +711,40 @@ struct ShelfAction: View {
 /// The sidebar's Related button: shows or hides Related in whichever mode is on.
 struct RelatedToggleButton: View {
     @ObservedObject var prefs = RelatedPrefs.shared
+    @ObservedObject var gate = RelatedGate.shared
+    var help: String {
+        let base = prefs.mode == .shelf ? "Show or hide Related (Shift-Cmd-R)" : "Related panel (Shift-Cmd-R)"
+        guard let p = gate.pause, p.isPower else { return base }
+        return base + ". " + p.short + "."
+    }
     var body: some View {
-        NavButton(symbol: prefs.mode == .shelf ? "rectangle.bottomthird.inset.filled" : "sidebar.right",
-                  help: prefs.mode == .shelf ? "Show or hide Related (Shift-Cmd-R)" : "Related panel (Shift-Cmd-R)") {
+        NavButton(symbol: prefs.mode == .shelf ? "rectangle.bottomthird.inset.filled" : "sidebar.right", help: help) {
             RelatedPrefs.shared.toggleVisible()
         }
     }
 }
 
-/// Settings, under General: Related as a shelf or a sidebar.
+/// Settings, under General: Related as a shelf or a sidebar, and when it runs.
 struct RelatedLayoutSection: View {
     @ObservedObject var prefs = RelatedPrefs.shared
+    @ObservedObject var gate = RelatedGate.shared
     var body: some View {
         Section {
             Picker("Show Related as", selection: Binding(get: { prefs.mode }, set: { RelatedPrefs.shared.setMode($0) })) {
                 ForEach(RelatedMode.allCases, id: \.self) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
+            Picker("Run Related", selection: Binding(get: { prefs.value.power }, set: { p in RelatedPrefs.shared.update { $0.power = p } })) {
+                ForEach(RelatedPower.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            if let p = gate.pause, p.isPower, prefs.value.power == .pluggedIn {
+                Text(p.short + ".")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         } header: {
             Text("Related")
         } footer: {
-            Text("The shelf floats small cards along the bottom of the page. Hover one to see why it's related. The sidebar shows full cards in a panel on the right. Ctrl-Cmd-R switches between them.")
+            Text("The shelf floats small cards along the bottom of the page. Hover one to see why it's related. The sidebar shows full cards in a panel on the right. Ctrl-Cmd-R switches between them.\n\nRelated runs AI models on your Mac for each page you stay on, which uses a lot of battery. By default it only runs when your Mac is plugged in.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }

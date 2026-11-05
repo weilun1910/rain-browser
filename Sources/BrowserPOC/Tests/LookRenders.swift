@@ -147,6 +147,19 @@ enum LookRenders {
         shoot("11-panel-hidden")
         Settings.shared.update { $0.rightPanelOpen = true }
 
+        // 8b. Related paused on battery: the right panel says why, and so does Settings.
+        RelatedGate.enforced = true
+        PowerSource.shared.override = (onBattery: true, lowPower: false)
+        RelatedGate.shared.update()
+        _ = SmokeTest.wait(1) { false }
+        shoot("11b-related-paused")
+        let paused = SmokeTest.offscreenWindow(NSHostingView(rootView: GeneralSettings().frame(width: 580, height: 620)), size: NSSize(width: 580, height: 620))
+        both(paused, "12b-settings-general-paused", out)
+        RelatedGate.enforced = false
+        PowerSource.shared.override = nil
+        RelatedGate.shared.update()
+        _ = SmokeTest.wait(2) { !model.resurfacer.isWorking }
+
         // 9. Settings, one tab at a time.
         let tabs: [(String, AnyView)] = [("12-settings-general", AnyView(GeneralSettings())),
                                          ("13-settings-sources", AnyView(SourcesSettings())),

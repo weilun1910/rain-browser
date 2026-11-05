@@ -298,6 +298,7 @@ enum SavedDataTests {
 
         let r = read(RelatedPrefsValue.self, "related.json", "{\"mode\":\"sidebar\",\"shelfHidden\":true}")
         check(r?.mode == .sidebar && r?.shelfHidden == true, "today's Related preferences keep their mode")
+        check(r?.power == .pluggedIn, "Related preferences from before the power setting run Related only when plugged in")
 
         let closed = read(LossyArray<ClosedItem>.self, "closed.json", """
         [{"id":"\(t[0])","kind":"web","url":"https://example.com/closed","title":"Closed page","closedAt":"2026-11-05T08:00:00Z","reason":"closed"},

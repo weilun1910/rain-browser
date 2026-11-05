@@ -18,6 +18,8 @@ struct RelatedPrefsValue: Codable, Equatable {
     var mode: RelatedMode = .shelf
     /// Cmd-Shift-R in shelf mode. The sidebar keeps using `AppSettings.rightPanelOpen`.
     var shelfHidden = false
+    /// When Related runs its models. Files from before this setting get the default.
+    var power: RelatedPower = .pluggedIn
 
     init() {}
 
@@ -26,6 +28,7 @@ struct RelatedPrefsValue: Codable, Equatable {
         let d = RelatedPrefsValue()
         mode = (try? c.decodeIfPresent(RelatedMode.self, forKey: .mode)) ?? d.mode
         shelfHidden = try c.decodeIfPresent(Bool.self, forKey: .shelfHidden) ?? d.shelfHidden
+        power = (try? c.decodeIfPresent(RelatedPower.self, forKey: .power)) ?? d.power
     }
 }
 
@@ -351,6 +354,7 @@ enum RelatedShelf {
     /// Called once at launch, before the window: settles the mode and starts noticing typing.
     @MainActor static func launch(_ model: BrowserModel) {
         _ = RelatedPrefs.shared
+        RelatedGate.shared.start()
         ShelfState.shared.installTypingMonitor()
         ShelfDemo.start(model: model)
     }

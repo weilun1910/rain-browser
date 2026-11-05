@@ -128,6 +128,10 @@ if let unknown = args.dropFirst().first(where: { $0.hasPrefix("--") && !known.co
     exit(2)
 }
 
+// The real app holds Related to its power setting, to being on screen and to the dwell. The shelf
+// demo and the motion tours show cards whatever the power source.
+if !args.contains("--shelf-demo") && !args.contains("--motion-tour") { MainActor.assumeIsolated { RelatedGate.enforced = true } }
+
 // The app itself. A build that hasn't opened this profile before backs it up first, before
 // anything in it is read or written.
 MainActor.assumeIsolated { DataSafety.prepareLaunch() }
