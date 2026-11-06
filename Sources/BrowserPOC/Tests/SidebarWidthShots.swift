@@ -147,6 +147,32 @@ enum SidebarWidthShots {
         CompactReveal.shared.reset()
         BrowserPrefs.shared.update { $0.sidebarHidden = false }
 
+        // Essentials: three in the column, and the box grown into a grid of all of them.
+        if let space = model.currentSpace {
+            let extra = model.tabs.filter { $0.spaceID == space.id && $0.isWeb && !$0.isEssential && !$0.isPinned }.prefix(4)
+            for t in extra { model.addToEssentials(t) }
+        }
+        settle()
+        check(model.essentials.count > IconEssentials.shown, "the demo has more Essentials than the column shows", "\(model.essentials.count)")
+        shoot("9-icons-essentials-closed")
+        LookRenders.skipWeb = true
+        EssentialsBloom.shared.forced = true
+        settle()
+        shoot("10-icons-essentials-open")
+        if let root = window.contentView {
+            // A point in the grown box's second column, out past the column over the page.
+            let p = NSPoint(x: SidebarWidth.icons + 14, y: root.bounds.height - 140)
+            let hit = root.superview?.hitTest(p) // window coordinates, as AppKit routes a real click
+            let name = hit.map { String(describing: type(of: $0)) } ?? "nothing"
+            check(!(name.contains("WK") || name.contains("WebHost")), "a click on the grown box over the page goes to the box, not the page", name)
+        }
+        BrowserPrefs.shared.update { $0.sidebarOnRight = true }
+        settle()
+        shoot("11-icons-essentials-open-right")
+        BrowserPrefs.shared.update { $0.sidebarOnRight = false }
+        EssentialsBloom.shared.forced = false
+        LookRenders.skipWeb = false
+
         // The command bar grows out of the search icon.
         model.focusAddress()
         _ = SmokeTest.wait(0.6) { false }

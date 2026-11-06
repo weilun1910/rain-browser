@@ -378,9 +378,16 @@ struct EssentialsGrid: View {
     var body: some View {
         let items = model.essentials
         if !items.isEmpty {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Theme.Space.s), count: iconsOnly ? 1 : min(4, max(3, items.count))),
-                      spacing: Theme.Space.s) {
-                ForEach(items) { EssentialTile(tab: $0).transition(Motion.Transitions.tabRow) }
+            Group {
+                if iconsOnly {
+                    // Three at most, and the box grows into a grid of the rest on hover.
+                    IconEssentials(items: items)
+                } else {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Theme.Space.s), count: min(4, max(3, items.count))),
+                              spacing: Theme.Space.s) {
+                        ForEach(items) { EssentialTile(tab: $0).transition(Motion.Transitions.tabRow) }
+                    }
+                }
             }
             .padding(.vertical, Theme.Space.xxs)
             .background(Theme.Radius.shape(Theme.Radius.card).fill(targeted ? Theme.Palette.rowHover : .clear))

@@ -13,6 +13,7 @@ enum SidebarWidthTests {
             SidebarResize.headless = true
             layout()
             dragging()
+            essentialsBloom()
             BrowserPrefs.shared.update { $0 = before }
             SidebarResize.headless = false
         }
@@ -42,6 +43,31 @@ enum SidebarWidthTests {
         check(SidebarWidth.saved(p).width == lo, "a saved width under the narrowest opens at the narrowest")
         p.sidebarIconsOnly = true
         check(SidebarWidth.saved(p) == L(iconsOnly: true, width: icons), "icons only opens as the icon column")
+    }
+
+    /// The icon column's Essentials: the box grows after the pointer rests, stays open while the
+    /// pointer moves from the column onto the grown box, and shrinks after it leaves both.
+    @MainActor
+    static func essentialsBloom() {
+        let b = EssentialsBloom.shared
+        b.reset()
+        b.hover(column: true)
+        check(!b.isOpen, "passing over the column's Essentials doesn't grow the box at once")
+        _ = SelfTest.spin(1) { b.isOpen }
+        check(b.isOpen, "resting on them grows it")
+        b.hover(column: false)
+        b.hover(grid: true)
+        _ = SelfTest.spin(Motion.Timing.concealDelay + 0.2) { !b.isOpen }
+        check(b.isOpen, "moving from the column onto the grown box keeps it open")
+        b.hover(grid: false)
+        check(b.isOpen, "it lingers a moment after the pointer leaves")
+        _ = SelfTest.spin(1) { !b.isOpen }
+        check(!b.isOpen, "then it shrinks back")
+        b.hover(column: true)
+        b.hover(column: false)
+        _ = SelfTest.spin(Motion.Timing.revealDwell + 0.2) { b.isOpen }
+        check(!b.isOpen, "a pointer that only passes through never opens it")
+        b.reset()
     }
 
     @MainActor

@@ -57,6 +57,8 @@ struct MainView: View {
         .background(StripTintBackground(strip: SpaceStrip.of(model),
                                         sidebarWidth: hidden ? 0 : sidebarWidth, fromTrailing: right))
         .overlay(alignment: right ? .trailing : .leading) { compactSidebar }
+        // The icon column's Essentials grown into a grid, over the page.
+        .overlayPreferenceValue(EssentialsColumnKey.self) { column in EssentialsBloomLayer(column: column, onRight: right) }
         .overlay {
             CommandBarOverlay(bar: model.bar,
                               leadingClear: hidden || right ? 0 : sidebarWidth,
