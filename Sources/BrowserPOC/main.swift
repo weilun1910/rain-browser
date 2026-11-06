@@ -98,6 +98,9 @@ if args.contains("--download-models") {
     exit(ModelDownloader.commandLine())
 }
 if args.contains("--granola-dry-run") { exit(GranolaSource.dryRun()) }
+// --tabbar-shots <out> --profile <demo profile>: the horizontal tab bar, its Essentials grid and
+// space menu, light and dark, offscreen. Without --profile it renders made-up tabs.
+if args.contains("--tabbar-shots") { exit(MainActor.assumeIsolated { TabBarShots.commandLine(args) }) }
 
 // --reduce-motion: behave as if Reduce Motion were on, for checking it without changing System Settings.
 if args.contains("--reduce-motion") { Motion.forceReduce = true }

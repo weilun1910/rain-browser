@@ -308,6 +308,12 @@ enum SavedDataTests {
         """)?.items ?? []
         check(closed.count == 2 && closed[0].reason == .closed && closed[1].customTitle == "Old note" && closed[1].splitRoot?.leaves.count == 2,
               "today's recently closed list and archive keep every item")
+        // 6 Nov 2026: the tab bar layout. Older files have no layout and keep the sidebar (the sample above).
+        check(b?.tabLayout == .sidebar, "browser preferences from before the tab bar keep tabs in the sidebar")
+        let bTabs = read(BrowserPrefsValue.self, "browser.json", """
+        {"archiveAfterHours":12,"sidebarHidden":false,"sidebarOnRight":false,"tabLayout":"horizontal","actionScores":{}}
+        """)
+        check(bTabs?.tabLayout == .horizontal, "browser preferences from 6 Nov 2026 keep the tab bar layout")
         check(DataNotices.take().isEmpty, "today's settings files read without notices")
 
         // Read-only tools (the MCP server, evals) never move a file, even one they can't read.

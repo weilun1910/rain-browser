@@ -42,6 +42,7 @@ build/Rain.app/Contents/MacOS/BrowserPOC --chrome-dry-run # what a Chrome import
 .build/debug/BrowserPOC --granola-dry-run                       # which Granola files exist and Granola's public sign-in details
 .build/debug/BrowserPOC --download-models --data-dir <profile>  # fetch the on-device models into a profile
 .build/debug/BrowserPOC --render-review <dir>                   # light and dark snapshots of every main view, offscreen
+.build/debug/BrowserPOC --tabbar-shots <dir> --profile <demo profile>  # the horizontal tab bar, its Essentials grid and space menu, offscreen
 scripts/make-icon.sh                                            # redraws the app icon from code
 .build/debug/BrowserPOC --shelf-demo --data-dir <folder>        # plays the Related shelf's motion in a window, on a throwaway profile
 .build/debug/BrowserPOC --data-dir <folder> --motion-tour glass dark --reduce-transparency  # each glass layer over a bright, busy and dark page, in a window; light or dark, and the solid fallback with --reduce-transparency

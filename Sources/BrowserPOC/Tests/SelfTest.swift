@@ -237,6 +237,7 @@ enum SelfTest {
         SectionTests.run(dir: dir)
         SplitTests.run(dir: dir)
         SpaceTests.run(dir: dir)
+        TabBarTests.run(dir: dir)
         CommandBarTests.run(dir: dir)
         ThemeTests.run()
         MotionTests.run(dir: dir)

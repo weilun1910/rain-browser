@@ -304,7 +304,8 @@ extension BrowserModel {
     var visibleRowOrder: [SidebarRef] {
         var out = refs(in: .essentials) + refs(in: .pinned)
         for f in spaceFolders where f.isExpanded { out += refs(in: .folder(f.id)) }
-        return out + refs(in: .today)
+        // The tab bar lists other tabs oldest first, so Cmd-1 to 9 count them as they're shown.
+        return out + (BrowserPrefs.shared.value.tabLayout == .horizontal ? TabBarRules.barOrder(refs(in: .today)) : refs(in: .today))
     }
 
     /// Cmd-click adds or removes a row. Shift-click picks a range from the last one picked.

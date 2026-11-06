@@ -17,7 +17,7 @@ struct BarAction {
 @MainActor
 enum BarActions {
     static func all(_ m: BrowserModel) -> [BarAction] {
-        var out = fixed
+        var out = fixed.filter { TabLayoutSwitch.applies($0.id) }
         // Focus on another space, like Zen's "Focus on" and Arc's "Focus On".
         for sp in m.spaces where sp.id != m.currentSpaceID {
             let id = sp.id
@@ -125,6 +125,10 @@ enum BarActions {
         BarAction(id: "app.settings", title: "Settings", icon: "gearshape", shortcut: "⌘,", keywords: ["preferences"]) { _ in
             DispatchQueue.main.async { AppDelegate.shared?.openSettings() }
         },
+        BarAction(id: "view.tabBar", title: "Show tabs in a bar along the top", icon: "rectangle.topthird.inset.filled", shortcut: "⌥⌘S",
+                  keywords: ["horizontal tabs", "tab bar", "safari", "layout", "top"]) { _ in TabLayoutSwitch.set(.horizontal) },
+        BarAction(id: "view.tabSidebar", title: "Show tabs in the sidebar", icon: "sidebar.left", shortcut: "⌥⌘S",
+                  keywords: ["vertical tabs", "sidebar", "layout", "left"]) { _ in TabLayoutSwitch.set(.sidebar) },
     ]
 }
 

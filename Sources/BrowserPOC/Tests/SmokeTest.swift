@@ -214,6 +214,9 @@ enum SmokeTest {
         // 12. Fill from Passwords: login and code fields, filling on the page's own site only.
         PasswordSmoke.run(snaps: snaps)
 
+        // 12b. The horizontal tab bar: a page moves into it and back, and spaces still switch.
+        TabBarSmoke.run(model: model, window: window, snaps: snaps)
+
         // 10. The graph: global, hover, settings, local and in a split.
         GraphSmoke.run(model: model, window: window, snaps: snaps, dir: dir)
 

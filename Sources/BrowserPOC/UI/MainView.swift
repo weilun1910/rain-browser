@@ -25,7 +25,8 @@ struct MainView: View {
     static let panelWidth: CGFloat = Theme.Space.panelWidth
 
     @MainActor static func host(_ model: BrowserModel) -> NSView {
-        NSHostingView(rootView: MainView().environmentObject(model))
+        // The sidebar layout, or the tab bar along the top (UI/TabBar.swift).
+        NSHostingView(rootView: LayoutRoot().environmentObject(model))
     }
 
     var hidden: Bool { prefs.value.sidebarHidden }

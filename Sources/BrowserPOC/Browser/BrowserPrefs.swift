@@ -19,6 +19,8 @@ struct BrowserPrefsValue: Codable, Equatable {
     var offerPasswords: Bool = true
     /// How often each command bar action was picked or passed over, from -5 to 5, like Zen's learner.
     var actionScores: [String: Int] = [:]
+    /// Tabs in the sidebar or in a bar along the top, like Safari.
+    var tabLayout: TabLayout = .sidebar
 
     static let archiveChoices: [(String, Double)] = [("12 hours", 12), ("24 hours", 24), ("7 days", 24 * 7), ("30 days", 24 * 30), ("Never", 0)]
 
@@ -35,6 +37,8 @@ struct BrowserPrefsValue: Codable, Equatable {
         sidebarOnRight = try c.decodeIfPresent(Bool.self, forKey: .sidebarOnRight) ?? d.sidebarOnRight
         actionScores = try c.decodeIfPresent([String: Int].self, forKey: .actionScores) ?? [:]
         offerPasswords = (try? c.decodeIfPresent(Bool.self, forKey: .offerPasswords)) ?? d.offerPasswords
+        // Added 6 Nov 2026. Older files have no layout and keep the sidebar.
+        tabLayout = (try? c.decodeIfPresent(TabLayout.self, forKey: .tabLayout)) ?? d.tabLayout
     }
 }
 
