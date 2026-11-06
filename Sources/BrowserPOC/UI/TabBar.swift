@@ -76,7 +76,9 @@ final class TabBarState: ObservableObject {
         let open = inside
         guard open != essentialsOpen else { return }
         let w = DispatchWorkItem { [weak self] in
-            MainActor.assumeIsolated { Motion.run(Motion.expand) { self?.essentialsOpen = open } }
+            // It grows on the reveal spring and goes on the quicker conceal curve, like the
+            // sidebar's icon column and compact mode.
+            MainActor.assumeIsolated { Motion.run(open ? Motion.reveal : Motion.conceal) { self?.essentialsOpen = open } }
         }
         hoverWork = w
         DispatchQueue.main.asyncAfter(deadline: .now() + (inside ? TabBarRules.essentialsOpenDelay : TabBarRules.essentialsCloseDelay), execute: w)
@@ -107,7 +109,7 @@ final class TabBarState: ObservableObject {
     func closeEssentials() {
         hoverWork?.cancel()
         guard essentialsOpen else { return }
-        Motion.run(Motion.expand) { essentialsOpen = false }
+        Motion.run(Motion.conceal) { essentialsOpen = false }
     }
 
     // MARK: Space menu

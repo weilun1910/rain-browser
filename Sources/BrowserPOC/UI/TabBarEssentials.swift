@@ -4,7 +4,8 @@ import SwiftUI
 // Essentials in the tab bar: a box at the start of the row of tabs that shows three, and grows
 // straight down into a grid of all of them while the pointer rests on it. The box itself grows,
 // over the page, so the tabs beside it never move. At rest it's a quiet well like the sidebar's
-// Essentials. Open, it floats on Liquid Glass.
+// Essentials. Open, it takes the sidebar's own surface, the same as the icon column's grown box,
+// so the two read as one feature.
 
 enum EssentialsBoxGeometry {
     static var tileWidth: CGFloat { TabBarMetrics.tileWidth }
@@ -79,6 +80,7 @@ struct EssentialsBox: View {
     @EnvironmentObject var model: BrowserModel
     @ObservedObject var state = TabBarState.shared
     @State private var targeted = false
+    @Environment(\.spaceTintHex) private var tintHex
 
     var body: some View {
         let items = model.essentials
@@ -92,14 +94,20 @@ struct EssentialsBox: View {
         // Open, the grid sits in the middle of the box, which keeps its width so the pointer never
         // falls off its edge as it opens.
         let inset = open ? (rest.width - EssentialsBoxGeometry.width(TabBarRules.essentialsColumns)) / 2 : 0
-        let shape = Theme.Radius.shape(Theme.Radius.row + 1)
+        let shape = Theme.Radius.shape(Theme.Radius.card)
         ZStack(alignment: .topLeading) {
-            // At rest a quiet well on the bar. Open, glass over the page.
+            // At rest a quiet well on the bar. Open, the space's own surface with its grain, a
+            // hairline and a floating shadow, like the icon column's grown box.
             shape.fill(targeted ? Theme.Palette.fieldHover : Theme.Palette.field)
                 .opacity(open ? 0 : 1)
-            Color.clear
-                .glassPanel(radius: Theme.Radius.row + 1, fallbackShadow: .popover, wash: false)
-                .opacity(open ? 1 : 0)
+            ZStack {
+                Theme.Palette.sidebarColor(tintHex)
+                GrainOverlay()
+            }
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(Theme.Palette.hairline, lineWidth: 0.5))
+            .background(shape.fill(Theme.Palette.sidebarColor(tintHex)).themeShadow(.floating))
+            .opacity(open ? 1 : 0)
             ZStack(alignment: .topLeading) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { i, tab in
                     // The first three keep their places. The rest wait in their grid places below
@@ -137,7 +145,7 @@ struct EssentialsBox: View {
         .onDrop(of: [ItemDrag.type], isTargeted: $targeted) { providers in
             ItemDrag.load(providers) { ids in model.place(ids.map { .tab($0) }, in: .essentials, at: Int.max) }
         }
-        .motion(Motion.expand, value: open)
+        .motion(open ? Motion.reveal : Motion.conceal, value: open)
         .motion(Motion.insert, value: ids)
         .help(more && !open ? "\(items.count - TabBarRules.essentialsShown) more Essentials. Rest the pointer here to see them all." : "")
         .accessibilityElement(children: .contain)
