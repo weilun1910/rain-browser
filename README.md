@@ -55,3 +55,7 @@ Rain runs as an MCP server, so Claude Code, Claude Desktop and Codex can search 
 They come from a demo profile of a made-up student, Theo Park, who's writing a paper on campus marketplaces, building a textbook swap app, applying for PM internships and planning a trip to Japan. His notes, docs and meetings are made up, and the web pages are real.
 
 The full feature list is in [docs/FEATURES.md](docs/FEATURES.md), and building it or opening the demo is in [DEVELOPING.md](DEVELOPING.md).
+
+## Credits
+
+A lot of how Rain handles tabs, spaces, split view and Cmd-T comes from [Arc](https://arc.net) and [Zen](https://github.com/zen-browser/desktop). Zen being open source meant I could read how those small behaviours actually work instead of guessing.
