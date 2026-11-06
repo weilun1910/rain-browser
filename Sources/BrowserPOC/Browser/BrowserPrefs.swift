@@ -15,6 +15,10 @@ struct BrowserPrefsValue: Codable, Equatable {
     var sidebarHidden: Bool = false
     /// Tabs on the right, like Zen.
     var sidebarOnRight: Bool = false
+    /// The sidebar's width with titles, set by dragging its edge.
+    var sidebarWidth: Double = Double(Theme.Space.sidebarWidth)
+    /// The sidebar shows one column of icons, after dragging its edge all the way in.
+    var sidebarIconsOnly: Bool = false
     /// Login and code fields offer the Passwords app.
     var offerPasswords: Bool = true
     /// How often each command bar action was picked or passed over, from -5 to 5, like Zen's learner.
@@ -33,6 +37,9 @@ struct BrowserPrefsValue: Codable, Equatable {
         autoPictureInPicture = try c.decodeIfPresent(Bool.self, forKey: .autoPictureInPicture) ?? d.autoPictureInPicture
         sidebarHidden = try c.decodeIfPresent(Bool.self, forKey: .sidebarHidden) ?? d.sidebarHidden
         sidebarOnRight = try c.decodeIfPresent(Bool.self, forKey: .sidebarOnRight) ?? d.sidebarOnRight
+        // Added 6 Nov 2026. Files from before have neither, and keep the default width.
+        sidebarWidth = (try? c.decodeIfPresent(Double.self, forKey: .sidebarWidth)) ?? d.sidebarWidth
+        sidebarIconsOnly = (try? c.decodeIfPresent(Bool.self, forKey: .sidebarIconsOnly)) ?? d.sidebarIconsOnly
         actionScores = try c.decodeIfPresent([String: Int].self, forKey: .actionScores) ?? [:]
         offerPasswords = (try? c.decodeIfPresent(Bool.self, forKey: .offerPasswords)) ?? d.offerPasswords
     }

@@ -295,6 +295,12 @@ enum SavedDataTests {
         wantB.sidebarOnRight = true
         wantB.actionScores = ["new-note": 3]
         check(b == wantB, "today's browser preferences keep every setting")
+        check(b?.sidebarWidth == Double(Theme.Space.sidebarWidth) && b?.sidebarIconsOnly == false,
+              "browser preferences from before the resizable sidebar open it at the default width with titles")
+        let b2 = read(BrowserPrefsValue.self, "browser.json", """
+        {"archiveAfterHours":12,"sidebarHidden":false,"sidebarOnRight":false,"sidebarWidth":312,"sidebarIconsOnly":true,"actionScores":{}}
+        """)
+        check(b2?.sidebarWidth == 312 && b2?.sidebarIconsOnly == true, "browser preferences from 6 Nov 2026 keep the sidebar's width and icons only")
 
         let r = read(RelatedPrefsValue.self, "related.json", "{\"mode\":\"sidebar\",\"shelfHidden\":true}")
         check(r?.mode == .sidebar && r?.shelfHidden == true, "today's Related preferences keep their mode")

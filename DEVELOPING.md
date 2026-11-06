@@ -70,6 +70,7 @@ The demo docs and meetings open at `demo://` addresses as read-only pages drawn 
 BrowserPOC --seed-demo <empty folder> [--models-from <folder>] [--offline] [--no-topics]
 BrowserPOC --demo-eval <demo profile>                          # scores Related against Demo/expected.json, on a copy
 BrowserPOC --demo-snapshots <out folder> --profile <demo profile>  # the opening moment, each space and the graph, offscreen
+BrowserPOC --sidebar-shots <out folder> --profile <demo profile>   # the sidebar at each width and icons only, offscreen, with drag checks
 python3 -I Demo/tools/check_demo.py [--network]                 # checks the demo content itself
 ```
 

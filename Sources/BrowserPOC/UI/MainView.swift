@@ -20,8 +20,9 @@ struct MainView: View {
     @ObservedObject var prefs = BrowserPrefs.shared
     /// Compact mode: the sidebar showing because the pointer rested at the edge.
     @ObservedObject private var reveal = CompactReveal.shared
+    /// The sidebar's width while its edge is dragged.
+    @ObservedObject private var resize = SidebarResize.shared
 
-    static let sidebarWidth: CGFloat = Theme.Space.sidebarWidth
     static let panelWidth: CGFloat = Theme.Space.panelWidth
 
     @MainActor static func host(_ model: BrowserModel) -> NSView {
@@ -30,13 +31,23 @@ struct MainView: View {
 
     var hidden: Bool { prefs.value.sidebarHidden }
     var right: Bool { prefs.value.sidebarOnRight }
+    /// Titles or icons only, and the width on screen.
+    var layout: SidebarWidth.Layout { resize.current }
+    var sidebarWidth: CGFloat { layout.width }
+    /// How far the page sits below the window's top margin: on the right, and with icons only,
+    /// the traffic lights sit over the page's corner, so it moves down to clear them.
+    var topClear: CGFloat {
+        if hidden { return 0 }
+        if right { return 22 }
+        return layout.iconsOnly ? Theme.Space.iconSidebarTopClear : 0
+    }
 
     var body: some View {
         HStack(spacing: 0) {
             if right { panel(leading: true) } else { sidebarSlot }
             ContentArea()
                 .padding(.vertical, Theme.Space.windowMargin)
-                .padding(.top, right && !hidden ? 22 : 0)
+                .padding(.top, topClear)
                 .padding(.leading, (hidden && !right) || (right && !settings.published.rightPanelOpen) ? Theme.Space.windowMargin : 0)
                 .padding(.trailing, (hidden && right) || (!right && !settings.published.rightPanelOpen) ? Theme.Space.windowMargin : 0)
             if right { sidebarSlot } else { panel(leading: false) }
@@ -44,12 +55,12 @@ struct MainView: View {
         // The frame: neutral grey with the space's colour on the sidebar's side, fading across.
         // It follows the sidebar's space strip, so a swipe carries the colour with it.
         .background(StripTintBackground(strip: SpaceStrip.of(model),
-                                        sidebarWidth: hidden ? 0 : Self.sidebarWidth, fromTrailing: right))
+                                        sidebarWidth: hidden ? 0 : sidebarWidth, fromTrailing: right))
         .overlay(alignment: right ? .trailing : .leading) { compactSidebar }
         .overlay {
             CommandBarOverlay(bar: model.bar,
-                              leadingClear: hidden || right ? 0 : Self.sidebarWidth,
-                              trailingClear: hidden || !right ? 0 : Self.sidebarWidth)
+                              leadingClear: hidden || right ? 0 : sidebarWidth,
+                              trailingClear: hidden || !right ? 0 : sidebarWidth)
         }
         // Ctrl-Tab shows its panel only if Ctrl is still held a moment later, like Cmd-Tab.
         .overlay { if let s = model.switcher { SwitcherOverlay(state: s).modifier(DelayedAppear(delay: Motion.Timing.switcherDelay)) } }
@@ -67,7 +78,14 @@ struct MainView: View {
 
     @ViewBuilder var sidebarSlot: some View {
         if !hidden {
-            LeftSidebar().frame(width: Self.sidebarWidth)
+            LeftSidebar()
+                .environment(\.sidebarIconsOnly, layout.iconsOnly)
+                .frame(width: sidebarWidth)
+                // Drag the inner edge to resize. It starts below the title bar row, so the
+                // window still drags from the top and the traffic lights stay clear.
+                .overlay(alignment: right ? .leading : .trailing) {
+                    SidebarResizeHandle(onRight: right).padding(.top, Theme.Space.titleBarHeight)
+                }
                 .transition(Motion.Transitions.sidebar(edge: right ? .trailing : .leading))
         }
     }
@@ -89,8 +107,10 @@ struct MainView: View {
                     .onHover { $0 ? reveal.pointerAtEdge() : reveal.pointerLeftEdge() }
                 if reveal.showing {
                     // The sidebar floats over the page on the space's colour, like Zen's compact mode.
+                    // Always with titles: it covers the page either way, and the icon column is
+                    // narrower than the traffic lights that show over it.
                     LeftSidebar()
-                        .frame(width: Self.sidebarWidth)
+                        .frame(width: SidebarWidth.clamp(CGFloat(prefs.value.sidebarWidth)))
                         .background(
                             ZStack {
                                 Theme.Palette.sidebarColor(model.currentSpace?.color)

@@ -23,7 +23,13 @@ final class CompactReveal: ObservableObject {
     }
 
     /// The pointer left the sidebar.
-    func pointerLeft() { schedule(after: Motion.Timing.concealDelay) { self.hide() } }
+    func pointerLeft() {
+        if Self.holdForShots { return }
+        schedule(after: Motion.Timing.concealDelay) { self.hide() }
+    }
+
+    /// Offscreen snapshots keep the sidebar up, since nothing there is under a pointer.
+    nonisolated(unsafe) static var holdForShots = false
 
     func show() {
         work?.cancel()

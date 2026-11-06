@@ -21,8 +21,9 @@ struct SpaceIcon: View {
 
 struct SpaceBar: View {
     @EnvironmentObject var model: BrowserModel
+    var showsNewSpace = true
 
-    var body: some View { SpaceBarIcons(strip: SpaceStrip.of(model)) }
+    var body: some View { SpaceBarIcons(strip: SpaceStrip.of(model), showsNewSpace: showsNewSpace) }
 }
 
 /// The space icons, with one highlight that slides between them in step with the sidebar's strip,
@@ -30,8 +31,12 @@ struct SpaceBar: View {
 private struct SpaceBarIcons: View {
     @ObservedObject var strip: SpaceStrip
     @EnvironmentObject var model: BrowserModel
+    var showsNewSpace = true
+    /// In the icon column the spaces stack, and New space moves to the column's menu.
+    @Environment(\.sidebarIconsOnly) private var vertical
 
     static let iconWidth: CGFloat = 26
+    static let iconHeight: CGFloat = 24
     static let gap: CGFloat = 3
 
     var body: some View {
@@ -39,20 +44,24 @@ private struct SpaceBarIcons: View {
         let lo = Int(at.rounded(.down))
         let frac = at - Double(lo)
         let colours = model.spaces.map { Theme.Palette.tint($0.color).opacity(0.16) }
-        HStack(spacing: Self.gap) {
+        let stack = vertical ? AnyLayout(VStackLayout(spacing: Self.gap)) : AnyLayout(HStackLayout(spacing: Self.gap))
+        stack {
             ForEach(Array(model.spaces.enumerated()), id: \.element.id) { i, sp in
                 SpaceButton(space: sp, index: i, lit: max(0, 1 - abs(at - Double(i))))
                     .transition(Motion.Transitions.tabRow)
             }
-            SmallIconButton(symbol: "plus", help: "New space") { model.promptNewSpace() }
+            if !vertical && showsNewSpace {
+                SmallIconButton(symbol: "plus", help: "New space") { model.promptNewSpace() }
+            }
         }
-        .background(alignment: .leading) {
+        .background(alignment: vertical ? .top : .leading) {
             if colours.indices.contains(lo) {
                 let next = colours.indices.contains(lo + 1) ? colours[lo + 1] : colours[lo]
+                let step = CGFloat(at) * ((vertical ? Self.iconHeight : Self.iconWidth) + Self.gap)
                 Theme.Radius.shape(Theme.Radius.button)
                     .fill(colours[lo].mix(with: next, by: frac))
-                    .frame(width: Self.iconWidth, height: 24)
-                    .offset(x: CGFloat(at) * (Self.iconWidth + Self.gap))
+                    .frame(width: Self.iconWidth, height: Self.iconHeight)
+                    .offset(x: vertical ? 0 : step, y: vertical ? step : 0)
                     .allowsHitTesting(false)
             }
         }

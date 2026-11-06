@@ -242,6 +242,7 @@ enum SelfTest {
         MotionTests.run(dir: dir)
         EngineTests.run(dir: dir)
         ArcZenTests.run(dir: dir)
+        SidebarWidthTests.run(dir: dir)
         ShelfTests.run(dir: dir)
         RelatedPowerTests.run(dir: dir)
         MCPTests.run(dir: dir)

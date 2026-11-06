@@ -377,18 +377,39 @@ struct SplitRow: View {
     @EnvironmentObject var model: BrowserModel
     @State private var hovering = false
     @Environment(\.pageSelection) private var pageSelection
+    @Environment(\.sidebarIconsOnly) private var iconsOnly
 
     var selected: Bool { model.currentSplit?.id == split.id || pageSelection == .split(split.id) }
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(split.items.enumerated()), id: \.element) { i, id in
-                if i > 0 { Rectangle().fill(Theme.Palette.hairline).frame(width: 1, height: 16) }
-                SplitHalf(tab: model.tab(id), focused: selected && split.focused == id, compact: split.count > 2, showClose: hovering) {
-                    if let t = model.tab(id) { model.selectSplit(split, focusItem: id); model.focusPane(item: t.id); model.closeCurrent() }
+        Group {
+            if iconsOnly {
+                // The icon column: the panes' icons side by side on one chip, or four small ones
+                // in a square for a grid. Each opens its own pane.
+                let ids = Array(split.items.prefix(4))
+                let size: CGFloat = ids.count > 2 ? 10 : 13
+                let grid = Array(repeating: GridItem(.fixed(size), spacing: 3), count: ids.count > 2 ? 2 : ids.count)
+                LazyVGrid(columns: grid, spacing: 3) {
+                    ForEach(ids, id: \.self) { id in
+                        ItemIcon(tab: model.tab(id), size: size)
+                            .opacity(selected && split.focused != id ? 0.55 : 1)
+                            .contentShape(Rectangle())
+                            .onTapGesture { model.selectSplit(split, focusItem: id) }
+                    }
                 }
-                .contentShape(Rectangle())
-                .onTapGesture { model.selectSplit(split, focusItem: id) }
+                .fixedSize()
+                .frame(maxWidth: .infinity)
+            } else {
+                HStack(spacing: 0) {
+                    ForEach(Array(split.items.enumerated()), id: \.element) { i, id in
+                        if i > 0 { Rectangle().fill(Theme.Palette.hairline).frame(width: 1, height: 16) }
+                        SplitHalf(tab: model.tab(id), focused: selected && split.focused == id, compact: split.count > 2, showClose: hovering) {
+                            if let t = model.tab(id) { model.selectSplit(split, focusItem: id); model.focusPane(item: t.id); model.closeCurrent() }
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture { model.selectSplit(split, focusItem: id) }
+                    }
+                }
             }
         }
         .frame(height: Theme.Space.rowHeight)

@@ -243,6 +243,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         view.addItem(item("Reload Without Cache", #selector(hardReloadAction), "r", [.command, .option], target: self))
         view.addItem(.separator())
         view.addItem(item("Toggle Sidebar", #selector(toggleSidebarAction), "s", target: self))
+        view.addItem(item("Sidebar Icons Only", #selector(sidebarIconsAction), "s", [.command, .control], target: self))
         view.addItem(item("Sidebar on the Other Side", #selector(sidebarSideAction), target: self))
         view.addItem(item("Show or Hide Related", #selector(togglePanelAction), "r", [.command, .shift], target: self))
         view.addItem(item("Related as Shelf or Sidebar", #selector(relatedModeAction), "r", [.command, .control], target: self))
@@ -363,6 +364,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @objc func toggleSidebarAction() { BrowserPrefs.shared.update { $0.sidebarHidden.toggle() } }
     @objc func sidebarSideAction() { BrowserPrefs.shared.update { $0.sidebarOnRight.toggle() } }
+    @objc func sidebarIconsAction() { SidebarResize.shared.toggleIconsOnly() }
     @objc func layoutSideAction() { model.setLayout(.sideBySide) }
     @objc func layoutStackAction() { model.setLayout(.stacked) }
     @objc func layoutGridAction() { model.setLayout(.grid) }

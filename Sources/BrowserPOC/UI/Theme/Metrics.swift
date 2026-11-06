@@ -16,8 +16,18 @@ extension Theme {
 
         /// Between the window edge and the content card, and between the card and its neighbours.
         static let windowMargin: CGFloat = 8
-        /// The sidebar's width, including its own inner padding.
+        /// The sidebar's width, including its own inner padding, until you drag its edge.
         static let sidebarWidth: CGFloat = 248
+        /// The narrowest the sidebar goes with titles: the top row still fits the traffic lights
+        /// and four buttons.
+        static let sidebarMinWidth: CGFloat = 212
+        /// The widest it goes.
+        static let sidebarMaxWidth: CGFloat = 420
+        /// Icons only: one column of icons, after dragging the edge past the narrowest width.
+        static let sidebarIconWidth: CGFloat = 56
+        /// The page sits this much lower while the sidebar shows icons only, so the traffic
+        /// lights, which are wider than the column, sit above it.
+        static let iconSidebarTopClear: CGFloat = 22
         /// The right panel's width.
         static let panelWidth: CGFloat = 300
         /// Horizontal padding inside the sidebar and the right panel.

@@ -108,6 +108,10 @@ enum BarActions {
         BarAction(id: "view.sidebar", title: "Toggle sidebar", icon: "sidebar.left", shortcut: "⌘S", keywords: ["compact mode", "hide sidebar", "show sidebar"]) { _ in
             BrowserPrefs.shared.update { $0.sidebarHidden.toggle() }
         },
+        BarAction(id: "view.sidebarIcons", title: "Sidebar icons only", icon: "sidebar.squares.left", shortcut: "⌃⌘S",
+                  keywords: ["collapse sidebar", "narrow", "compact", "icons", "titles", "resize"]) { _ in
+            SidebarResize.shared.toggleIconsOnly()
+        },
         BarAction(id: "view.sidebarSide", title: "Move sidebar to the other side", icon: "sidebar.right", keywords: ["tabs on the right", "left", "right"]) { _ in
             BrowserPrefs.shared.update { $0.sidebarOnRight.toggle() }
         },

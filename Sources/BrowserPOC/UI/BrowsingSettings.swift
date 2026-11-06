@@ -30,6 +30,10 @@ struct BrowsingSettings: View {
             Section("Sidebar") {
                 Toggle("Hide the sidebar until the pointer reaches the edge (Cmd-S)", isOn: bind(\.sidebarHidden))
                 Toggle("Sidebar on the right", isOn: bind(\.sidebarOnRight))
+                Toggle("Icons only (Ctrl-Cmd-S)", isOn: Binding(get: { prefs.value.sidebarIconsOnly },
+                                                               set: { SidebarResize.shared.setIconsOnly($0) }))
+                Text("Drag the sidebar's edge to change its width. Drag it all the way in for one column of icons, and double-click the edge to go back to the default width.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Section {
                 Button("Forget which actions I use") { prefs.update { $0.actionScores = [:] } }

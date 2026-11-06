@@ -77,6 +77,9 @@ enum Motion {
     static let peekExpand = split
     /// Cmd-S sliding the sidebar out and back. Quick, because the page's width changes every frame.
     static let sidebarToggle = Animation.spring(duration: 0.2, bounce: 0)
+    /// The sidebar's edge snapping between titles and icons. A little slower than Cmd-S, since
+    /// the rows change shape on the way, though quicker than Chrome's 350 to 400 ms.
+    static let sidebarSnap = Animation.spring(duration: 0.3, bounce: 0)
     /// Compact mode's floating sidebar sliding in on hover, and away again.
     static let reveal = Animation.spring(duration: 0.24, bounce: 0)
     static let conceal = Animation.easeIn(duration: 0.16)
