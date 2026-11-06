@@ -102,41 +102,51 @@ struct SpaceButton: View {
                     }
                 }
             }
-            .contextMenu {
-                Button("Rename...") { model.promptRenameSpace(space) }
-                Menu("Icon") {
-                    ForEach(Space.icons, id: \.self) { ic in
-                        Button { model.updateSpace(space.id) { $0.icon = ic } } label: { Label(ic, systemImage: ic) }
-                    }
-                    Divider()
-                    Button("Emoji...") { model.promptSpaceEmoji(space) }
-                }
-                Menu("Color") {
-                    ForEach(Space.palette, id: \.1) { name, hex in
-                        Button(name) { model.updateSpace(space.id) { $0.color = hex } }
-                    }
-                }
-                Menu("New notes go in") {
-                    Button("App default (\(Settings.shared.value.defaultNewNotesFolder.lastPathComponent))") {
-                        model.updateSpace(space.id) { $0.newNotesFolder = nil }
-                    }
-                    Button("Choose folder...") { SpaceActions.pickNotesFolder(for: space, model: model) }
-                }
-                // Each profile keeps its own cookies and logins, like Arc's profiles.
-                Menu("Profile") {
-                    Button(space.profile == nil ? "Default (current)" : "Default") { model.updateSpace(space.id) { $0.profile = nil } }
-                    ForEach(model.profiles, id: \.self) { p in
-                        Button(space.profile == p ? "\(p) (current)" : p) { model.updateSpace(space.id) { $0.profile = p } }
-                    }
-                    Divider()
-                    Button("New profile...") { model.promptNewProfile(for: space) }
-                }
-                Divider()
-                Button("Move left") { model.moveSpace(space.id, by: -1) }.disabled(index == 0)
-                Button("Move right") { model.moveSpace(space.id, by: 1) }.disabled(index == model.spaces.count - 1)
-                Divider()
-                Button("Delete space...") { model.promptDeleteSpace(space) }.disabled(model.spaces.count < 2)
+            .contextMenu { SpaceContextMenu(space: space, index: index) }
+    }
+}
+
+/// A space's own menu: rename, icon, colour, notes folder, profile, order and delete. On the
+/// space icons in the sidebar and the rows of the tab bar's space menu.
+struct SpaceContextMenu: View {
+    let space: Space
+    let index: Int
+    @EnvironmentObject var model: BrowserModel
+
+    var body: some View {
+        Button("Rename...") { model.promptRenameSpace(space) }
+        Menu("Icon") {
+            ForEach(Space.icons, id: \.self) { ic in
+                Button { model.updateSpace(space.id) { $0.icon = ic } } label: { Label(ic, systemImage: ic) }
             }
+            Divider()
+            Button("Emoji...") { model.promptSpaceEmoji(space) }
+        }
+        Menu("Color") {
+            ForEach(Space.palette, id: \.1) { name, hex in
+                Button(name) { model.updateSpace(space.id) { $0.color = hex } }
+            }
+        }
+        Menu("New notes go in") {
+            Button("App default (\(Settings.shared.value.defaultNewNotesFolder.lastPathComponent))") {
+                model.updateSpace(space.id) { $0.newNotesFolder = nil }
+            }
+            Button("Choose folder...") { SpaceActions.pickNotesFolder(for: space, model: model) }
+        }
+        // Each profile keeps its own cookies and logins, like Arc's profiles.
+        Menu("Profile") {
+            Button(space.profile == nil ? "Default (current)" : "Default") { model.updateSpace(space.id) { $0.profile = nil } }
+            ForEach(model.profiles, id: \.self) { p in
+                Button(space.profile == p ? "\(p) (current)" : p) { model.updateSpace(space.id) { $0.profile = p } }
+            }
+            Divider()
+            Button("New profile...") { model.promptNewProfile(for: space) }
+        }
+        Divider()
+        Button("Move left") { model.moveSpace(space.id, by: -1) }.disabled(index == 0)
+        Button("Move right") { model.moveSpace(space.id, by: 1) }.disabled(index == model.spaces.count - 1)
+        Divider()
+        Button("Delete space...") { model.promptDeleteSpace(space) }.disabled(model.spaces.count < 2)
     }
 }
 

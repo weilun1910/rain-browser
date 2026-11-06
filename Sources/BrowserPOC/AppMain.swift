@@ -249,6 +249,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         view.addItem(item("Related as Shelf or Sidebar", #selector(relatedModeAction), "r", [.command, .control], target: self))
         view.addItem(item("Toggle Note Preview", #selector(togglePreviewAction), "p", [.command, .shift], target: self))
         view.addItem(item("Graph", #selector(graphAction), "g", [.command, .option], target: self))
+        view.addItem(item("Tabs in a Bar Along the Top", #selector(tabLayoutAction), "s", [.command, .option], target: self))
         view.addItem(.separator())
         let layout = NSMenu(title: "Split Layout")
         layout.addItem(item("Side by Side", #selector(layoutSideAction), target: self))

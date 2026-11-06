@@ -49,8 +49,9 @@ enum SidebarWidthTests {
     /// pointer moves from the column onto the grown box, and shrinks after it leaves both.
     @MainActor
     static func essentialsBloom() {
-        let b = EssentialsBloom.shared
-        b.reset()
+        // Its own instance: a window an earlier test left open can drop an icon column at any
+        // moment, and that closes the shared box.
+        let b = EssentialsBloom()
         b.hover(column: true)
         check(!b.isOpen, "passing over the column's Essentials doesn't grow the box at once")
         _ = SelfTest.spin(1) { b.isOpen }
