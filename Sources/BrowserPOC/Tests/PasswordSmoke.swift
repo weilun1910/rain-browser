@@ -29,6 +29,14 @@ enum PasswordSmoke {
         return out
     }
 
+    /// Every label's text in a view and the views inside it.
+    static func texts(in view: NSView) -> [String] {
+        var out: [String] = []
+        if let t = view as? NSTextField { out.append(t.stringValue) }
+        for v in view.subviews { out += texts(in: v) }
+        return out
+    }
+
     static let host = "https://login.example.test"
 
     static let loginPage = """
@@ -174,6 +182,27 @@ enum PasswordSmoke {
         PasswordAutoFill.shared.fillFromMenu(wv) { found = $0 }
         _ = SmokeTest.wait(3) { found != nil && lastFocus() != nil }
         check(found == true && (lastFocus()?.body["kind"] as? String) == "username", "the menu item finds the page's login form")
+
+        // 9. A page can focus a field, but it can't fake the ArrowDown that opens the form.
+        focus("p")
+        let focused = lastFocus("password") != nil
+        seen.removeAll()
+        _ = js(wv, """
+            const el = document.getElementById('p');
+            for (const key of ['ArrowDown', 'Escape', 'a']) el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, composed: true }));
+            el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true }));
+            return true
+            """)
+        _ = SmokeTest.wait(0.6) { false }
+        check(focused && !seen.contains { ["open", "dismiss", "typing", "focus"].contains($0.type) },
+              "faked keys and clicks from the page don't open, close or re-offer the Passwords form", seen.map(\.type).joined(separator: " "))
+
+        // 10. The site shows in the suggestion row before anything is filled.
+        focus("u")
+        if let s = lastFocus(), let f = PasswordAutoFill.Focus(s.body, frame: s.frame, webView: s.webView) {
+            let titles = PasswordSmoke.texts(in: PasswordPanel.shared.suggestionContent(for: f))
+            check(titles.contains { $0.contains("login.example.test") }, "the suggestion row names the site", titles.joined(separator: " | "))
+        } else { check(false, "the suggestion row names the site", "no focus message") }
 
         snapshots(wv: wv, seen: lastFocus(), snaps: snaps)
         print("      autofill scripting world: \(PasswordAutoFill.hasAutofillScripting ? "yes (macOS 27)" : "no")")

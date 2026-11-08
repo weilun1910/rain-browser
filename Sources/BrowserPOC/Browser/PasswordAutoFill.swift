@@ -280,12 +280,15 @@ final class PasswordAutoFill: NSObject, WKScriptMessageHandler {
       document.addEventListener('focusout', () => setTimeout(() => {
         if (current && !kindOf(deepActive())) { current = null; post({ type: 'leave' }); }
       }, 0), true);
+      // Clicks and keys only count when they're real. A page can fake them with dispatchEvent,
+      // and a faked ArrowDown would open the Passwords form on a field the page chose.
       document.addEventListener('mousedown', (e) => {
+        if (!e.isTrusted) return;
         const t = target(e);
         if (t === deepActive() && kindOf(t)) setTimeout(() => announce(t), 0);
       }, true);
       document.addEventListener('keydown', (e) => {
-        if (!current || target(e) !== current) return;
+        if (!e.isTrusted || !current || target(e) !== current) return;
         if (e.key === 'Escape') post({ type: 'dismiss' });
         else if (e.key === 'ArrowDown' && !e.metaKey && !e.altKey) post({ type: 'open' });
         else if (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete') post({ type: 'typing' });

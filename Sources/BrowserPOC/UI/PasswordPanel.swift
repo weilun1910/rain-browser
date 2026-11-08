@@ -54,13 +54,15 @@ final class PasswordPanel: NSObject {
         case .code:
             rows.append(PanelRow(symbol: "ellipsis.message", title: "Fill code from Messages or Mail...") { [weak self] in self?.openForm(for: f) })
         case .username, .password:
+            // The rows name the site the field belongs to, so a login isn't handed to a lookalike
+            // page or to a frame from another site without the site showing first.
             if let p = PasswordAutoFill.shared.pendingLogin(for: f) {
-                rows.append(PanelRow(symbol: "key.fill", title: "Fill password for \(p.username)") { [weak self] in
+                rows.append(PanelRow(symbol: "key.fill", title: "Fill password for \(p.username) on \(f.host)") { [weak self] in
                     PasswordAutoFill.shared.fillPending(p, into: f) { ok in self?.finish(ok) }
                 })
                 rows.append(PanelRow(symbol: "key", title: "Other login from Passwords...") { [weak self] in self?.openForm(for: f) })
             } else {
-                rows.append(PanelRow(symbol: "key.fill", title: "Fill from Passwords...") { [weak self] in self?.openForm(for: f) })
+                rows.append(PanelRow(symbol: "key.fill", title: "Fill login for \(f.host) from Passwords...") { [weak self] in self?.openForm(for: f) })
             }
         }
         let stack = NSStackView(views: rows)

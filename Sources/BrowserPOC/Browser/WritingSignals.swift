@@ -22,7 +22,8 @@ final class TypingCounter: NSObject, WKScriptMessageHandler {
         return el.isContentEditable === true;
       };
       document.addEventListener('keydown', (e) => {
-        if (e.metaKey || e.ctrlKey || !e.key || e.key.length !== 1) return;
+        // Only real keys count. A page could fake keydowns to get itself filed under Notes / Docs.
+        if (!e.isTrusted || e.metaKey || e.ctrlKey || !e.key || e.key.length !== 1) return;
         const t = (e.composedPath && e.composedPath()[0]) || e.target;
         if (writable(t) || writable(document.activeElement)) n += 1;
       }, true);
