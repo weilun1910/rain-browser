@@ -2,8 +2,8 @@ import AppKit
 import CoreServices
 import WebKit
 
-/// Security defaults for web pages: HTTPS first and Global Privacy Control. Research behind
-/// each one is in notes/research/2026-11-08-security-privacy.md.
+/// Security defaults for web pages: HTTPS first, Global Privacy Control and the "Not secure"
+/// check. Research behind each one is in notes/research/2026-11-08-security-privacy.md.
 enum WebSecurity {
     /// Sets the defaults on a web view configuration.
     ///
@@ -28,6 +28,25 @@ enum WebSecurity {
     static func globalPrivacyControl(_ prefs: WKWebpagePreferences) -> Bool? {
         guard prefs.responds(to: NSSelectorFromString(gpcKey)) else { return nil }
         return (prefs.value(forKey: gpcKey) as? Bool) ?? false
+    }
+
+    // MARK: Not secure
+
+    /// A page the address field labels "Not secure": plain HTTP to anywhere but this Mac.
+    static func isNotSecure(_ address: String) -> Bool {
+        guard let u = URL(string: address.trimmingCharacters(in: .whitespaces)) else { return false }
+        return isNotSecure(u)
+    }
+
+    static func isNotSecure(_ url: URL) -> Bool {
+        guard url.scheme?.lowercased() == "http", let host = url.host?.lowercased(), !host.isEmpty else { return false }
+        return !isThisMac(host)
+    }
+
+    /// Local addresses count as secure, the way Chrome and Safari treat them.
+    static func isThisMac(_ host: String) -> Bool {
+        let h = host.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+        return h == "localhost" || h.hasSuffix(".localhost") || h == "::1" || h.hasPrefix("127.")
     }
 }
 

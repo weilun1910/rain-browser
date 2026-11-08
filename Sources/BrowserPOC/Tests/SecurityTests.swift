@@ -8,6 +8,7 @@ enum SecurityTests {
 
     static func run(dir: URL) {
         configDefaults()
+        notSecure()
         externalApps()
     }
 
@@ -24,6 +25,16 @@ enum SecurityTests {
             check(WebSecurity.globalPrivacyControl(prefs) == nil, "Global Privacy Control is skipped where WebKit lacks it")
         }
         check(c.preferences.isFraudulentWebsiteWarningEnabled, "Safari's fraudulent website warning stays on")
+    }
+
+    static func notSecure() {
+        let insecure = ["http://example.com", "http://example.com/login?next=/", "HTTP://Example.com/x", "http://192.168.1.1/"]
+        let fine = ["https://example.com", "http://localhost:3000", "http://127.0.0.1:8080/x", "http://[::1]:5000/",
+                    "http://app.localhost/", "file:///Users/x/note.md", "demo://doc/1", "about:blank", "", "example.com"]
+        let wrongInsecure = insecure.filter { !WebSecurity.isNotSecure($0) }
+        let wrongFine = fine.filter { WebSecurity.isNotSecure($0) }
+        check(wrongInsecure.isEmpty, "plain HTTP pages are labelled Not secure", wrongInsecure.joined(separator: " "))
+        check(wrongFine.isEmpty, "HTTPS, this Mac, files and app pages aren't", wrongFine.joined(separator: " "))
     }
 
     static func externalApps() {

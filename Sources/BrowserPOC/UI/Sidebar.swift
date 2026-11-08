@@ -80,7 +80,11 @@ struct LeftSidebar: View {
     /// Shows the focused page's address. Clicking it opens the command bar, like Cmd-L.
     private var addressField: some View {
         HStack(spacing: Theme.Space.m) {
-            Image(systemName: "magnifyingglass").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+            if WebSecurity.isNotSecure(model.addressText) {
+                NotSecureBadge()
+            } else {
+                Image(systemName: "magnifyingglass").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+            }
             Text(model.addressText.isEmpty ? "Search or enter address" : Snippet.prettyURL(model.addressText))
                 .font(Theme.Font.row)
                 .foregroundStyle(model.addressText.isEmpty ? .secondary : .primary)
