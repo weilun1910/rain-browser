@@ -248,6 +248,7 @@ enum SelfTest {
         ShelfTests.run(dir: dir)
         RelatedPowerTests.run(dir: dir)
         MCPTests.run(dir: dir)
+        SecurityTests.run(dir: dir)
         GraphTests.run(dir: dir)
         DemoTests.run(dir: dir)
         SavedDataTests.run(dir: dir)

@@ -256,8 +256,9 @@ final class WebCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDown
         let scheme = url.scheme?.lowercased() ?? ""
         if navigationAction.shouldPerformDownload { decisionHandler(.download); return }
         if !["http", "https", "about", "data", "blob", "file", "javascript", DemoScheme.scheme].contains(scheme) {
-            NSWorkspace.shared.open(url)
+            // Links to other apps (zoommtg:, mailto:, itms-apps: and so on) ask first.
             decisionHandler(.cancel)
+            ExternalApps.request(url, action: navigationAction, webView: webView, model: model)
             return
         }
         // The graph's navigation edges: page A led to page B, however the link opens.
@@ -424,13 +425,14 @@ enum LinkRouting {
     /// Same site means the same registrable-looking domain: the last two labels, or three for
     /// country domains like co.uk.
     static func sameSite(_ a: URL, _ b: URL) -> Bool {
-        func site(_ u: URL) -> String {
-            let parts = (u.host ?? "").lowercased().split(separator: ".").map(String.init)
-            guard parts.count > 2, let last = parts.last else { return parts.joined(separator: ".") }
-            let second = parts[parts.count - 2]
-            let country = last.count == 2 && ["co", "com", "org", "net", "ac", "gov", "edu"].contains(second)
-            return parts.suffix(country ? 3 : 2).joined(separator: ".")
-        }
-        return site(a) == site(b)
+        site(host: a.host ?? "") == site(host: b.host ?? "")
+    }
+
+    static func site(host: String) -> String {
+        let parts = host.lowercased().split(separator: ".").map(String.init)
+        guard parts.count > 2, let last = parts.last else { return parts.joined(separator: ".") }
+        let second = parts[parts.count - 2]
+        let country = last.count == 2 && ["co", "com", "org", "net", "ac", "gov", "edu"].contains(second)
+        return parts.suffix(country ? 3 : 2).joined(separator: ".")
     }
 }
