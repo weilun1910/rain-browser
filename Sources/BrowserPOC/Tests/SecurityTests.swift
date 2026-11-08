@@ -10,6 +10,7 @@ enum SecurityTests {
         configDefaults()
         notSecure()
         externalApps()
+        quarantine(dir: dir)
     }
 
     static func configDefaults() {
@@ -61,6 +62,23 @@ enum SecurityTests {
                   && LinkRouting.sameSite(URL(string: "https://x.zoom.us/a")!, URL(string: "https://zoom.us/b")!),
                   "sites still group subdomains the same way")
         }
+    }
+
+    static func quarantine(dir: URL) {
+        let folder = dir.appendingPathComponent("security-downloads", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let file = folder.appendingPathComponent("installer.command")
+        try? Data("#!/bin/sh\necho hi\n".utf8).write(to: file)
+        let before = WebSecurity.isQuarantined(file)
+        let ok = WebSecurity.quarantine(file, source: "https://downloads.example.test/installer.command")
+        var url = file
+        url.removeAllCachedResourceValues()
+        let props = (try? url.resourceValues(forKeys: [.quarantinePropertiesKey]).quarantineProperties) ?? [:]
+        check(!before && ok && WebSecurity.isQuarantined(file), "a finished download is marked as coming from the internet")
+        check((props[kLSQuarantineAgentNameKey as String] as? String) == "Rain"
+              && (props[kLSQuarantineTypeKey as String] as? String) == (kLSQuarantineTypeWebDownload as String),
+              "the mark names Rain and says it's a web download", "\(props)")
+        check(WebSecurity.quarantine(file, source: nil), "a file that's already marked is left as it is")
     }
 }
 

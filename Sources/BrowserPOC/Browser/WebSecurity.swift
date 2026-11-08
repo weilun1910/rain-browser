@@ -2,8 +2,9 @@ import AppKit
 import CoreServices
 import WebKit
 
-/// Security defaults for web pages: HTTPS first, Global Privacy Control and the "Not secure"
-/// check. Research behind each one is in notes/research/2026-11-08-security-privacy.md.
+/// Security defaults for web pages: HTTPS first, Global Privacy Control, the "Not secure" check
+/// and quarantining downloads. Research behind each one is in
+/// notes/research/2026-11-08-security-privacy.md.
 enum WebSecurity {
     /// Sets the defaults on a web view configuration.
     ///
@@ -47,6 +48,32 @@ enum WebSecurity {
     static func isThisMac(_ host: String) -> Bool {
         let h = host.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
         return h == "localhost" || h.hasSuffix(".localhost") || h == "::1" || h.hasPrefix("127.")
+    }
+
+    // MARK: Downloads
+
+    /// Marks a finished download as coming from the internet, like Safari does, so Gatekeeper
+    /// checks an app or script before it first opens. A file WebKit already marked is left alone.
+    @discardableResult
+    static func quarantine(_ file: URL, source: String?) -> Bool {
+        if isQuarantined(file) { return true }
+        var props: [String: Any] = [
+            kLSQuarantineAgentNameKey as String: "Rain",
+            kLSQuarantineTypeKey as String: kLSQuarantineTypeWebDownload as String,
+        ]
+        if let s = source, let u = URL(string: s), ["http", "https"].contains(u.scheme?.lowercased() ?? "") {
+            props[kLSQuarantineDataURLKey as String] = u
+        }
+        var values = URLResourceValues()
+        values.quarantineProperties = props
+        var url = file
+        do { try url.setResourceValues(values); return true } catch { return false }
+    }
+
+    static func isQuarantined(_ file: URL) -> Bool {
+        var url = file
+        url.removeAllCachedResourceValues()
+        return (try? url.resourceValues(forKeys: [.quarantinePropertiesKey]).quarantineProperties) != nil
     }
 }
 

@@ -95,7 +95,11 @@ final class Downloads: ObservableObject {
         live[ObjectIdentifier(download)] = nil
         if let i = items.firstIndex(where: { $0.id == id }) {
             items[i].state = state
-            if state == .done { items[i].progress = 1 }
+            if state == .done {
+                items[i].progress = 1
+                // So Gatekeeper checks a downloaded app or script before it first opens.
+                WebSecurity.quarantine(items[i].fileURL, source: items[i].source)
+            }
         }
         save()
     }
