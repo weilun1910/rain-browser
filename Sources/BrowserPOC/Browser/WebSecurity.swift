@@ -2,6 +2,35 @@ import AppKit
 import CoreServices
 import WebKit
 
+/// Security defaults for web pages: HTTPS first and Global Privacy Control. Research behind
+/// each one is in notes/research/2026-11-08-security-privacy.md.
+enum WebSecurity {
+    /// Sets the defaults on a web view configuration.
+    ///
+    /// Loads try HTTPS first and quietly fall back to HTTP when a site has no HTTPS, like Safari
+    /// since 18.2 and Firefox's HTTPS-First. Global Privacy Control tells sites the user doesn't
+    /// want their data sold or shared. Its switch is public API from macOS 27, which the pinned
+    /// 26.2 SDK doesn't declare yet, so it's set by name when the system has it.
+    static func applyDefaults(to c: WKWebViewConfiguration) {
+        let prefs: WKWebpagePreferences = c.defaultWebpagePreferences
+        prefs.preferredHTTPSNavigationPolicy = .automaticFallbackToHTTP
+        if prefs.responds(to: gpcSetter) { prefs.setValue(true, forKey: gpcKey) }
+        c.defaultWebpagePreferences = prefs
+    }
+
+    static let gpcKey = "globalPrivacyControlEnabled"
+    static let gpcSetter = NSSelectorFromString("setGlobalPrivacyControlEnabled:")
+
+    /// Whether this Mac's WebKit has the Global Privacy Control switch (macOS 27 and later).
+    static var supportsGlobalPrivacyControl: Bool { WKWebpagePreferences().responds(to: gpcSetter) }
+
+    /// Global Privacy Control on these preferences, or nil when WebKit doesn't have the switch.
+    static func globalPrivacyControl(_ prefs: WKWebpagePreferences) -> Bool? {
+        guard prefs.responds(to: NSSelectorFromString(gpcKey)) else { return nil }
+        return (prefs.value(forKey: gpcKey) as? Bool) ?? false
+    }
+}
+
 /// Asks before a page opens another app through a link like zoommtg: or mailto:, the way Safari
 /// and Chrome do. A frame from another site can't ask at all, a background tab can't ask, one tab
 /// shows one question at a time so a page can't stack them up, and "Don't ask again" holds for

@@ -7,7 +7,23 @@ enum SecurityTests {
     static func check(_ ok: Bool, _ label: String, _ detail: String = "") { SelfTest.check(ok, label, detail) }
 
     static func run(dir: URL) {
+        configDefaults()
         externalApps()
+    }
+
+    static func configDefaults() {
+        let c = MainActor.assumeIsolated { BrowserModel.makeConfig(store: .nonPersistent()) }
+        let prefs: WKWebpagePreferences = c.defaultWebpagePreferences
+        check(prefs.preferredHTTPSNavigationPolicy == .automaticFallbackToHTTP,
+              "pages try HTTPS first and fall back to HTTP", "\(prefs.preferredHTTPSNavigationPolicy.rawValue)")
+        let major = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
+        if major >= 27 {
+            check(WebSecurity.supportsGlobalPrivacyControl && WebSecurity.globalPrivacyControl(prefs) == true,
+                  "Global Privacy Control is on (macOS 27 and later)")
+        } else {
+            check(WebSecurity.globalPrivacyControl(prefs) == nil, "Global Privacy Control is skipped where WebKit lacks it")
+        }
+        check(c.preferences.isFraudulentWebsiteWarningEnabled, "Safari's fraudulent website warning stays on")
     }
 
     static func externalApps() {
@@ -33,6 +49,25 @@ enum SecurityTests {
             check(LinkRouting.site(host: "a.b.example.co.uk") == "example.co.uk" && LinkRouting.site(host: "www.zoom.us") == "zoom.us"
                   && LinkRouting.sameSite(URL(string: "https://x.zoom.us/a")!, URL(string: "https://zoom.us/b")!),
                   "sites still group subdomains the same way")
+        }
+    }
+}
+
+/// The security checks that need a real web view, in `--smoketest`.
+@MainActor
+enum SecuritySmoke {
+    static func check(_ ok: Bool, _ label: String, _ detail: String = "") { SelfTest.check(ok, label, detail) }
+
+    static func run() {
+        let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: 600, height: 400),
+                           configuration: BrowserModel.makeConfig(store: .nonPersistent()))
+        wv.loadHTMLString("<!doctype html><title>GPC</title><p>hello</p>", baseURL: URL(string: "https://gpc.example.test/")!)
+        _ = SmokeTest.wait(10) { !wv.isLoading }
+        let gpc = PasswordSmoke.js(wv, "return navigator.globalPrivacyControl === true")
+        if WebSecurity.supportsGlobalPrivacyControl {
+            check((gpc as? Bool) == true, "pages see Global Privacy Control turned on", "\(String(describing: gpc))")
+        } else {
+            print("      Global Privacy Control: not in this WebKit")
         }
     }
 }

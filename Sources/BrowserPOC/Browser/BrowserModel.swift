@@ -251,6 +251,8 @@ final class BrowserModel: ObservableObject {
         let major = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
         c.applicationNameForUserAgent = "Version/\(major).0 Safari/605.1.15"
         c.allowsAirPlayForMediaPlayback = true
+        // HTTPS first and Global Privacy Control.
+        WebSecurity.applyDefaults(to: c)
         TypingCounter.install(on: c.userContentController)
         MediaWatch.install(on: c.userContentController)
         Favicons.install(on: c.userContentController)
