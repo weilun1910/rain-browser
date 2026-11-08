@@ -44,7 +44,8 @@ enum MCPProtocol {
     Good habits:
     - Search before answering questions about the user's own projects, notes, reading or past research, and when they say \
     "I read something about", "my notes", "what do I know about".
-    - Prefer the user's own notes, docs and meetings over general knowledge when they disagree, and say so.
+    - Prefer the user's own notes over general knowledge when they disagree, and say so.
+    \(MCPExternalText.guidance)
     - Results say when and in what context the user saw each item ("history"). Use it to tell old reading from current work.
     - Results carry a ready "cite" string. Use it. For notes, the link is a file path on their Mac.
     - get_item and read_note page long text with offset and max_chars. Read the passage you need, not everything.

@@ -165,9 +165,19 @@ enum MCPTests {
               "search leaves out sign-in links and excluded sites", "hidden \(s1["hidden"] ?? "?")")
         check((s1["results"] as? [JSON] ?? []).allSatisfy { ($0["cite"] as? String)?.hasPrefix("[") == true && $0["id"] is Int },
               "search results carry an id and a cite link")
-        let snippets = (s1["results"] as? [JSON] ?? []).compactMap { $0["snippet"] as? String }
+        let rows1 = s1["results"] as? [JSON] ?? []
+        let snippets = rows1.compactMap { ($0["snippet"] as? String).map { MCPExternalText.parse($0)?.body ?? $0 } }
         check(!snippets.isEmpty && !snippets.contains { $0.hasPrefix("#") }, "snippets don't start with the note's heading",
               snippets.map { String($0.prefix(40)) }.joined(separator: " | "))
+        // Page text is marked as external, with the id the server's instructions give; notes aren't.
+        let serverID = instructions.range(of: #"external-content [0-9a-f]{8}"#, options: .regularExpression)
+            .map { String(instructions[$0].suffix(8)) } ?? "none"
+        let webRows = rows1.filter { ($0["source"] as? String) != "note" && ($0["snippet"] as? String)?.isEmpty == false }
+        let noteRows = rows1.filter { ($0["source"] as? String) == "note" }
+        check(!webRows.isEmpty && webRows.allSatisfy { $0["trust"] as? String == "external" && MCPExternalText.parse($0["snippet"] as? String ?? "")?.id == serverID }
+              && !noteRows.isEmpty && noteRows.allSatisfy { $0["trust"] as? String == "own" && MCPExternalText.parse($0["snippet"] as? String ?? "") == nil },
+              "search marks page and doc text as external, inside the markers the instructions name, and leaves notes alone",
+              "id \(serverID), \(webRows.count) external, \(noteRows.count) notes")
         let s2 = titles(c.tool("search", ["query": "sourdough", "sources": ["note"]]).0["results"])
         check(!s2.isEmpty && s2.allSatisfy { ["Sourdough plan", "Bread bake log"].contains($0) }, "search filters by source", s2.joined(separator: "; "))
         let s3 = titles(c.tool("search", ["query": "plan", "kind": "doc"]).0["results"])
@@ -194,7 +204,11 @@ enum MCPTests {
         check(!g1Err && (g1["text"] as? String ?? "").contains("Meera") && titles(g1["names"]).isEmpty
               && ((g1["names"] as? [JSON]) ?? []).contains { $0["name"] as? String == "Meera" }
               && (g1["item"] as? JSON)?["section"] as? String == "docs", "get_item by URL with text, names and section")
+        check(MCPExternalText.parse(g1["text"] as? String ?? "")?.body.contains("Meera") == true
+              && (g1["item"] as? JSON)?["trust"] as? String == "external", "get_item wraps a Google Doc's text as external")
         let (g2, _, _) = c.tool("get_item", ["item": fx.sourdough.path])
+        check(MCPExternalText.parse(g2["text"] as? String ?? "") == nil && (g2["item"] as? JSON)?["trust"] as? String == "own",
+              "get_item returns a note's text as the user's own, unwrapped")
         let links = g2["links"] as? [JSON] ?? []
         check(links.contains { $0["text"] as? String == "Bread bake log" && $0["id"] is Int }
               && links.contains { ($0["url"] as? String ?? "").contains("kingarthur") && $0["in_related_list"] as? Bool == true },

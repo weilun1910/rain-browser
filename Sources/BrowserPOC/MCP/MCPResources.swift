@@ -80,9 +80,11 @@ enum MCPResources {
             let body = ctx.reader.body(id: it.id)
             var md = "# \(ctx.title(it))\n\n"
             md += "- Link: \(it.url)\n- Source: \(MCPSources.normalized(it.source))\n"
+            md += "- Trust: \(MCPExternalText.trust(source: it.source))\n"
             if let p = it.project { md += "- Project: \(p)\n" }
             md += "- Last active: \(J.date(it.lastActive))\n\n"
-            md += body.isEmpty ? (it.description.isEmpty ? "(Only the title and address are indexed.)" : it.description) : body
+            md += body.isEmpty ? (it.description.isEmpty ? "(Only the title and address are indexed.)" : it.description)
+                : MCPExternalText.wrap(body, source: it.source, url: it.url)
             ctx.log("resource", "item", ctx.title(it), served: [ctx.title(it)])
             return ["contents": [["uri": uri, "mimeType": "text/markdown", "text": md]]]
         }

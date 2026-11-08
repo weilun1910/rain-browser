@@ -7,6 +7,6 @@ args = ["--mcp"]
 startup_timeout_sec = 30
 
 # Every read tool says readOnlyHint, so Codex runs them without asking, in codex exec too.
-# If you turn on note editing in the app, Codex asks before each write. To let it write
-# without asking, uncomment this line. Writes still follow the app's disk rules.
-# tools.append_to_note.approval_mode = "approve"
+# If you turn on note editing in the app, Codex asks before each write. Keep it that way.
+# Search results include text from web pages and shared docs, which can carry instructions
+# aimed at the AI, and that approval is what stops one from writing to your notes.
