@@ -47,6 +47,7 @@ enum SpaceFolderTests {
             listing(base.appendingPathComponent("listing"))
             model(base.appendingPathComponent("model"))
             filing(base.appendingPathComponent("filing"))
+            popupFlow(base.appendingPathComponent("popup"))
             thumbnails()
             try? FileManager.default.removeItem(at: Paths.stateFile)
             FolderMeta.shared.reload()
@@ -200,6 +201,51 @@ enum SpaceFolderTests {
             check(SpaceFolders.encode(home.appendingPathComponent("Alpha")) == "Home/Alpha" && SpaceFolders.decode("Home/Alpha")?.path == home.appendingPathComponent("Alpha").path
                   && SpaceFolders.encode(URL(fileURLWithPath: "/tmp/x")) == "/tmp/x",
                   "paths inside the root are kept relative to it, others in full")
+        }
+    }
+
+    // MARK: The popup's save, open and move flows
+
+    @MainActor static func popupFlow(_ dir: URL) {
+        withSpaceFolders(dir) { root, _ in
+            let m = ArcZenTests.freshModel()
+            let popup = FolderPopup.shared
+            defer { popup.close() }
+            guard let homeDir = m.currentSpace.flatMap({ m.spaceFolderURL($0) }) else { check(false, "a folder for the popup"); return }
+            let inbox = try! SpaceFolders.makeFolder(named: "Inbox", in: homeDir)
+            let t = ArcZenTests.page(m, "https://example.com/popup", "Popup page")
+            m.select(t)
+            m.saveCurrentPage()
+            check(popup.isOpen && popup.mode == .save(t.id) && popup.saveName == "Popup page" && popup.current?.path == homeDir.path,
+                  "Save Page opens the popup on the space's folder with the page's title filled in")
+            if let e = popup.entries.first(where: { $0.name == "Inbox" }) { popup.enter(e) }
+            popup.saveName = "Kept for later"
+            popup.save()
+            check(!popup.isOpen && Webloc.read(inbox.appendingPathComponent("Kept for later.webloc"))?.url.absoluteString == "https://example.com/popup"
+                  && m.savedFiles(for: t).count == 1, "Save puts it in the folder you're looking at, under the name you gave it")
+            // Browsing: a click opens the page as a tab here and closes the popup.
+            let other = try! SpaceFolders.savePage(URL(string: "https://example.com/elsewhere")!, title: "Elsewhere", in: homeDir)
+            popup.open(m)
+            if let e = popup.entries.first(where: { $0.url.path == other.path }) {
+                popup.activate(e)
+                check(!popup.isOpen && m.currentTab?.savedFile == "Home/Elsewhere.webloc", "clicking a page opens it as a tab and closes the popup")
+            } else { check(false, "the popup lists the saved page") }
+            popup.open(m)
+            if let e = popup.entries.first(where: { $0.url.path == other.path }) {
+                let n = m.tabs.count
+                popup.activate(e, background: true)
+                check(popup.isOpen && m.tabs.count == n, "Cmd-click on a page that's open here goes to its tab and keeps the popup open")
+                // Move to...
+                popup.startMove([e.url])
+                if let inboxEntry = popup.entries.first(where: { $0.name == "Inbox" }) { popup.enter(inboxEntry) }
+                popup.moveHere()
+                check(SpaceFolders.exists(inbox.appendingPathComponent("Elsewhere.webloc")) && !SpaceFolders.exists(other) && popup.mode == .browse,
+                      "Move to... moves it into the folder you pick")
+            }
+            check(popup.trail.count == 2 && popup.canGoBack, "the path shows where you are")
+            popup.goBack()
+            check(popup.current?.path == homeDir.path, "back goes to the folder before")
+            _ = root
         }
     }
 

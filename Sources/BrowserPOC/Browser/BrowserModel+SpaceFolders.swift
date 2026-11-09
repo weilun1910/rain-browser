@@ -286,7 +286,7 @@ extension BrowserModel {
         guard let old = SpaceFolders.root else { return }
         let new = newRoot.standardizedFileURL
         guard new.path != old.path else { return }
-        guard !FileSafety.isInside(new, old) else { toast("Pick a folder outside the current space folders"); return }
+        guard !SpaceFolders.isInside(new, old) else { toast("Pick a folder outside the current space folders"); return }
         do { try FileManager.default.createDirectory(at: new, withIntermediateDirectories: true) } catch {
             toast("Couldn't use that folder")
             return
@@ -336,8 +336,7 @@ extension BrowserModel {
 
     /// A folder path for people: "Home / Work", from the root down.
     func displayPath(_ url: URL) -> String {
-        guard let root = SpaceFolders.root, FileSafety.isInside(url, root) else { return url.lastPathComponent }
-        let rel = url.standardizedFileURL.path.dropFirst(root.path.count + 1)
+        guard let rel = SpaceFolders.relativePath(url), !rel.isEmpty else { return url.lastPathComponent }
         var parts = rel.split(separator: "/").map(String.init)
         if let first = parts.first, let sp = spaces.first(where: { $0.folderName == first }) { parts[0] = sp.name }
         return parts.joined(separator: " / ")

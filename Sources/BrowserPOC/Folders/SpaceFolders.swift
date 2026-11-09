@@ -40,12 +40,54 @@ enum SpaceFolders {
     /// How a path is kept in state.json: relative to the root when it's inside it, so a copy of
     /// the profile with its own root finds its own files, and absolute otherwise.
     static func encode(_ url: URL) -> String {
-        let p = url.standardizedFileURL.path
-        if let r = root?.path {
-            if p == r { return "." }
-            if p.hasPrefix(r + "/") { return String(p.dropFirst(r.count + 1)) }
+        if let rel = relativePath(url) { return rel.isEmpty ? "." : rel }
+        return url.standardizedFileURL.path
+    }
+
+    /// The path inside the root, "" for the root itself, or nil outside it. Links in the path,
+    /// like /var and /private/var, don't matter.
+    static func relativePath(_ url: URL) -> String? {
+        guard let r = root else { return nil }
+        let p = url.standardizedFileURL.path, rp = r.path
+        if p == rp { return "" }
+        if p.hasPrefix(rp + "/") { return String(p.dropFirst(rp.count + 1)) }
+        let cp = canonical(url), cr = canonicalRoot(r)
+        if cp == cr { return "" }
+        if cp.hasPrefix(cr + "/") { return String(cp.dropFirst(cr.count + 1)) }
+        return nil
+    }
+
+    nonisolated(unsafe) private static var rootCanon: (raw: String, canon: String)?
+    private static let canonLock = NSLock()
+
+    private static func canonicalRoot(_ r: URL) -> String {
+        canonLock.lock(); defer { canonLock.unlock() }
+        if let c = rootCanon, c.raw == r.path { return c.canon }
+        let c = canonical(r)
+        rootCanon = (r.path, c)
+        return c
+    }
+
+    /// The path with every link resolved, the same way whether or not the file exists yet.
+    static func canonical(_ url: URL) -> String {
+        var cur = url.standardizedFileURL.path
+        var missing: [String] = []
+        while cur.count > 1 {
+            if let r = realpath(cur, nil) {
+                let base = String(cString: r)
+                free(r)
+                return missing.isEmpty ? base : base + "/" + missing.reversed().joined(separator: "/")
+            }
+            missing.append((cur as NSString).lastPathComponent)
+            cur = (cur as NSString).deletingLastPathComponent
         }
-        return p
+        return url.standardizedFileURL.path
+    }
+
+    /// Whether `url` is `dir` or inside it, with links resolved.
+    static func isInside(_ url: URL, _ dir: URL) -> Bool {
+        let a = canonical(url), d = canonical(dir)
+        return a == d || a.hasPrefix(d + "/")
     }
 
     static func decode(_ s: String) -> URL? {
@@ -54,16 +96,13 @@ enum SpaceFolders {
         return s == "." ? root : root.appendingPathComponent(s).standardizedFileURL
     }
 
-    static func isInsideRoot(_ url: URL) -> Bool {
-        guard let r = root else { return false }
-        return url.standardizedFileURL.path == r.path || FileSafety.isInside(url, r)
-    }
+    static func isInsideRoot(_ url: URL) -> Bool { relativePath(url) != nil }
 
     /// Rain writes inside the root, and inside the folders linked into it or chosen as notes
     /// folders. Nothing else.
     static func canWrite(_ url: URL) -> Bool {
         if isInsideRoot(url) { return true }
-        return Settings.shared.value.notesRoots.contains { url.standardizedFileURL.path == $0.standardizedFileURL.path || FileSafety.isInside(url, $0) }
+        return Settings.shared.value.notesRoots.contains { isInside(url, $0) }
     }
 
     /// A file or folder name made safe: no slashes or colons, no leading dot, not too long.
@@ -145,7 +184,7 @@ enum SpaceFolders {
     static func move(_ url: URL, into dir: URL) throws -> URL {
         let src = url.standardizedFileURL, d = dir.standardizedFileURL
         if src.deletingLastPathComponent().path == d.path { return src }
-        if src.path == d.path || FileSafety.isInside(d, src) { throw Failure.insideItself }
+        if src.path == d.path || isInside(d, src) { throw Failure.insideItself }
         guard canWrite(src), canWrite(d) else { throw Failure.notAllowed(d.path) }
         let ext = isDirectory(src) ? "" : src.pathExtension
         let base = ext.isEmpty ? src.lastPathComponent : src.deletingPathExtension().lastPathComponent

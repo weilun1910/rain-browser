@@ -92,6 +92,8 @@ struct LeftSidebar: View {
                     .opacity(addressHover ? 1 : 0)
                     .motion(Motion.hover, value: addressHover, fadeOnly: true)
             }
+            // Save Page to Folder, filled in when the page is already saved.
+            if let tab = model.currentWebTab, tab.url != nil, model.spaceFoldersOn { SavePageButton(tab: tab) }
         }
         .padding(.leading, Theme.Space.l - 2)
         .padding(.trailing, Theme.Space.xs)

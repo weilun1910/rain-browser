@@ -152,6 +152,34 @@ enum FolderShots {
         BrowserPrefs.shared.update { $0.tabLayout = .sidebar }
         settle()
 
+        // Save mode: Cmd-Shift-S on a page picks a folder for it, like saving a download.
+        let loose = model.refs(in: .today).compactMap { r -> Tab? in if case .tab(let id) = r { return model.tab(id) }; return nil }
+        if let pageTab = loose.first(where: { $0.isWeb && $0.url != nil }) {
+            popup.close()
+            LookRenders.skipWeb = false
+            model.select(pageTab)
+            settle(1.5)
+            LookRenders.skipWeb = true
+            model.saveCurrentPage(from: "address-save")
+            settle()
+            check(popup.isOpen && popup.mode == .save(pageTab.id) && popup.saveName == pageTab.displayTitle,
+                  "Save Page opens the popup to pick a folder, with the page's title filled in")
+            if let reading = popup.entries.first(where: { $0.name == "Reading" }) { popup.enter(reading) }
+            settle()
+            shoot("7-save")
+            popup.saveName = "Saved from the shots"
+            popup.save()
+            settle()
+            check(!popup.isOpen && SpaceFolders.exists(schoolDir.appendingPathComponent("Reading/Saved from the shots.webloc")) && !model.savedFiles(for: pageTab).isEmpty,
+                  "Save puts the page in that folder, and the page shows as saved",
+                  "open \(popup.isOpen), in \(popup.current?.lastPathComponent ?? "-"), files \(((try? FileManager.default.contentsOfDirectory(atPath: schoolDir.appendingPathComponent("Reading").path)) ?? []).filter { $0.hasPrefix("Saved") }), saved \(model.savedFiles(for: pageTab).count), toast \(model.toastState?.message ?? "")")
+            LookRenders.skipWeb = false
+            shoot("8-saved-icon")
+            LookRenders.skipWeb = true
+            popup.open(model)
+            settle()
+        }
+
         // Esc closes it.
         if let esc = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
                                       context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53) {

@@ -125,8 +125,8 @@ final class FolderPopup: ObservableObject {
     /// a path of one.
     func trail(for url: URL) -> [Crumb] {
         let u = url.standardizedFileURL
-        guard let root = SpaceFolders.root, FileSafety.isInside(u, root), let model else { return [Crumb(name: u.lastPathComponent, url: u)] }
-        let parts = u.path.dropFirst(root.path.count + 1).split(separator: "/").map(String.init)
+        guard let root = SpaceFolders.root, let rel = SpaceFolders.relativePath(u), !rel.isEmpty, let model else { return [Crumb(name: u.lastPathComponent, url: u)] }
+        let parts = rel.split(separator: "/").map(String.init)
         var out: [Crumb] = []
         var cur = root
         for (i, p) in parts.enumerated() {

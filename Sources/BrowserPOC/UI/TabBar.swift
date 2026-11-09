@@ -307,6 +307,7 @@ struct TabBarAddressField: View {
                     .opacity(hovering ? 1 : 0)
                     .motion(Motion.hover, value: hovering, fadeOnly: true)
             }
+            if let tab = model.currentWebTab, tab.url != nil, model.spaceFoldersOn { SavePageButton(tab: tab, size: 22) }
             if let tab = model.currentWebTab, model.currentTab?.kind == .web { FieldReload(tab: tab) }
         }
         .padding(.leading, Theme.Space.l - 2)

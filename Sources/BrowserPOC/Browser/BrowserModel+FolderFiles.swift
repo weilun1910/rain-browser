@@ -7,7 +7,7 @@ import Foundation
 extension BrowserModel {
     /// The linked folder an item lives in, if it's inside one.
     func linkedOriginal(containing u: URL) -> URL? {
-        SpaceFolders.notesRoots.dropFirst().first { u.standardizedFileURL.path == $0.path || FileSafety.isInside(u, $0) }
+        SpaceFolders.notesRoots.dropFirst().first { SpaceFolders.isInside(u, $0) }
     }
 
     /// Moves things into `dir`, or links them there when they live inside a linked folder that

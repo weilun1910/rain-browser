@@ -302,6 +302,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         let foldersMenu = NSMenu(title: "Folders")
         foldersMenu.addItem(item("Show Folders", #selector(showFoldersAction), "b", [.command, .option], target: self))
+        foldersMenu.addItem(item("Save Page to Folder...", #selector(savePageAction), "s", [.command, .shift], target: self))
         addSubmenu(main, "Folders", foldersMenu)
 
         let spacesMenu = NSMenu(title: "Spaces")
@@ -402,6 +403,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc func previousSpaceAction() { model.switchSpace(by: -1) }
     @objc func newSpaceAction() { model.promptNewSpace() }
     @objc func showFoldersAction() { showMain(); model.showFolders() }
+    @objc func savePageAction() { showMain(); model.saveCurrentPage() }
     @objc func restoreClosedItem(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? UUID else { return }
         showMain()

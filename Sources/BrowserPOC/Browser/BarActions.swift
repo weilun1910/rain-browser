@@ -44,6 +44,8 @@ enum BarActions {
     static let fixed: [BarAction] = [
         BarAction(id: "folders.show", title: "Show folders", icon: FolderPopup.icon, shortcut: "⌥⌘B", keywords: ["bookmarks", "saved", "files", "finder"],
                   available: { $0.spaceFoldersOn }) { $0.showFolders() },
+        BarAction(id: "folders.savePage", title: "Save page to folder", icon: "bookmark", shortcut: "⇧⌘S", keywords: ["bookmark", "save", "folder"],
+                  available: { m in m.spaceFoldersOn && (m.currentTab.map { ($0.isWeb || $0.isApp) && $0.url != nil } ?? false) }) { $0.saveCurrentPage() },
         BarAction(id: "tab.copyURL", title: "Copy link", icon: "link", shortcut: "⇧⌘C", keywords: ["url", "address", "copy url"],
                   available: { $0.currentTab?.url != nil && $0.currentTab?.isApp == false }) { $0.copyCurrentURL() },
         BarAction(id: "tab.copyMarkdown", title: "Copy link as Markdown", icon: "link", shortcut: "⌥⇧⌘C", keywords: ["url", "markdown"],
