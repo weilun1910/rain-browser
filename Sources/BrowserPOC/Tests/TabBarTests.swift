@@ -39,16 +39,21 @@ enum TabBarTests {
         check(r.essentialSlots([]).isEmpty, "with no Essentials the box shows none")
         check(r.openIsHidden(ids, open: [ids[4]]) && !r.openIsHidden(ids, open: [ids[1]]) && !r.openIsHidden(ids, open: []),
               "the count lights up only when the page you're on is a hidden Essential")
-        check(EssentialsBoxGeometry.restWidth(6) == EssentialsBoxGeometry.width(3) + EssentialsBoxGeometry.countWidth + EssentialsBoxGeometry.gap
+        check(EssentialsBoxGeometry.restWidth(6) == EssentialsBoxGeometry.width(3)
               && EssentialsBoxGeometry.restWidth(3) == EssentialsBoxGeometry.width(3) && EssentialsBoxGeometry.restWidth(2) == EssentialsBoxGeometry.width(2),
-              "the box is three tiles wide, with room for the count only when there are more")
+              "the box is three tiles wide at most")
+        check(EssentialsBoxGeometry.slotWidth(6) == EssentialsBoxGeometry.width(3) + EssentialsBoxGeometry.gap + EssentialsBoxGeometry.countWidth
+              && EssentialsBoxGeometry.slotWidth(3) == EssentialsBoxGeometry.width(3),
+              "the count sits outside the box, and only when there are more")
         check(r.essentialsOpenDelay == Motion.Timing.revealDwell && r.essentialsCloseDelay == Motion.Timing.concealDelay,
               "the box opens and closes on the same timings as the sidebar's icon column")
         check([1, 3, 4, 7, 12].map(r.essentialRows) == [1, 1, 2, 3, 4], "the open grid has a row per three Essentials",
               "\([1, 3, 4, 7, 12].map(r.essentialRows))")
-        check(EssentialsBoxGeometry.width(3) == EssentialsBoxGeometry.width(3) && EssentialsBoxGeometry.openHeight(12) > EssentialsBoxGeometry.openHeight(4)
+        check(EssentialsBoxGeometry.width(r.essentialsColumns) == EssentialsBoxGeometry.restWidth(12)
+              && EssentialsBoxGeometry.openHeight(12) > EssentialsBoxGeometry.openHeight(4)
+              && (0..<3).allSatisfy { EssentialsBoxGeometry.gridOrigin($0).y == EssentialsBoxGeometry.pad }
               && EssentialsBoxGeometry.gridOrigin(3).x == EssentialsBoxGeometry.gridOrigin(0).x && EssentialsBoxGeometry.gridOrigin(3).y > 0,
-              "the grid opens straight down at the box's own width")
+              "the grid opens straight down at the box's own width, with the first three where they were")
 
         let refs: [SidebarRef] = ids.prefix(3).map { .tab($0) }
         check(r.barOrder(refs) == refs.reversed(), "the bar lists tabs oldest first, newest at the right")

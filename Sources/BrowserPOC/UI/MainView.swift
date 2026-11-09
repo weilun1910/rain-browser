@@ -35,23 +35,30 @@ struct MainView: View {
     /// Titles or icons only, and the width on screen.
     var layout: SidebarWidth.Layout { resize.current }
     var sidebarWidth: CGFloat { layout.width }
-    /// How far the page sits below the window's top margin: on the right, and with icons only,
-    /// the traffic lights sit over the page's corner, so it moves down to clear them.
-    var topClear: CGFloat {
-        if hidden { return 0 }
-        if right { return 22 }
-        return layout.iconsOnly ? Theme.Space.iconSidebarTopClear : 0
-    }
+    /// With icons only, the address and the app's buttons move to a row across the top of the
+    /// window, like Chrome's collapsed tabs, and the traffic lights sit in that row, since they're
+    /// wider than the column.
+    var iconBar: Bool { !hidden && layout.iconsOnly }
+    /// How far the page sits below the window's top margin: with the sidebar on the right, the
+    /// traffic lights sit over the page's corner, so it moves down to clear them.
+    var topClear: CGFloat { !hidden && right && !iconBar ? 22 : 0 }
 
     var body: some View {
-        HStack(spacing: 0) {
-            if right { panel(leading: true) } else { sidebarSlot }
-            ContentArea()
-                .padding(.vertical, Theme.Space.windowMargin)
-                .padding(.top, topClear)
-                .padding(.leading, (hidden && !right) || (right && !settings.published.rightPanelOpen) ? Theme.Space.windowMargin : 0)
-                .padding(.trailing, (hidden && right) || (!right && !settings.published.rightPanelOpen) ? Theme.Space.windowMargin : 0)
-            if right { sidebarSlot } else { panel(leading: false) }
+        VStack(spacing: 0) {
+            if iconBar {
+                TabBarToolbar(spaceMenu: false)
+                    .frame(height: Theme.Space.titleBarHeight)
+                    .transition(toolbarTransition)
+            }
+            HStack(spacing: 0) {
+                if right { panel(leading: true) } else { sidebarSlot }
+                ContentArea()
+                    .padding(.top, iconBar ? TabBarMetrics.contentTop : Theme.Space.windowMargin + topClear)
+                    .padding(.bottom, Theme.Space.windowMargin)
+                    .padding(.leading, (hidden && !right) || (right && !settings.published.rightPanelOpen) ? Theme.Space.windowMargin : 0)
+                    .padding(.trailing, (hidden && right) || (!right && !settings.published.rightPanelOpen) ? Theme.Space.windowMargin : 0)
+                if right { sidebarSlot } else { panel(leading: false) }
+            }
         }
         // The frame: neutral grey with the space's colour on the sidebar's side, fading across.
         // It follows the sidebar's space strip, so a swipe carries the colour with it.
@@ -59,7 +66,11 @@ struct MainView: View {
                                         sidebarWidth: hidden ? 0 : sidebarWidth, fromTrailing: right))
         .overlay(alignment: right ? .trailing : .leading) { compactSidebar }
         // The icon column's Essentials grown into a grid, over the page.
-        .overlayPreferenceValue(EssentialsColumnKey.self) { column in EssentialsBloomLayer(column: column, onRight: right) }
+        .overlayPreferenceValue(EssentialsColumnKey.self) { column in
+            EssentialsBloomLayer(column: column, onRight: right).environment(\.hoverCardSide, cardSide)
+        }
+        // The name of the icon under the pointer.
+        .overlay { HoverCardLayer() }
         .overlay {
             CommandBarOverlay(bar: model.bar,
                               leadingClear: hidden || right ? 0 : sidebarWidth,
@@ -83,11 +94,13 @@ struct MainView: View {
         if !hidden {
             LeftSidebar()
                 .environment(\.sidebarIconsOnly, layout.iconsOnly)
+                .environment(\.hoverCardSide, layout.iconsOnly ? cardSide : nil)
                 .frame(width: sidebarWidth)
-                // Drag the inner edge to resize. It starts below the title bar row, so the
-                // window still drags from the top and the traffic lights stay clear.
+                // Drag the inner edge to resize. With titles it starts below the title bar row,
+                // so the window still drags from the top and the traffic lights stay clear. The
+                // icon column already starts below the toolbar.
                 .overlay(alignment: right ? .leading : .trailing) {
-                    SidebarResizeHandle(onRight: right).padding(.top, Theme.Space.titleBarHeight)
+                    SidebarResizeHandle(onRight: right).padding(.top, iconBar ? 0 : Theme.Space.titleBarHeight)
                 }
                 .transition(Motion.Transitions.sidebar(edge: right ? .trailing : .leading))
         }
@@ -95,10 +108,21 @@ struct MainView: View {
 
     @ViewBuilder func panel(leading: Bool) -> some View {
         if settings.published.rightPanelOpen {
-            // On the left it starts below the window buttons.
-            RightPanel().frame(width: Self.panelWidth).padding(.top, leading ? 24 : 0)
+            // On the left it starts below the window buttons, or below the toolbar.
+            RightPanel().frame(width: Self.panelWidth).padding(.top, leading && !iconBar ? 24 : 0)
                 .transition(Motion.Transitions.panel(edge: leading ? .leading : .trailing))
         }
+    }
+
+    /// Icons in the column show their names in a card on the page's side.
+    var cardSide: Edge { right ? .leading : .trailing }
+
+    /// The icon column's toolbar comes in from above as the column snaps in, and the page moves
+    /// down under it on the same spring.
+    private var toolbarTransition: AnyTransition {
+        if Motion.suppressed { return .identity }
+        if Motion.reduceMotion { return .opacity }
+        return .opacity.combined(with: .offset(y: -6))
     }
 
     /// Compact mode: a thin edge that brings the sidebar back as an overlay once the pointer rests

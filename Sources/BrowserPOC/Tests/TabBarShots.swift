@@ -66,6 +66,12 @@ enum TabBarShots {
             LookRenders.skipWeb = false
         }
         func slug(_ s: String?) -> String { (s ?? "space").lowercased().replacingOccurrences(of: " ", with: "-") }
+        var failed = 0
+        func check(_ ok: Bool, _ label: String, _ detail: String) {
+            print("  \(ok ? "ok  " : "FAIL") \(label)\(detail.isEmpty ? "" : " (\(detail))")")
+            if !ok { failed += 1 }
+        }
+        HoverCards.shared.recorded = [:]
 
         print("Rendering the tab bar into \(out.path)")
         let start = model.currentSpaceID
@@ -88,6 +94,22 @@ enum TabBarShots {
         wait(0.5) { false }
         shoot("2b-essentials-open", floating: true)
         TabBarState.shared.closeAll()
+        wait(0.3) { false }
+
+        // A pinned tab shows its name in a card under it, and a right-click on a tab offers the
+        // three ways to show tabs.
+        if let pin = model.refs(in: .pinned).first, case .tab(let id) = pin {
+            LookRenders.skipWeb = true
+            SidebarWidthShots.showCard(for: id, side: .bottom, label: "a pinned tab in the bar shows its name in a card under it", outside: false, check)
+            shoot("2c-pinned-hover-card", floating: true)
+            HoverCards.shared.hide()
+        }
+        if let root = window.contentView {
+            let p = NSPoint(x: root.bounds.width / 2, y: root.bounds.height - Theme.Space.titleBarHeight - TabBarMetrics.stripHeight / 2)
+            let (hit, titles) = SidebarWidthShots.menuTitles(window, at: p)
+            check(TabMode.allCases.allSatisfy { titles.contains($0.title) }, "a right-click on a tab in the bar offers the three tab modes",
+                  "hit \(hit): \(titles.filter { !$0.isEmpty }.joined(separator: ", "))")
+        }
 
         TabBarState.shared.openSpaceMenu(model)
         wait(0.5) { false }
@@ -106,8 +128,8 @@ enum TabBarShots {
         window.setContentSize(NSSize(width: 1440, height: 900))
         settle()
         shoot("5-sidebar-again")
-        print("Done.")
+        print(failed == 0 ? "Done." : "\(failed) checks failed.")
         Intelligence.shared.shutdown()
-        return 0
+        return failed == 0 ? 0 : 1
     }
 }

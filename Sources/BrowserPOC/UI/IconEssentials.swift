@@ -1,19 +1,24 @@
 import SwiftUI
 
-// Essentials in the icon column. At most three show, one under the other, with a count of the
-// rest under them. Resting on them grows the box sideways over the page into a grid of every
-// Essential, three to a column, so the first three stay exactly where they were and the box
-// reads as growing rather than a menu opening. It shrinks back a moment after the pointer
-// leaves. The horizontal tab bar's Essentials follow the same rule, growing downward.
+// Essentials in the icon column: a box holding at most three, one under the other, with a count
+// of the rest under it. Resting on the box grows it sideways over the page into a grid of every
+// Essential, three to a column. Only its width changes: the first three stay exactly where they
+// were, and the rest come into view as its far edge passes them, so it reads as the same box
+// getting wider. It shrinks back a moment after the pointer leaves. The tab bar's box does the
+// same downward (TabBarEssentials.swift), with the same tiles and surface.
 //
-// The grown box is drawn by the main view, over the whole window, at the place the column
-// reports. Drawn inside the sidebar, it went under the page, since the page's web view sits
-// after the sidebar.
+// At rest the box is drawn in the column. While it's grown, a copy is drawn by the main view over
+// the whole window, at the place the column reports, since anything drawn inside the sidebar goes
+// under the page's web view. The copy takes over at the box's resting size, so the hand-off
+// doesn't show, and hands back once it has shrunk.
 
-/// Whether the grown box is open, shared by the column and the layer that draws the box.
+/// Whether the box is grown, shared by the column and the layer that draws the grown copy.
 @MainActor
 final class EssentialsBloom: ObservableObject {
     static let shared = EssentialsBloom()
+    /// The copy over the window is up, at rest or grown.
+    @Published private(set) var shown = false
+    /// The copy is grown, or growing.
     @Published private(set) var open = false
     private var overColumn = false
     private var overGrid = false
@@ -22,6 +27,7 @@ final class EssentialsBloom: ObservableObject {
     /// Offscreen shots open the box without a pointer.
     @Published var forced = false
 
+    var isShown: Bool { shown || forced }
     var isOpen: Bool { open || forced }
 
     func hover(column: Bool? = nil, grid: Bool? = nil) {
@@ -31,17 +37,56 @@ final class EssentialsBloom: ObservableObject {
         let want = overColumn || overGrid
         guard want != open else { return }
         // The pointer rests a moment before it grows, so passing over on the way to a tab
-        // doesn't open it, and it lingers a moment so a slow move into the box keeps it open.
+        // doesn't open it, and it lingers a moment so a slow move onto the grown box keeps it open.
         let work = DispatchWorkItem { [weak self] in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 let now = self.overColumn || self.overGrid
                 guard now != self.open else { return }
-                Motion.run(now ? Motion.reveal : Motion.conceal) { self.open = now }
+                now ? self.grow() : self.shrink()
             }
         }
         pending = work
         DispatchQueue.main.asyncAfter(deadline: .now() + (want ? Motion.Timing.revealDwell : Motion.Timing.concealDelay), execute: work)
+    }
+
+    private func grow() {
+        if shown {
+            Motion.run(Motion.reveal) { open = true }
+            return
+        }
+        // The copy first appears at rest over the column's box, then grows from there.
+        shown = true
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.shown, self.overColumn || self.overGrid else { return }
+                Motion.run(Motion.reveal) { self.open = true }
+            }
+        }
+    }
+
+    private func shrink() {
+        guard let anim = Motion.animation(Motion.conceal) else {
+            open = false
+            shown = false
+            return
+        }
+        withAnimation(anim, completionCriteria: .removed) {
+            open = false
+        } completion: { [weak self] in
+            MainActor.assumeIsolated {
+                // Back at rest, the column's own box takes over again.
+                if let self, !self.open { self.shown = false }
+            }
+        }
+    }
+
+    /// A tile was picked: the box shrinks back now.
+    func close() {
+        pending?.cancel()
+        overColumn = false
+        overGrid = false
+        if open { shrink() } else { shown = false }
     }
 
     /// The column went away, say for titles.
@@ -50,44 +95,65 @@ final class EssentialsBloom: ObservableObject {
         overColumn = false
         overGrid = false
         open = false
+        shown = false
     }
 }
 
-/// Where the column's three tiles are, for the main view to grow the box from.
+/// Where the column's box is, for the main view to draw the grown copy over it.
 struct EssentialsColumnKey: PreferenceKey {
     static let defaultValue: Anchor<CGRect>? = nil
     static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) { value = value ?? nextValue() }
 }
 
-/// The column: three Essentials and a count of the rest.
+/// The column: the box of three, and a count of the rest under it.
 struct IconEssentials: View {
     let items: [Tab]
     @EnvironmentObject var model: BrowserModel
     @ObservedObject private var bloom = EssentialsBloom.shared
+    @ObservedObject private var prefs = BrowserPrefs.shared
 
     /// How many show before the box has to grow.
     static let shown = 3
-    static let tileWidth: CGFloat = Theme.Space.sidebarIconWidth - 2 * Theme.Space.sidebarInset
-    static let gap: CGFloat = Theme.Space.s
-    /// The grown box's padding, so its first column sits on the tiles it grew from.
-    static let pad: CGFloat = Theme.Space.s
+    /// The box at rest fills the column between its insets.
+    static let boxWidth: CGFloat = Theme.Space.sidebarIconWidth - 2 * Theme.Space.sidebarInset
+    static let pad: CGFloat = TabBarMetrics.boxPadding
+    static let gap: CGFloat = TabBarMetrics.tileGap
+    static let tileWidth: CGFloat = boxWidth - 2 * pad
+    static let tileHeight: CGFloat = Theme.Space.rowHeight - 2
+
+    /// The box's height, the same at rest and grown: three tiles, or fewer.
+    static func height(_ count: Int) -> CGFloat {
+        let rows = CGFloat(max(1, min(count, shown)))
+        return 2 * pad + rows * tileHeight + (rows - 1) * gap
+    }
+
+    /// The grown box's width: a column of three per three Essentials.
+    static func openWidth(_ count: Int) -> CGFloat {
+        let columns = CGFloat(max(1, (count + shown - 1) / shown))
+        return 2 * pad + columns * tileWidth + (columns - 1) * gap
+    }
+
+    /// Where the tile at `index` sits, from the box's top corner nearest the sidebar.
+    static func origin(_ index: Int) -> CGPoint {
+        CGPoint(x: pad + CGFloat(index / shown) * (tileWidth + gap), y: pad + CGFloat(index % shown) * (tileHeight + gap))
+    }
 
     var body: some View {
         let rest = items.count - min(items.count, Self.shown)
-        VStack(spacing: Self.gap) {
-            VStack(spacing: Self.gap) {
-                ForEach(items.prefix(Self.shown)) { EssentialTile(tab: $0).transition(Motion.Transitions.tabRow) }
-            }
-            .anchorPreference(key: EssentialsColumnKey.self, value: .bounds) { rest > 0 ? $0 : nil }
+        VStack(spacing: Self.gap + 2) {
+            EssentialsColumnBox(items: items, open: false, onRight: prefs.value.sidebarOnRight)
+                // While the copy over the window is up, this one steps aside for it.
+                .opacity(bloom.isShown && rest > 0 ? 0 : 1)
+                .allowsHitTesting(!(bloom.isShown && rest > 0))
+                .anchorPreference(key: EssentialsColumnKey.self, value: .bounds) { rest > 0 ? $0 : nil }
+                .onHover { inside in if rest > 0 { bloom.hover(column: inside) } }
             if rest > 0 { more(rest) }
         }
-        .contentShape(Rectangle())
-        .onHover { bloom.hover(column: $0) }
         .onDisappear { bloom.reset() }
         .motion(Motion.insert, value: items.map { $0.id })
     }
 
-    /// "+5" under the three, in the selected chip's style when the page you're on is one of the
+    /// "+5" under the box, in the selected chip's style when the page you're on is one of the
     /// hidden ones, so you can still tell where you are.
     private func more(_ n: Int) -> some View {
         let hiddenSelected = items.dropFirst(Self.shown).contains { model.isSelected($0) || model.isVisible($0) }
@@ -98,12 +164,54 @@ struct IconEssentials: View {
             .frame(height: 18)
             .background(Theme.Radius.shape(Theme.Radius.button).fill(hiddenSelected ? Theme.Palette.rowSelected : .clear))
             .opacity(bloom.isOpen ? 0 : 1)
-            .help("\(n) more Essentials. Rest the pointer here to see them all.")
+            .motion(bloom.isOpen ? Motion.reveal : Motion.conceal, value: bloom.isOpen, fadeOnly: true)
+            .contentShape(Rectangle())
+            .onHover { bloom.hover(column: $0) }
+            .help("\(n) more Essentials. Rest the pointer here or on the box to see them all.")
     }
 }
 
-/// The grown box, drawn over the window at the column's place. It grows toward the page:
-/// rightward from a sidebar on the left, leftward from one on the right.
+/// The box, at rest in the column or grown over the page. It grows away from the sidebar's
+/// outer edge: rightward from a sidebar on the left, leftward from one on the right.
+struct EssentialsColumnBox: View {
+    let items: [Tab]
+    let open: Bool
+    let onRight: Bool
+    @State private var frame: CGRect = .zero
+
+    var body: some View {
+        let width = open ? IconEssentials.openWidth(items.count) : IconEssentials.boxWidth
+        let height = IconEssentials.height(items.count)
+        let near: Alignment = onRight ? .topTrailing : .topLeading
+        let shape = Theme.Radius.shape(Theme.Radius.card)
+        ZStack(alignment: near) {
+            EssentialsSurface(open: open)
+            ZStack(alignment: near) {
+                ForEach(Array(items.enumerated()), id: \.element.id) { i, tab in
+                    let at = IconEssentials.origin(i)
+                    let hiddenAtRest = !open && i >= IconEssentials.shown
+                    EssentialBoxTile(tab: tab, vertical: true) { EssentialsBloom.shared.close() }
+                        .frame(width: IconEssentials.tileWidth, height: IconEssentials.tileHeight)
+                        .offset(x: onRight ? -at.x : at.x, y: at.y)
+                        .opacity(hiddenAtRest ? 0 : 1)
+                        .allowsHitTesting(!hiddenAtRest)
+                }
+            }
+            .frame(width: width, height: height, alignment: near)
+            .clipShape(shape)
+        }
+        .frame(width: width, height: height, alignment: near)
+        .contentShape(shape)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+        // A tile's card sits beyond the box's far edge, so it never covers the next column.
+        .environment(\.hoverCardBounds, frame == .zero ? nil : frame)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Essentials")
+    }
+}
+
+/// The grown copy, drawn over the window at the column box's place. It's laid out at its full
+/// grown width from the column's outer side, so only its far edge moves.
 struct EssentialsBloomLayer: View {
     let column: Anchor<CGRect>?
     let onRight: Bool
@@ -112,65 +220,14 @@ struct EssentialsBloomLayer: View {
 
     var body: some View {
         GeometryReader { g in
-            if let column, bloom.isOpen, model.essentials.count > IconEssentials.shown {
+            if let column, bloom.isShown, model.essentials.count > IconEssentials.shown {
                 let r = g[column]
-                let items = model.essentials
-                let width = Self.width(for: items.count)
-                EssentialsGrid3(items: items, onRight: onRight)
+                let full = IconEssentials.openWidth(model.essentials.count)
+                EssentialsColumnBox(items: model.essentials, open: bloom.isOpen, onRight: onRight)
                     .onHover { bloom.hover(grid: $0) }
-                    .offset(x: onRight ? r.maxX + IconEssentials.pad - width : r.minX - IconEssentials.pad,
-                            y: r.minY - IconEssentials.pad)
-                    .transition(grow)
+                    .frame(width: full, height: r.height, alignment: onRight ? .topTrailing : .topLeading)
+                    .offset(x: onRight ? r.maxX - full : r.minX, y: r.minY)
             }
         }
-    }
-
-    static func width(for count: Int) -> CGFloat {
-        let columns = CGFloat((count + IconEssentials.shown - 1) / IconEssentials.shown)
-        return columns * IconEssentials.tileWidth + (columns - 1) * IconEssentials.gap + 2 * IconEssentials.pad
-    }
-
-    private var grow: AnyTransition {
-        if Motion.suppressed { return .identity }
-        if Motion.reduceMotion { return .opacity }
-        return .opacity.combined(with: .scale(scale: 0.92, anchor: onRight ? .topTrailing : .topLeading))
-    }
-}
-
-/// Every Essential, three to a column, the first column nearest the sidebar.
-private struct EssentialsGrid3: View {
-    let items: [Tab]
-    let onRight: Bool
-
-    var body: some View {
-        let ordered = stride(from: 0, to: items.count, by: IconEssentials.shown).map { Array(items[$0 ..< min(items.count, $0 + IconEssentials.shown)]) }
-        let columns = onRight ? Array(ordered.reversed()) : ordered
-        HStack(alignment: .top, spacing: IconEssentials.gap) {
-            ForEach(Array(columns.enumerated()), id: \.offset) { _, column in
-                VStack(spacing: IconEssentials.gap) {
-                    ForEach(column) { EssentialTile(tab: $0).frame(width: IconEssentials.tileWidth) }
-                }
-            }
-        }
-        .padding(IconEssentials.pad)
-        .background(GrownBox())
-        .fixedSize()
-        .environment(\.sidebarIconsOnly, true)
-    }
-}
-
-/// The grown box: the sidebar's own surface, lifted over the page like compact mode's floating
-/// sidebar, so the tiles look the same as they did in the column.
-private struct GrownBox: View {
-    @EnvironmentObject var model: BrowserModel
-    var body: some View {
-        let shape = Theme.Radius.shape(Theme.Radius.card)
-        ZStack {
-            Theme.Palette.sidebarColor(model.currentSpace?.color)
-            GrainOverlay()
-        }
-        .clipShape(shape)
-        .overlay(shape.strokeBorder(Theme.Palette.hairline, lineWidth: 0.5))
-        .themeShadow(.floating)
     }
 }

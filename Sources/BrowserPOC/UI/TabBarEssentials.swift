@@ -1,11 +1,12 @@
 import AppKit
 import SwiftUI
 
-// Essentials in the tab bar: a box at the start of the row of tabs that shows three, and grows
-// straight down into a grid of all of them while the pointer rests on it. The box itself grows,
-// over the page, so the tabs beside it never move. At rest it's a quiet well like the sidebar's
-// Essentials. Open, it takes the sidebar's own surface, the same as the icon column's grown box,
-// so the two read as one feature.
+// Essentials in the tab bar: a box at the start of the row of tabs that holds three, and grows
+// straight down into a grid of all of them while the pointer rests on it. Only its height
+// changes: the three stay where they are and the rest come into view as its bottom edge passes
+// them, so it reads as the same box getting taller. A count of the rest sits just outside it.
+// The icon column's box (IconEssentials.swift) does the same sideways, and both use the tile and
+// the surface here.
 
 enum EssentialsBoxGeometry {
     static var tileWidth: CGFloat { TabBarMetrics.tileWidth }
@@ -13,7 +14,7 @@ enum EssentialsBoxGeometry {
     static var gap: CGFloat { TabBarMetrics.tileGap }
     static var pad: CGFloat { TabBarMetrics.boxPadding }
 
-    /// The "+N" after the three when there are more.
+    /// The "+N" after the box when there are more.
     static let countWidth: CGFloat = 26
 
     /// The box's width for `columns` tiles.
@@ -22,9 +23,12 @@ enum EssentialsBoxGeometry {
         return 2 * pad + n * tileWidth + (n - 1) * gap
     }
 
-    /// The box at rest: up to three tiles, and the count when there are more.
-    static func restWidth(_ count: Int) -> CGFloat {
-        width(min(count, TabBarRules.essentialsShown)) + (count > TabBarRules.essentialsShown ? countWidth + gap : 0)
+    /// The box itself, at rest and open: up to three tiles across.
+    static func restWidth(_ count: Int) -> CGFloat { width(min(count, TabBarRules.essentialsShown)) }
+
+    /// The box and the count beside it, in the row of tabs.
+    static func slotWidth(_ count: Int) -> CGFloat {
+        restWidth(count) + (count > TabBarRules.essentialsShown ? gap + countWidth : 0)
     }
 
     /// The open grid's height for `count` Essentials.
@@ -47,13 +51,18 @@ struct EssentialsBoxSlot: View {
     @ObservedObject private var drag = SidebarDrag.shared
     @State private var targeted = false
 
+    @ObservedObject private var state = TabBarState.shared
+
     var body: some View {
         let n = model.essentials.count
         if n > 0 {
-            Color.clear
-                .frame(width: EssentialsBoxGeometry.restWidth(n), height: TabBarMetrics.itemHeight)
-                .anchorPreference(key: TabBarAnchors.self, value: .bounds) { ["essentials": $0] }
-                .padding(.trailing, Theme.Space.m)
+            HStack(spacing: EssentialsBoxGeometry.gap) {
+                Color.clear
+                    .frame(width: EssentialsBoxGeometry.restWidth(n), height: TabBarMetrics.itemHeight)
+                    .anchorPreference(key: TabBarAnchors.self, value: .bounds) { ["essentials": $0] }
+                if n > TabBarRules.essentialsShown { count(n) }
+            }
+            .padding(.trailing, Theme.Space.m)
         } else if !drag.dragging.isEmpty {
             // With no Essentials yet, a drag shows where one would go.
             Text("Essentials")
@@ -71,6 +80,26 @@ struct EssentialsBoxSlot: View {
                 .transition(.opacity)
         }
     }
+
+    /// "+5" just outside the box, in the selected chip's style when the page you're on is one of
+    /// the hidden ones, like the icon column's. It fades while the box is open.
+    private func count(_ n: Int) -> some View {
+        let ids = model.essentials.map(\.id)
+        let onScreen = Set(model.essentials.filter { model.isSelected($0) || model.isVisible($0) }.map(\.id))
+        let hiddenOpen = TabBarRules.openIsHidden(ids, open: onScreen)
+        return Text("+\(n - TabBarRules.essentialsShown)")
+            .font(Theme.Font.caption.monospacedDigit())
+            .foregroundStyle(hiddenOpen ? .primary : .secondary)
+            .frame(width: EssentialsBoxGeometry.countWidth, height: EssentialsBoxGeometry.tileHeight)
+            .background(Theme.Radius.shape(Theme.Radius.row - 1)
+                .fill(hiddenOpen ? Theme.Palette.rowSelected : .clear)
+                .themeShadow(hiddenOpen ? .row : .mark))
+            .opacity(state.essentialsOpen ? 0 : 1)
+            .motion(state.essentialsOpen ? Motion.reveal : Motion.conceal, value: state.essentialsOpen, fadeOnly: true)
+            .contentShape(Rectangle())
+            .onHover { state.pointerInEssentials($0) }
+            .help("\(n - TabBarRules.essentialsShown) more Essentials. Rest the pointer here or on the box to see them all.")
+    }
 }
 
 /// The box: three Essentials at rest, all of them in a grid while it's open.
@@ -80,60 +109,29 @@ struct EssentialsBox: View {
     @EnvironmentObject var model: BrowserModel
     @ObservedObject var state = TabBarState.shared
     @State private var targeted = false
-    @Environment(\.spaceTintHex) private var tintHex
+    @State private var frame: CGRect = .zero
 
     var body: some View {
         let items = model.essentials
         let ids = items.map(\.id)
         let more = items.count > TabBarRules.essentialsShown
         let open = state.essentialsOpen && more
-        let slots = TabBarRules.essentialSlots(ids)
-        let onScreen = Set(items.filter { model.isSelected($0) || model.isVisible($0) }.map(\.id))
-        let hiddenOpen = TabBarRules.openIsHidden(ids, open: onScreen)
+        let slots = Set(TabBarRules.essentialSlots(ids))
         let height = open ? EssentialsBoxGeometry.openHeight(items.count) : rest.height
-        // Open, the grid sits in the middle of the box, which keeps its width so the pointer never
-        // falls off its edge as it opens.
-        let inset = open ? (rest.width - EssentialsBoxGeometry.width(TabBarRules.essentialsColumns)) / 2 : 0
         let shape = Theme.Radius.shape(Theme.Radius.card)
         ZStack(alignment: .topLeading) {
-            // At rest a quiet well on the bar. Open, the space's own surface with its grain, a
-            // hairline and a floating shadow, like the icon column's grown box.
-            shape.fill(targeted ? Theme.Palette.fieldHover : Theme.Palette.field)
-                .opacity(open ? 0 : 1)
-            ZStack {
-                Theme.Palette.sidebarColor(tintHex)
-                GrainOverlay()
-            }
-            .clipShape(shape)
-            .overlay(shape.strokeBorder(Theme.Palette.hairline, lineWidth: 0.5))
-            .background(shape.fill(Theme.Palette.sidebarColor(tintHex)).themeShadow(.floating))
-            .opacity(open ? 1 : 0)
+            EssentialsSurface(open: open, targeted: targeted)
             ZStack(alignment: .topLeading) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { i, tab in
                     // The first three keep their places. The rest wait in their grid places below
                     // the box's edge until it grows down over them.
                     let at = EssentialsBoxGeometry.gridOrigin(i)
                     let hiddenAtRest = !open && !slots.contains(tab.id)
-                    BarEssentialTile(tab: tab)
+                    EssentialBoxTile(tab: tab, vertical: false) { state.closeEssentials() }
                         .frame(width: EssentialsBoxGeometry.tileWidth, height: EssentialsBoxGeometry.tileHeight)
-                        .offset(x: at.x + inset, y: at.y)
+                        .offset(x: at.x, y: at.y)
                         .opacity(hiddenAtRest ? 0 : 1)
                         .allowsHitTesting(!hiddenAtRest)
-                }
-                if more {
-                    // "+5" after the three, in the selected chip's style when the page you're on is
-                    // one of the hidden ones, like the sidebar's icon column.
-                    Text("+\(items.count - TabBarRules.essentialsShown)")
-                        .font(Theme.Font.caption.monospacedDigit())
-                        .foregroundStyle(hiddenOpen ? .primary : .secondary)
-                        .frame(width: EssentialsBoxGeometry.countWidth, height: EssentialsBoxGeometry.tileHeight)
-                        .background(Theme.Radius.shape(Theme.Radius.row - 1)
-                            .fill(hiddenOpen ? Theme.Palette.rowSelected : .clear)
-                            .themeShadow(hiddenOpen ? .row : .mark))
-                        .offset(x: EssentialsBoxGeometry.width(TabBarRules.essentialsShown) - EssentialsBoxGeometry.pad + EssentialsBoxGeometry.gap,
-                                y: EssentialsBoxGeometry.pad)
-                        .opacity(open ? 0 : 1)
-                        .allowsHitTesting(false)
                 }
             }
             .frame(width: rest.width, height: height, alignment: .topLeading)
@@ -141,21 +139,52 @@ struct EssentialsBox: View {
         }
         .frame(width: rest.width, height: height, alignment: .topLeading)
         .contentShape(shape)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+        // Tiles show their card under the box, so it never covers the next row.
+        .environment(\.hoverCardBounds, frame == .zero ? nil : frame)
         .onHover { inside in if more { state.pointerInEssentials(inside) } }
         .onDrop(of: [ItemDrag.type], isTargeted: $targeted) { providers in
             ItemDrag.load(providers) { ids in model.place(ids.map { .tab($0) }, in: .essentials, at: Int.max) }
         }
         .motion(open ? Motion.reveal : Motion.conceal, value: open)
         .motion(Motion.insert, value: ids)
-        .help(more && !open ? "\(items.count - TabBarRules.essentialsShown) more Essentials. Rest the pointer here to see them all." : "")
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Essentials")
     }
 }
 
-/// One Essential in the box: its icon on a tile, the selected chip when it's open.
-struct BarEssentialTile: View {
+/// The Essentials box's surface, the same at rest and open so it reads as one box changing size.
+/// At rest it's a quiet well like the sidebar's Essentials. It sits on the space's own colour,
+/// so the page doesn't show through where it grows over it. Open, a hairline and a floating
+/// shadow fade in to lift it off the page.
+struct EssentialsSurface: View {
+    let open: Bool
+    var targeted = false
+    @Environment(\.spaceTintHex) private var tintHex
+    @Environment(\.controlActiveState) private var activeState
+
+    var body: some View {
+        let shape = Theme.Radius.shape(Theme.Radius.card)
+        let active = SpaceTintBackground.forceActive || activeState == .key || activeState == .active
+        let base = Theme.Palette.sidebarColor(tintHex, active: active)
+        ZStack {
+            shape.fill(base)
+            GrainOverlay().clipShape(shape)
+            shape.fill(targeted ? Theme.Palette.fieldHover : Theme.Palette.field)
+        }
+        .overlay(shape.strokeBorder(Theme.Palette.hairline, lineWidth: 0.5).opacity(open ? 1 : 0))
+        .background(shape.fill(base).themeShadow(.floating).opacity(open ? 1 : 0))
+    }
+}
+
+/// One Essential in a box, in the tab bar or the icon column: its icon on a tile, the selected
+/// chip when it's the page you're on. `vertical` is the icon column's box, whose tiles run down
+/// in columns, so a drop lands above or below a tile rather than beside it.
+struct EssentialBoxTile: View {
     @ObservedObject var tab: Tab
+    var vertical = false
+    /// After a click: the box shrinks back.
+    var onPick: () -> Void = {}
     @EnvironmentObject var model: BrowserModel
     @State private var hovering = false
     @State private var indicator: TabBarDropIndicator?
@@ -179,44 +208,58 @@ struct BarEssentialTile: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
         }
-        .overlay(alignment: indicator == .after ? .trailing : .leading) {
+        .overlay(alignment: overlayAlignment) {
             // Where a dragged Essential would land.
             if indicator == .before || indicator == .after {
-                Capsule().fill(Color.accentColor).frame(width: 2).padding(.vertical, 4)
-                    .offset(x: indicator == .after ? 2 : -2)
+                let sign: CGFloat = indicator == .after ? 2 : -2
+                if vertical {
+                    Capsule().fill(Color.accentColor).frame(height: 2).padding(.horizontal, 4).offset(y: sign)
+                } else {
+                    Capsule().fill(Color.accentColor).frame(width: 2).padding(.vertical, 4).offset(x: sign)
+                }
             }
         }
         .motion(Motion.hover, value: hovering, fadeOnly: true)
         .motion(Motion.hover, value: selected, fadeOnly: true)
         .contentShape(Rectangle())
         .onTapGesture {
+            HoverCards.shared.hide()
             TabClick.perform(tab, model: model)
-            TabBarState.shared.closeEssentials()
+            onPick()
         }
         .simultaneousGesture(TapGesture(count: 2).onEnded { if tab.isAwayFromPin { model.resetPinned(tab) } })
         .onHover { hovering = $0 }
         .onDrag {
+            HoverCards.shared.hide()
             SidebarDrag.shared.begin([tab.id])
             return ItemDrag.provider(tab.id)
         }
-        .onDrop(of: [ItemDrag.type], delegate: EssentialDropDelegate(tab: tab, model: model, indicator: $indicator))
+        .onDrop(of: [ItemDrag.type], delegate: EssentialDropDelegate(tab: tab, vertical: vertical, model: model, indicator: $indicator))
         .contextMenu { TabMenu(tab: tab) }
-        .help(tab.displayTitle)
-        .accessibilityLabel(tab.displayTitle)
+        .hoverCard(tab)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private var overlayAlignment: Alignment {
+        if vertical { return indicator == .after ? .bottom : .top }
+        return indicator == .after ? .trailing : .leading
     }
 }
 
-/// Drops on an Essential reorder Essentials: the left half lands before it, the right half after.
+/// Drops on an Essential reorder Essentials: the left or top half lands before it, the right or
+/// bottom half after.
 struct EssentialDropDelegate: DropDelegate {
     let tab: Tab
+    var vertical = false
     let model: BrowserModel
     @Binding var indicator: TabBarDropIndicator?
 
     func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [ItemDrag.type]) }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        indicator = info.location.x < EssentialsBoxGeometry.tileWidth / 2 ? .before : .after
+        indicator = vertical
+            ? (info.location.y < IconEssentials.tileHeight / 2 ? .before : .after)
+            : (info.location.x < EssentialsBoxGeometry.tileWidth / 2 ? .before : .after)
         return DropProposal(operation: .move)
     }
 

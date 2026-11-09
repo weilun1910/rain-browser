@@ -395,7 +395,22 @@ struct NewTabMenu: View {
         Button("Clear tabs") { TodaySweep.shared.run { _ = model.clearToday() } }
             .disabled(model.refs(in: .today).isEmpty)
         Divider()
-        Button("Show tabs in the sidebar") { TabLayoutSwitch.set(.sidebar) }
+        TabModeItems()
+    }
+}
+
+/// The three ways to show tabs, with a check on the one showing. The right-click menu on the
+/// sidebar, the icon column and the tab bar all end with these, so you can get from any of them
+/// to any other.
+struct TabModeItems: View {
+    @ObservedObject private var prefs = BrowserPrefs.shared
+    var body: some View {
+        Section("Show Tabs") {
+            ForEach(TabMode.allCases, id: \.self) { mode in
+                Toggle(mode.title, isOn: Binding(get: { TabMode.of(prefs.value) == mode },
+                                                 set: { if $0 { TabMode.set(mode) } }))
+            }
+        }
     }
 }
 
@@ -681,8 +696,8 @@ struct BarPinnedTab: View {
             return ItemDrag.provider(ids: ids)
         }
         .contextMenu { TabMenu(tab: tab) }
-        .help(tab.isWeb ? "\(tab.displayTitle)\n\(tab.url.map { Snippet.prettyURL($0.absoluteString) } ?? "")" : tab.displayTitle)
-        .accessibilityLabel(tab.displayTitle)
+        // Only its icon shows, so its name and site come up in a card under it.
+        .hoverCard(tab)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }

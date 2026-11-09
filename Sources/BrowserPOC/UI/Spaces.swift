@@ -90,7 +90,7 @@ struct SpaceButton: View {
             .contentShape(Rectangle())
             .onTapGesture { model.switchSpace(to: space.id) }
             .onHover { hovering = $0 }
-            .help(index < 9 ? "\(space.name)  (Ctrl-\(index + 1))" : space.name)
+            .hoverCard(id: space.id, title: space.name, detail: index < 9 ? "Ctrl-\(index + 1)" : nil)
             .onDrop(of: [ItemDrag.type], isTargeted: nil) { providers in
                 ItemDrag.loadItems(providers) { items in
                     for item in items {

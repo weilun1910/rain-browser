@@ -14,6 +14,9 @@ enum SidebarWidthTests {
             layout()
             dragging()
             essentialsBloom()
+            columnBox()
+            tabModes()
+            hoverCards()
             BrowserPrefs.shared.update { $0 = before }
             SidebarResize.headless = false
         }
@@ -68,7 +71,85 @@ enum SidebarWidthTests {
         b.hover(column: false)
         _ = SelfTest.spin(Motion.Timing.revealDwell + 0.2) { b.isOpen }
         check(!b.isOpen, "a pointer that only passes through never opens it")
+        b.hover(column: true)
+        _ = SelfTest.spin(1) { b.isOpen }
+        check(b.isShown && b.isOpen, "the copy over the page is up while the box is grown")
+        b.close()
+        _ = SelfTest.spin(1) { !b.isShown }
+        check(!b.isOpen && !b.isShown, "picking a tile shrinks the box and hands it back to the column")
         b.reset()
+    }
+
+    /// The icon column's box grows sideways only: the same height at rest and grown, and the
+    /// first three tiles in one column where they always are.
+    @MainActor
+    static func columnBox() {
+        let e = IconEssentials.self
+        check(e.height(8) == e.height(3) && e.height(2) < e.height(3), "the box is three tiles tall whether it's at rest or grown")
+        check(e.openWidth(3) == e.boxWidth && e.openWidth(4) > e.boxWidth && e.openWidth(7) > e.openWidth(6),
+              "it grows a column per three Essentials, and not at all with three")
+        check((0..<3).allSatisfy { e.origin($0).x == e.pad } && e.origin(3).x > e.pad && e.origin(3).y == e.origin(0).y,
+              "the first three keep their column, and the fourth starts the next one at the top")
+        check(e.tileWidth + 2 * e.pad == e.boxWidth && e.boxWidth == Theme.Space.sidebarIconWidth - 2 * Theme.Space.sidebarInset,
+              "at rest the box fills the column between its insets")
+    }
+
+    /// The three ways to show tabs, as the right-click menu lists them.
+    @MainActor
+    static func tabModes() {
+        var p = BrowserPrefsValue()
+        check(TabMode.of(p) == .sidebar, "a new profile shows the sidebar")
+        p.sidebarIconsOnly = true
+        check(TabMode.of(p) == .icons, "icons only is its own mode")
+        p.sidebarHidden = true
+        check(TabMode.of(p) == .sidebar, "compact mode's floating sidebar has titles, so it counts as the sidebar")
+        p.tabLayout = .horizontal
+        check(TabMode.of(p) == .bar, "the tab bar wins over the sidebar's own settings")
+
+        let before = BrowserPrefs.shared.value
+        BrowserPrefs.shared.update { $0.tabLayout = .horizontal; $0.sidebarIconsOnly = false; $0.sidebarHidden = true }
+        TabMode.set(.icons)
+        let v = BrowserPrefs.shared.value
+        check(v.tabLayout == .sidebar && v.sidebarIconsOnly && !v.sidebarHidden && TabMode.current == .icons,
+              "picking icons from the tab bar brings back the sidebar as the icon column")
+        TabMode.set(.sidebar)
+        check(TabMode.current == .sidebar && !BrowserPrefs.shared.value.sidebarIconsOnly, "picking the sidebar brings titles back")
+        TabMode.set(.bar)
+        check(TabMode.current == .bar, "picking the tab bar moves tabs to the top")
+        BrowserPrefs.shared.update { $0 = before }
+    }
+
+    /// Hover cards wait the first time, then follow the pointer from icon to icon at once.
+    @MainActor
+    static func hoverCards() {
+        let c = HoverCards.shared
+        c.hide()
+        _ = SelfTest.spin(HoverCards.warm + 0.1) { false }
+        func item(_ id: String) -> HoverCardItem {
+            HoverCardItem(id: id, title: id, detail: nil, frame: .zero, bounds: .zero, side: .trailing)
+        }
+        c.enter(item("a"))
+        check(c.item == nil, "a card doesn't show the moment the pointer arrives")
+        _ = SelfTest.spin(1) { c.item != nil }
+        check(c.item?.id == AnyHashable("a"), "it shows once the pointer rests")
+        c.leave("a")
+        c.enter(item("b"))
+        check(c.item?.id == AnyHashable("b"), "moving to the next icon swaps the card at once")
+        c.leave("b")
+        _ = SelfTest.spin(1) { c.item == nil }
+        check(c.item == nil, "it goes when the pointer leaves")
+        c.enter(item("c"))
+        check(c.item?.id == AnyHashable("c"), "coming back to another icon within 300 ms shows its card at once")
+        c.leave("c")
+        c.enter(item("d"))
+        c.leave("d")
+        _ = SelfTest.spin(HoverCards.delay + 0.2) { false }
+        c.hide()
+        _ = SelfTest.spin(HoverCards.warm + 0.1) { false }
+        c.enter(item("e"))
+        c.leave("e")
+        _ = SelfTest.spin(HoverCards.delay + 0.2) { c.item != nil }
+        check(c.item == nil, "passing over an icon without resting never shows its card")
     }
 
     @MainActor

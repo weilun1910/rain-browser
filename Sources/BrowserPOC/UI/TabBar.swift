@@ -173,6 +173,7 @@ struct TabBarLayout: View {
                 .frame(height: Theme.Space.titleBarHeight)
             TabStrip()
                 .frame(height: TabBarMetrics.stripHeight)
+                .environment(\.hoverCardSide, .bottom)
             HStack(spacing: 0) {
                 ContentArea()
                     .padding(.top, TabBarMetrics.contentTop)
@@ -193,6 +194,7 @@ struct TabBarLayout: View {
                     if let a = anchors["essentials"] {
                         let r = g[a]
                         EssentialsBox(rest: r.size)
+                            .environment(\.hoverCardSide, .bottom)
                             .offset(x: r.minX, y: r.minY)
                     }
                     if state.spaceMenuOpen, let a = anchors["picker"] {
@@ -209,6 +211,8 @@ struct TabBarLayout: View {
                 .frame(width: g.size.width, height: g.size.height, alignment: .topLeading)
             }
         }
+        // The name of a pinned tab or Essential under the pointer.
+        .overlay { HoverCardLayer() }
         .background(TabBarTint(strip: SpaceStrip.of(model)))
         .overlay { CommandBarOverlay(bar: model.bar) }
         .overlay { if let s = model.switcher { SwitcherOverlay(state: s).modifier(DelayedAppear(delay: Motion.Timing.switcherDelay)) } }
@@ -237,15 +241,21 @@ extension Motion.Transitions {
 // MARK: - Toolbar
 
 /// The top row: room for the traffic lights, the space menu, back, forward and reload, the
-/// address field in the middle, and the app's own buttons on the right, as in Safari.
+/// address field in the middle, and the app's own buttons on the right, as in Safari. The
+/// sidebar's icon column uses it too, without the space menu, since the column lists the spaces:
+/// like Chrome's collapsed tabs, the address moves up to a row across the window and the
+/// traffic lights sit in it.
 struct TabBarToolbar: View {
+    var spaceMenu = true
     @EnvironmentObject var model: BrowserModel
 
     var body: some View {
         HStack(spacing: 2) {
             Color.clear.frame(width: Theme.Space.trafficLightsWidth - Theme.Space.windowMargin)
-            SpacePickerButton()
-                .padding(.trailing, Theme.Space.s)
+            if spaceMenu {
+                SpacePickerButton()
+                    .padding(.trailing, Theme.Space.s)
+            }
             // Back and forward here, and reload at the end of the address field, as in Safari.
             if let tab = model.currentTab, tab.kind == .web {
                 BackForward(tab: tab)

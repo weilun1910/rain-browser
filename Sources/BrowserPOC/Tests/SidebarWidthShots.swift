@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import WebKit
 
 /// `--sidebar-shots <out> --profile <demo profile>`: the sidebar at its default, narrowest and a
 /// wide width, then icons only on the left, on the right and floating in compact mode, rendered
@@ -49,6 +50,7 @@ enum SidebarWidthShots {
         BrowserModel.useEphemeralStore = true
         SpaceTintBackground.forceActive = true
         Motion.forceReduce = true
+        HoverCards.shared.recorded = [:]
         // Offscreen there's no display link, so a space switch's fade and a reveal's slide never
         // finish. With motion held, every change lands at once.
         MotionSuppression.set(.launch, true)
@@ -116,9 +118,50 @@ enum SidebarWidthShots {
         settle()
         shoot("3-wide")
 
+        // Right-click on the sidebar's empty space offers the three ways to show tabs, and a tab
+        // keeps its own menu. An empty space has room to click.
+        let home = model.currentSpaceID
+        let empty = model.createSpace(name: "Menu check")
+        model.switchSpace(to: empty.id)
+        settle()
+        let midY = window.contentView!.bounds.height / 2
+        menuCheck(window, label: "the sidebar's empty space", at: NSPoint(x: 120, y: midY), wantsModes: true, check)
+        resize.setIconsOnly(true)
+        settle()
+        menuCheck(window, label: "the icon column's empty space", at: NSPoint(x: 28, y: midY), wantsModes: true, check)
+        resize.setIconsOnly(false)
+        model.switchSpace(to: home)
+        model.deleteSpace(empty.id)
+        settle()
+
         resize.setIconsOnly(true)
         settle()
         shoot("4-icons")
+        if let root = window.contentView {
+            // The traffic lights sit in the toolbar, above the column, and the page starts below it.
+            let close = window.standardWindowButton(.closeButton).map { $0.convert($0.bounds, to: nil) } ?? .zero
+            let lightsBottom = root.bounds.height - close.minY
+            check(lightsBottom < Theme.Space.titleBarHeight, "with icons only the traffic lights sit in the toolbar row",
+                  "bottom \(Int(lightsBottom)) of \(Int(Theme.Space.titleBarHeight))")
+            let field = root.superview?.hitTest(NSPoint(x: root.bounds.width / 2, y: root.bounds.height - Theme.Space.titleBarHeight / 2))
+            check(field != nil && !(field is WKWebView), "the toolbar across the top answers clicks", field.map { String(describing: type(of: $0)) } ?? "nothing")
+        }
+        if let chip = firstChip(window) {
+            let (_, titles) = menuTitles(window, at: chip)
+            check(titles.contains("Close") && TabMode.allCases.allSatisfy { titles.contains($0.title) },
+                  "a right-click on a tab in the icon column keeps the tab's menu and adds the three tab modes",
+                  titles.filter { !$0.isEmpty }.joined(separator: ", "))
+        } else {
+            check(false, "found a tab in the icon column to right-click", "")
+        }
+        // The card a pinned tab in the column shows when the pointer rests on it.
+        if let pin = model.refs(in: .pinned).first, case .tab(let id) = pin {
+            LookRenders.skipWeb = true
+            showCard(for: id, side: .trailing, label: "a tab in the icon column shows its name in a card beside it", outside: false, check)
+            shoot("12-icons-hover-card")
+            LookRenders.skipWeb = false
+        }
+        HoverCards.shared.hide()
         // The other spaces, for what each one's column looks like.
         for name in ["Swapshelf", "Job hunt"] {
             if let sp = model.spaces.first(where: { $0.name == name }) {
@@ -159,6 +202,12 @@ enum SidebarWidthShots {
         EssentialsBloom.shared.forced = true
         settle()
         shoot("10-icons-essentials-open")
+        // A hidden Essential's card sits past the grown box, so it never covers the next column.
+        if let hidden = model.essentials.last {
+            showCard(for: hidden.id, side: .trailing, label: "an Essential in the grown box shows its card past the box's edge", outside: true, check)
+            shoot("13-icons-essentials-hover-card")
+            HoverCards.shared.hide()
+        }
         if let root = window.contentView {
             // A point in the grown box's second column, out past the column over the page.
             let p = NSPoint(x: SidebarWidth.icons + 14, y: root.bounds.height - 140)
@@ -173,7 +222,7 @@ enum SidebarWidthShots {
         EssentialsBloom.shared.forced = false
         LookRenders.skipWeb = false
 
-        // The command bar grows out of the search icon.
+        // The command bar grows out of the address field in the toolbar.
         model.focusAddress()
         _ = SmokeTest.wait(0.6) { false }
         shoot("8-icons-command-bar")
@@ -183,6 +232,55 @@ enum SidebarWidthShots {
         print(failed == 0 ? "Done." : "\(failed) checks failed.")
         Intelligence.shared.shutdown()
         return failed == 0 ? 0 : 1
+    }
+
+    /// The menu a right-click at `p` (window coordinates) would show, asked of the view AppKit
+    /// hits there and its ancestors, without opening it.
+    static func menuTitles(_ window: NSWindow, at p: NSPoint) -> (hit: String, titles: [String]) {
+        guard let root = window.contentView, let hit = root.superview?.hitTest(p),
+              let e = NSEvent.mouseEvent(with: .rightMouseDown, location: p, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                         windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) else { return ("nothing", []) }
+        var v: NSView? = hit
+        while let x = v {
+            if let m = x.menu(for: e) { return (String(describing: type(of: hit)), m.items.map(\.title)) }
+            v = x.superview
+        }
+        return (String(describing: type(of: hit)), [])
+    }
+
+    static func menuCheck(_ window: NSWindow, label: String, at p: NSPoint, wantsModes: Bool, _ check: (Bool, String, String) -> Void) {
+        let (hit, titles) = menuTitles(window, at: p)
+        let modes = TabMode.allCases.allSatisfy { m in titles.contains(m.title) }
+        check(modes == wantsModes, "a right-click on \(label) \(wantsModes ? "offers" : "doesn't offer") the three tab modes",
+              "hit \(hit): \(titles.filter { !$0.isEmpty }.joined(separator: ", "))")
+    }
+
+    /// A point on a tab in the icon column, found by walking down the column until a right-click
+    /// there would show a tab's menu.
+    static func firstChip(_ window: NSWindow) -> NSPoint? {
+        guard let h = window.contentView?.bounds.height else { return nil }
+        for fromTop in stride(from: 260.0, to: h - 200, by: 8) {
+            let p = NSPoint(x: 28, y: h - fromTop)
+            if menuTitles(window, at: p).titles.contains("Close") { return p }
+        }
+        return nil
+    }
+
+    /// The card a tab's icon would show, shown as if the pointer rested there. An offscreen window
+    /// gets no pointer, so this reads the card the icon recorded rather than hovering it.
+    static func showCard(for id: UUID, side: Edge, label: String, outside: Bool, _ check: (Bool, String, String) -> Void) {
+        let cards = HoverCards.shared
+        cards.hide()
+        guard let i = cards.recorded?[AnyHashable(id)] else {
+            check(false, label, "the icon recorded no card")
+            return
+        }
+        cards.enter(i)
+        _ = SmokeTest.wait(1) { cards.item != nil }
+        let beside = side == .trailing ? i.bounds.maxX <= i.frame.maxX + 0.5 || outside : true
+        check(cards.item?.id == i.id && i.side == side && !i.title.isEmpty && beside
+              && (outside ? i.bounds.width > i.frame.width : true),
+              label, "\(i.title), \(i.detail ?? "no detail"), icon at \(Int(i.frame.minX)),\(Int(i.frame.minY)), card past x \(Int(i.bounds.maxX))")
     }
 
     /// Real mouse events on the sidebar's edge, at the top, middle and bottom of the window: what

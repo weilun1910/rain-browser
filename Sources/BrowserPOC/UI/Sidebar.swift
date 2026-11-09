@@ -31,40 +31,27 @@ struct LeftSidebar: View {
         }
         .padding(.horizontal, Theme.Space.sidebarInset)
         .background(SpaceSwipeTracker(model: model))
+        // Right-click anywhere a row doesn't have its own menu: new things, and the three ways
+        // to show tabs.
+        .contextMenu { NewTabMenu() }
     }
 
     // MARK: Icons only
 
-    /// The title bar row for the traffic lights, then the button that brings titles back and the
-    /// address field as one icon.
+    /// The button that brings titles back, at the top of the column like Chrome's. The address
+    /// field and the traffic lights are in the toolbar across the window.
     private var iconTop: some View {
-        VStack(spacing: Theme.Space.xs) {
-            WindowDragArea().frame(height: Theme.Space.titleBarHeight)
-            IconButton(symbol: BrowserPrefs.shared.value.sidebarOnRight ? "sidebar.right" : "sidebar.left", help: "Show titles",
-                       width: Theme.Space.sidebarIconWidth - 2 * Theme.Space.sidebarInset, height: 28, symbolSize: 13) {
-                SidebarResize.shared.setIconsOnly(false)
-            }
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(addressHover ? .primary : .secondary)
-                .frame(maxWidth: .infinity)
-                .frame(height: 32)
-                .background(Theme.Radius.shape(Theme.Radius.row).fill(addressHover ? Theme.Palette.fieldHover : Theme.Palette.field))
-                // The command bar grows out of this, the way it grows out of the address field.
-                .background(AddressFieldFrame())
-                .contentShape(Rectangle())
-                .onTapGesture { model.focusAddress() }
-                .onHover { addressHover = $0 }
-                .motion(Motion.hover, value: addressHover, fadeOnly: true)
-                .help(model.addressText.isEmpty ? "Search or enter address (Cmd-L)" : Snippet.prettyURL(model.addressText))
+        IconButton(symbol: BrowserPrefs.shared.value.sidebarOnRight ? "sidebar.right" : "sidebar.left", help: "Show titles (Ctrl-Cmd-S)",
+                   width: Theme.Space.sidebarIconWidth - 2 * Theme.Space.sidebarInset, height: 28, symbolSize: 13) {
+            SidebarResize.shared.setIconsOnly(false)
         }
+        .padding(.top, TabBarMetrics.contentTop)
     }
 
-    /// Downloads, the spaces in a column, and one menu for what the full bottom bar and the
-    /// section headers hold.
+    /// The spaces in a column, and one menu for what the full bottom bar and the section headers
+    /// hold. Downloads, History, Graph and Settings are in the toolbar.
     private var iconBottom: some View {
         VStack(spacing: Theme.Space.xs) {
-            DownloadsButton()
             SpaceBar()
             IconSidebarMenu()
         }
@@ -658,10 +645,12 @@ struct TabRow: View {
             .onHover { hovering = $0 }
             .onDrag { dragProvider() }
             .contextMenu { TabMenu(tab: tab) }
-            .help(tab.isWeb ? "\(tab.displayTitle)\n\(tab.url.map { Snippet.prettyURL($0.absoluteString) } ?? "")" : tab.displayTitle)
+            // Its name and site in a card beside it, since the column has no room for titles.
+            .hoverCard(tab)
     }
 
     private func dragProvider() -> NSItemProvider {
+        HoverCards.shared.hide()
         let picked = model.multiSelection.contains(tab.id) && model.multiSelection.count > 1
         let ids = picked ? model.multiSelectedTabs.map { $0.id } : [tab.id]
         SidebarDrag.shared.begin(ids)
@@ -767,6 +756,10 @@ struct TabMenu: View {
 
     var body: some View {
         if multi.count > 1 { multiMenu } else if tab.isNote { noteMenu } else { webMenu }
+        // Like Chrome, any tab's menu also switches how tabs show. In the icon column the
+        // tabs fill most of the space, so this is where a right-click usually lands.
+        Divider()
+        TabModeItems()
     }
 
     @ViewBuilder var multiMenu: some View {
@@ -956,7 +949,7 @@ struct MediaRow: View {
                 Button("Go to tab") { model.select(tab) }
             }
             .transition(Motion.Transitions.tabRow)
-            .help("Playing in \(tab.displayTitle). Click to \(tab.mediaPlaying ? "pause" : "play").")
+            .hoverCard(id: "media-\(tab.id)", title: tab.displayTitle, detail: tab.mediaPlaying ? "Playing. Click to pause." : "Paused. Click to play.")
     }
 
     private var row: some View {
@@ -1018,8 +1011,6 @@ struct IconSidebarMenu: View {
 
     var body: some View {
         Menu {
-            Button("Show Titles") { SidebarResize.shared.setIconsOnly(false) }
-            Divider()
             Button("New Note") { model.newNote() }
             Button("New Folder...") { model.promptNewFolder() }
             Button("New Space...") { model.promptNewSpace() }
@@ -1027,11 +1018,7 @@ struct IconSidebarMenu: View {
                 Button("Clear Tabs") { TodaySweep.shared.run { _ = model.clearToday() } }
             }
             Divider()
-            Button("Show or Hide Related") { RelatedPrefs.shared.toggleVisible() }
-            Button("History") { model.openAppPage("history") }
-            Button("Graph") { model.openGraph() }
-            Divider()
-            Button("Settings...") { AppDelegate.shared?.openSettings() }
+            TabModeItems()
         } label: {
             Image(systemName: "ellipsis")
         }

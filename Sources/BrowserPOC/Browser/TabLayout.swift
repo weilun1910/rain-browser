@@ -37,6 +37,53 @@ enum TabLayoutSwitch {
     static func applies(_ actionID: String) -> Bool { applies(actionID, in: current) }
 }
 
+/// The three ways to show tabs, as the right-click menu on the sidebar, the icon column and the
+/// tab bar offers them: the sidebar with titles, the sidebar as a column of icons, or the bar
+/// along the top.
+enum TabMode: CaseIterable {
+    case sidebar, icons, bar
+
+    var title: String {
+        switch self {
+        case .sidebar: return "Sidebar"
+        case .icons: return "Sidebar Icons Only"
+        case .bar: return "Tab Bar"
+        }
+    }
+
+    /// Compact mode's floating sidebar always has titles, so it counts as the sidebar.
+    static func of(_ p: BrowserPrefsValue) -> TabMode {
+        if p.tabLayout == .horizontal { return .bar }
+        return p.sidebarIconsOnly && !p.sidebarHidden ? .icons : .sidebar
+    }
+
+    @MainActor static var current: TabMode { of(BrowserPrefs.shared.value) }
+
+    @MainActor static func set(_ mode: TabMode) {
+        guard mode != current else { return }
+        switch mode {
+        case .bar:
+            TabLayoutSwitch.set(.horizontal)
+        case .sidebar, .icons:
+            let icons = mode == .icons
+            if TabLayoutSwitch.isHorizontal {
+                // The layouts swap at once, so the sidebar arrives already in its new form.
+                BrowserPrefs.shared.update { p in
+                    p.sidebarIconsOnly = icons
+                    if icons { p.sidebarHidden = false }
+                }
+                TabLayoutSwitch.set(.sidebar)
+            } else if icons && BrowserPrefs.shared.value.sidebarHidden {
+                // Picking icons in compact mode brings the sidebar back as the column, since the
+                // floating sidebar only ever shows titles.
+                Motion.run(Motion.sidebarToggle) { BrowserPrefs.shared.update { $0.sidebarHidden = false; $0.sidebarIconsOnly = true } }
+            } else {
+                SidebarResize.shared.setIconsOnly(icons)
+            }
+        }
+    }
+}
+
 /// The tab bar's rules, as plain values and pure functions so the self test can check them. The
 /// numbers come from notes/research/2026-11-06-horizontal-tabs.md.
 enum TabBarRules {
