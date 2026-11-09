@@ -311,20 +311,24 @@ struct NotePreview: View {
     @State private var preview: NotePreviewCache.Preview?
 
     var body: some View {
+        // The first lines of the note, like the top of a page. Its name is under the card, so
+        // the card doesn't repeat it.
         ZStack(alignment: .topLeading) {
             Theme.Palette.sheet
-            VStack(alignment: .leading, spacing: 6) {
-                Text(preview?.title ?? entry.name)
-                    .font(.system(size: 12, weight: .semibold))
-                    .lineLimit(2)
-                Text(preview?.body ?? "")
-                    .font(.system(size: 10.5))
+            if let body = preview?.body, !body.isEmpty {
+                Text(body)
+                    .font(.system(size: 11))
                     .foregroundStyle(.secondary)
-                    .lineSpacing(2)
-                    .lineLimit(6)
+                    .lineSpacing(2.5)
+                    .lineLimit(8)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+            } else if preview != nil {
+                Image(systemName: "doc.text")
+                    .font(.system(size: 26, weight: .light))
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
             if entry.isLink { LinkBadge().padding(8).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing) }
         }
         .task(id: entry.id) { preview = await NotePreviewCache.shared.preview(entry.target) }

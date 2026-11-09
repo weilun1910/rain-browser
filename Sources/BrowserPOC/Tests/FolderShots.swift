@@ -86,8 +86,12 @@ enum FolderShots {
 
         // A click on the popup over the page reaches the popup, and one beside it closes it.
         if let root = window.contentView {
-            let size = FolderPopupLayer.panelSize(in: root.bounds.size)
-            let mid = NSPoint(x: root.bounds.midX + size.width * 0.2, y: root.bounds.midY)
+            let r = popup.panelFrame
+            // The panel's frame counts from the top left, and window points from the bottom left.
+            let mid = NSPoint(x: r.midX + r.width * 0.2, y: root.bounds.height - r.midY)
+            let side = SidebarResize.shared.current.width
+            check(r.width > 0 && r.minX >= side, "the popup sits over the page and leaves the sidebar in view",
+                  "panel from x \(Int(r.minX)), sidebar \(Int(side)) wide")
             let hit = root.superview?.hitTest(mid)
             let name = hit.map { String(describing: type(of: $0)) } ?? "nothing"
             var v: NSView? = hit

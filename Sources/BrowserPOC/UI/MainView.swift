@@ -76,8 +76,11 @@ struct MainView: View {
                               leadingClear: hidden || right ? 0 : sidebarWidth,
                               trailingClear: hidden || !right ? 0 : sidebarWidth)
         }
-        // The folder popup, over everything, including the page's web view.
-        .overlay { FolderPopupLayer() }
+        // The folder popup, over the page area and its web view, with the sidebar left in view.
+        .overlay {
+            FolderPopupLayer(leadingClear: hidden || right ? 0 : sidebarWidth,
+                             trailingClear: hidden || !right ? 0 : sidebarWidth)
+        }
         // Ctrl-Tab shows its panel only if Ctrl is still held a moment later, like Cmd-Tab.
         .overlay { if let s = model.switcher { SwitcherOverlay(state: s).modifier(DelayedAppear(delay: Motion.Timing.switcherDelay)) } }
         .overlay { StartupOverlayHost() }

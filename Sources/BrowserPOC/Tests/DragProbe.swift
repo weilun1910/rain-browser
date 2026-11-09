@@ -221,10 +221,11 @@ enum DragProbe {
             if let tab = Optional(page), let u = tab.url {
                 popup.open(model)
                 spin(0.8)
-                let size = FolderPopupLayer.panelSize(in: content.bounds.size)
-                let x0 = (content.bounds.width - size.width) / 2, y0 = (content.bounds.height - size.height) / 2
+                // The panel's frame counts from the top left. Drops here are in window
+                // coordinates, which count from the bottom left.
+                let r = popup.panelFrame
                 // Low in the grid, past the cards.
-                let at = NSPoint(x: x0 + size.width - 70, y: y0 + 50)
+                let at = NSPoint(x: r.maxX - 70, y: content.bounds.height - r.maxY + 50)
                 let op = drag(ItemDrag.provider(tab.id), from: NSPoint(x: 40, y: at.y), to: at, items: [.tab(tab.id)])
                 spin(0.5)
                 let saved = SpaceFolders.list(schoolDir).contains { $0.page.map { URLKey.key(for: $0) == URLKey.key(for: u) } ?? false }

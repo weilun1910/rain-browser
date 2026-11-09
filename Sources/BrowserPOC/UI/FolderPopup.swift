@@ -48,6 +48,8 @@ final class FolderPopup: ObservableObject {
     private(set) var origin: CGRect?
     /// Where the buttons that open it sit, by name, in window coordinates.
     var anchors: [String: CGRect] = [:]
+    /// Where the panel sits while it's open, in window coordinates from the top left.
+    var panelFrame: CGRect = .zero
     /// How many cards fit across, for the arrow keys.
     var columns = 4
 
@@ -377,14 +379,28 @@ final class FolderPopup: ObservableObject {
 
 // MARK: - The layer over the window
 
-/// Drawn over the whole window from the layout's root, above the page's web view, so clicks on
-/// the popup reach it and not the page.
+/// Drawn from the layout's root, above the page's web view, so clicks on the popup reach it and
+/// not the page. It covers the page area and leaves the sidebar alone, so the pinned folders stay
+/// in view to drag things onto. A click on the sidebar that picks another tab or space closes it.
 struct FolderPopupLayer: View {
     @ObservedObject var popup = FolderPopup.shared
     @EnvironmentObject var model: BrowserModel
+    /// The sidebar's width on either side, kept clear.
+    var leadingClear: CGFloat = 0
+    var trailingClear: CGFloat = 0
 
+    /// The panel fills the page area, less a margin, up to 1100 by 760.
     static func panelSize(in size: CGSize) -> CGSize {
-        CGSize(width: min(1100, (size.width * 0.8).rounded()), height: min(760, (size.height * 0.8).rounded()))
+        CGSize(width: min(1100, max(0, size.width - 2 * sideMargin).rounded()),
+               height: min(760, (size.height * 0.8).rounded()))
+    }
+    static let sideMargin: CGFloat = 32
+
+    /// The panel, centred in the layer.
+    static func panelFrame(in layer: CGRect) -> CGRect {
+        let s = panelSize(in: layer.size)
+        return CGRect(x: layer.minX + (layer.width - s.width) / 2, y: layer.minY + (layer.height - s.height) / 2,
+                      width: s.width, height: s.height)
     }
 
     var body: some View {
@@ -403,7 +419,14 @@ struct FolderPopupLayer: View {
                 }
             }
             .frame(width: g.size.width, height: g.size.height)
+            // Worked out from the layer rather than measured, so the grow animation doesn't skew it.
+            .onAppear { popup.panelFrame = Self.panelFrame(in: frame) }
+            .onChange(of: frame) { _, f in popup.panelFrame = Self.panelFrame(in: f) }
         }
+        .padding(.leading, leadingClear)
+        .padding(.trailing, trailingClear)
+        .onChange(of: model.selection) { _, _ in if popup.isOpen && !popup.suspended { popup.close() } }
+        .onChange(of: model.currentSpaceID) { _, _ in if popup.isOpen { popup.close() } }
     }
 }
 
