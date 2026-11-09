@@ -96,6 +96,8 @@ struct LeftSidebar: View {
                     .opacity(addressHover ? 1 : 0)
                     .motion(Motion.hover, value: addressHover, fadeOnly: true)
             }
+            // Save Page to Folder, filled in when the page is already saved.
+            if let tab = model.currentWebTab, tab.url != nil, model.spaceFoldersOn { SavePageButton(tab: tab) }
         }
         .padding(.leading, Theme.Space.l - 2)
         .padding(.trailing, Theme.Space.xs)
@@ -207,10 +209,18 @@ struct SpacePage: View {
     }
 
     private var foldersSection: some View {
-        SectionBox(title: "Folders", trailing: AnyView(SmallIconButton(symbol: "plus", help: "New folder") { model.promptNewFolder() }),
+        SectionBox(title: "Folders", trailing: AnyView(HStack(spacing: 0) {
+                       SmallIconButton(symbol: FolderPopup.icon, help: "Show Folders (Option-Cmd-B)") { model.showFolders(from: "folders-header") }
+                           .folderPopupAnchor("folders-header")
+                       SmallIconButton(symbol: "plus", help: "New folder") { model.promptNewFolder() }
+                   }),
                    onDropItems: { items in
                        // A folder dropped on the header goes back to the top level, first.
                        if case .folder(let fid)? = items.first { Motion.run(Motion.insert) { model.placeFolder(fid, in: nil, at: 0) } }
+                       // A folder from the popup is pinned, first. It stays where it is on disk.
+                       for case .entry(let u) in items.reversed() where SpaceFolders.isDirectory(FileLink.resolve(u) ?? u) {
+                           Motion.run(Motion.insert) { _ = model.pinFolder(u, at: 0) }
+                       }
                        SidebarDrag.shared.end()
                    }) {
             ForEach(model.childFolders(of: nil, space: spaceID)) { f in
@@ -246,7 +256,11 @@ struct SpacePage: View {
             }
             SmallIconButton(symbol: "square.and.pencil", help: "New note") { model.newNote() }
         }
-        return SectionBox(title: iconsOnly ? "" : "Tabs", trailing: AnyView(trailing), onDropItems: { items in model.place(items.compactMap(\.sidebarRef), in: .today, at: 0) }) {
+        return SectionBox(title: iconsOnly ? "" : "Tabs", trailing: AnyView(trailing), onDropItems: { items in
+            model.place(items.compactMap(\.sidebarRef), in: .today, at: 0)
+            // Pages and notes dragged out of the folder popup open here.
+            model.openEntriesAsTabs(items.compactMap { if case .entry(let u) = $0 { return u }; return nil })
+        }) {
             Button { model.newTabCommand() } label: {
                 HStack(spacing: Theme.Space.rowIconGap) {
                     Image(systemName: "plus").font(.system(size: 12, weight: .medium)).frame(width: Theme.Space.rowIcon)
@@ -274,7 +288,7 @@ extension DragItem {
         switch self {
         case .tab(let id): return .tab(id)
         case .split(let id): return .split(id)
-        case .folder: return nil
+        case .folder, .entry: return nil
         }
     }
 }
@@ -778,11 +792,20 @@ struct TabMenu: View {
         }
     }
 
+    /// A tab opened from a saved page: back to the saved address, or save where it is now.
+    @ViewBuilder var savedMenu: some View {
+        if tab.keepsSavedURL {
+            Button("Back to Saved Page") { model.resetPinned(tab); model.select(tab) }.disabled(!tab.isAwayFromPin)
+            Button("Update Saved Address") { model.updateSavedAddress(tab) }.disabled(!tab.isAwayFromPin)
+        }
+    }
+
     @ViewBuilder var webMenu: some View {
         splitMenu
         Divider()
         folderMenu
         pinMenu
+        savedMenu
         Divider()
         Button("Rename...") { model.promptRenameTab(tab) }
         if tab.customTitle != nil { Button("Use page title") { model.rename(tab, to: nil) } }
@@ -803,11 +826,23 @@ struct TabMenu: View {
         if !tab.isPinned && !tab.isEssential && tab.folderID == nil {
             Button("Archive") { model.archive(tab) }
         }
-        Button(!(tab.isPinned || tab.folderID != nil || tab.isEssential) ? "Close" : "Remove") { model.remove(tab) }
+        if model.isDiskFolder(tab.folderID) {
+            // Its saved page goes to the Trash, so it can come back.
+            Button("Remove from Folder") { model.removeFromDiskFolder(tab) }
+        } else {
+            Button(!(tab.isPinned || tab.folderID != nil || tab.isEssential) ? "Close" : "Remove") { model.remove(tab) }
+        }
     }
 
     @ViewBuilder var noteMenu: some View {
-        Button("Close") { model.remove(tab) }
+        if model.isDiskFolder(tab.folderID) {
+            // It stays in its folder. Close only puts it away.
+            Button("Close") { model.close(tab) }
+            // A link to a note elsewhere can leave the folder. A note that lives there is deleted with Delete.
+            if !model.isFiledNote(tab) { Button("Remove from Folder") { model.removeFromDiskFolder(tab) } }
+        } else {
+            Button("Close") { model.remove(tab) }
+        }
         if tab.isMissing {
             Button("Locate...") { model.locateNote(tab) }
         } else {
@@ -875,7 +910,7 @@ struct FolderRow: View {
         }
         .onDrop(of: [ItemDrag.type], delegate: FolderDropDelegate(folder: folder, length: Theme.Space.rowHeight, model: model, zone: $zone, spring: spring))
         .contextMenu { FolderMenu(folder: folder) }
-        .hoverCard(id: folder.id, title: folder.name, detail: Self.count(count), enabled: iconsOnly)
+        .hoverCard(id: folder.id, title: folder.name, detail: folder.path == nil ? Self.count(count) : (count == 1 ? "1 item" : "\(count) items"), enabled: iconsOnly)
     }
 
     static func count(_ n: Int) -> String { n == 1 ? "1 tab" : "\(n) tabs" }
@@ -900,7 +935,24 @@ struct FolderMenu: View {
         }
         Divider()
         Button("Rename...") { model.promptRename(folder) }
-        Button("Delete folder") { model.deleteFolder(folder) }
+        if folder.path != nil {
+            // A folder on disk: a pin comes off without deleting anything, and deleting goes to the Trash.
+            if let dir = model.folderDirectory(folder) {
+                Button("Show in Folders") { FolderPopup.shared.open(model, at: dir) }
+                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([dir]) }
+            }
+            Divider()
+            if folder.parentID == nil {
+                Button("Unpin from Sidebar") { Motion.run(Motion.insert) { model.unpinFolder(folder.id) } }
+            } else {
+                if let p = folder.path.flatMap(SpaceFolders.decode) {
+                    Button("Pin to Sidebar") { Motion.run(Motion.insert) { _ = model.pinFolder(p) } }
+                }
+                Button("Move to Trash...") { model.promptTrashDiskFolder(folder) }
+            }
+        } else {
+            Button("Delete folder") { model.deleteFolder(folder) }
+        }
     }
 }
 
@@ -1011,6 +1063,8 @@ struct IconSidebarMenu: View {
 
     var body: some View {
         Menu {
+            Button("Show Folders") { model.showFolders(from: "icon-menu") }
+            Divider()
             Button("New Note") { model.newNote() }
             Button("New Folder...") { model.promptNewFolder() }
             Button("New Space...") { model.promptNewSpace() }
@@ -1026,6 +1080,7 @@ struct IconSidebarMenu: View {
         .buttonStyle(IconButtonStyle(width: 28, height: 24, symbolSize: 12))
         .menuIndicator(.hidden)
         .fixedSize()
+        .folderPopupAnchor("icon-menu")
         .help("More")
     }
 }

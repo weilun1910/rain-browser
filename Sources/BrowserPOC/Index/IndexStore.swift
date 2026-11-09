@@ -1066,6 +1066,12 @@ enum Snippet {
         return h + path
     }
 
+    /// The site alone, without www.
+    static func prettyHost(_ u: URL) -> String? {
+        guard let host = u.host, !host.isEmpty else { return nil }
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+    }
+
     /// Picks a stretch of the passage around the first shared term, starting at a sentence edge.
     /// Drops the lines a card shouldn't open with: Markdown headings, the item's own title and
     /// metadata lines like "Date: ..." at the top.

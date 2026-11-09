@@ -76,6 +76,8 @@ struct MainView: View {
                               leadingClear: hidden || right ? 0 : sidebarWidth,
                               trailingClear: hidden || !right ? 0 : sidebarWidth)
         }
+        // The folder popup, over everything, including the page's web view.
+        .overlay { FolderPopupLayer() }
         // Ctrl-Tab shows its panel only if Ctrl is still held a moment later, like Cmd-Tab.
         .overlay { if let s = model.switcher { SwitcherOverlay(state: s).modifier(DelayedAppear(delay: Motion.Timing.switcherDelay)) } }
         .overlay { StartupOverlayHost() }
@@ -645,6 +647,19 @@ enum SourcesActions {
             for path in paths where !s.notesFolders.contains(path) { s.notesFolders.append(path) }
         }
         AppDelegate.shared?.model.notes.reload()
+    }
+
+    /// A link to a Markdown folder in the current space's folder. The folder stays where it is,
+    /// and its notes are indexed and edited in place.
+    static func linkFolder() {
+        let p = NSOpenPanel()
+        p.canChooseDirectories = true
+        p.canChooseFiles = false
+        p.allowsMultipleSelection = false
+        p.prompt = "Link"
+        p.message = "Pick a folder to link into this space's folder. Nothing is copied."
+        guard p.runModal() == .OK, let u = p.url else { return }
+        AppDelegate.shared?.model.linkFolder(u)
     }
 
     static func removeNotesFolder(_ path: String) {

@@ -89,8 +89,10 @@ struct NoteFolder: Identifiable, Hashable {
 
 /// Lists the notes tree on disk. Only reads directory listings and file attributes.
 enum NotesScan {
-    static func scan(_ root: URL, depth: Int = 0) -> NoteFolder {
-        let keys: [URLResourceKey] = [.isDirectoryKey, .contentModificationDateKey, .ubiquitousItemDownloadingStatusKey, .isPackageKey]
+    /// `skipping` holds other notes roots inside this one, so a file is only ever under one root.
+    static func scan(_ root: URL, depth: Int = 0, skipping: Set<String> = []) -> NoteFolder {
+        let keys: [URLResourceKey] = [.isDirectoryKey, .contentModificationDateKey, .ubiquitousItemDownloadingStatusKey, .isPackageKey,
+                                      .isAliasFileKey, .isSymbolicLinkKey]
         let items = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: keys,
                                                                    options: [.skipsHiddenFiles])) ?? []
         var folders: [NoteFolder] = []
@@ -100,8 +102,11 @@ enum NotesScan {
             let rv = try? u.resourceValues(forKeys: Set(keys))
             if rv?.isDirectory == true {
                 if rv?.isPackage == true || FileSafety.isSkippedFolder(name) || name == ".build" || depth > 12 { continue }
-                folders.append(scan(u, depth: depth + 1))
+                if skipping.contains(u.standardizedFileURL.path) { continue }
+                folders.append(scan(u, depth: depth + 1, skipping: skipping))
             } else if u.pathExtension.lowercased() == "md" && !name.hasPrefix(".") {
+                // A Finder alias named like a note is a pointer, not a note: its bytes aren't text.
+                if rv?.isAliasFile == true && rv?.isSymbolicLink != true { continue }
                 let local = rv?.ubiquitousItemDownloadingStatus != .notDownloaded
                 files.append(NoteFile(url: u, name: u.deletingPathExtension().lastPathComponent,
                                       mtime: rv?.contentModificationDate?.timeIntervalSince1970 ?? 0, isLocal: local))
@@ -209,9 +214,13 @@ final class FolderWatcher {
     private let callback: () -> Void
     /// The watched folders as FSEvents reports them (symlinks resolved), each ending in "/".
     private let roots: [String]
+    private let anyFile: Bool
 
-    init?(paths: [String], callback: @escaping () -> Void) {
+    /// `anyFile` reports changes to every kind of file, for the space folders. Otherwise only
+    /// notes and folders count.
+    init?(paths: [String], anyFile: Bool = false, callback: @escaping () -> Void) {
         self.callback = callback
+        self.anyFile = anyFile
         self.roots = paths.map {
             let r = URL(fileURLWithPath: $0).resolvingSymlinksInPath().standardizedFileURL.path
             return r.hasSuffix("/") ? r : r + "/"
@@ -229,6 +238,7 @@ final class FolderWatcher {
                 let rel = me.roots.first(where: { p.hasPrefix($0) }).map { String(p.dropFirst($0.count)) } ?? p
                 let comps = rel.split(separator: "/")
                 if comps.contains(where: { $0.hasPrefix(".") || $0 == "node_modules" || $0.lowercased().hasSuffix(".nosync") }) { return false }
+                if me.anyFile { return true }
                 let ext = (p as NSString).pathExtension.lowercased()
                 return ext == "md" || ext.isEmpty
             }

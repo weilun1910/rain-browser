@@ -215,6 +215,7 @@ struct TabBarLayout: View {
         .overlay { HoverCardLayer() }
         .background(TabBarTint(strip: SpaceStrip.of(model)))
         .overlay { CommandBarOverlay(bar: model.bar) }
+        .overlay { FolderPopupLayer() }
         .overlay { if let s = model.switcher { SwitcherOverlay(state: s).modifier(DelayedAppear(delay: Motion.Timing.switcherDelay)) } }
         .overlay { StartupOverlayHost() }
         .background(TrafficLights(hidden: false))
@@ -269,6 +270,8 @@ struct TabBarToolbar: View {
                 .layoutPriority(1)
             WindowDragArea().frame(minWidth: Theme.Space.l)
             DownloadsButton()
+            NavButton(symbol: FolderPopup.icon, help: "Folders (Option-Cmd-B)") { model.showFolders(from: "toolbar") }
+                .folderPopupAnchor("toolbar")
             RelatedToggleButton()
             NavButton(symbol: "clock", help: "History (Cmd-Y)") { model.openAppPage("history") }
             NavButton(symbol: GraphTab.icon, help: "Graph (Cmd-Option-G)") { model.openGraph() }
@@ -305,6 +308,7 @@ struct TabBarAddressField: View {
                     .opacity(hovering ? 1 : 0)
                     .motion(Motion.hover, value: hovering, fadeOnly: true)
             }
+            if let tab = model.currentWebTab, tab.url != nil, model.spaceFoldersOn { SavePageButton(tab: tab, size: 22) }
             if let tab = model.currentWebTab, model.currentTab?.kind == .web { FieldReload(tab: tab) }
         }
         .padding(.leading, Theme.Space.l - 2)

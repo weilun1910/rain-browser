@@ -148,9 +148,14 @@ struct AppSettings: Codable, Equatable {
     /// True when no folder is chosen and the app's own Notes folder stands in.
     var usesFallbackNotes: Bool { notesFolders.isEmpty }
 
+    /// The folders you chose, or the app's own, then the space folders and the folders linked
+    /// into them. A space folder that's already inside a chosen folder isn't listed twice.
     var notesRoots: [URL] {
-        if notesFolders.isEmpty { return [Paths.defaultNotesDir] }
-        return notesFolders.map { URL(fileURLWithPath: $0, isDirectory: true) }
+        var out = notesFolders.isEmpty ? [Paths.defaultNotesDir] : notesFolders.map { URL(fileURLWithPath: $0, isDirectory: true) }
+        for r in SpaceFolders.notesRoots where !out.contains(where: { $0.standardizedFileURL.path == r.standardizedFileURL.path || FileSafety.isInside(r, $0) }) {
+            out.append(r)
+        }
+        return out
     }
 
     /// The folder new notes go in when nothing is selected in the tree.

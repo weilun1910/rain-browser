@@ -128,7 +128,7 @@ private struct SpaceMenuRow: View {
                     switch item {
                     case .tab(let id): if let t = model.tab(id) { model.move(t, toSpace: space.id) }
                     case .split(let id): if let s = model.split(id) { model.move(split: s, toSpace: space.id) }
-                    case .folder: break
+                    case .folder, .entry: break
                     }
                 }
                 state.closeSpaceMenu()

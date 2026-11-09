@@ -148,6 +148,9 @@ struct SourcesSettings: View {
                 }
                 HStack {
                     Button("Add folder...") { SourcesActions.addNotesFolders() }
+                    Button("Link folder...") { SourcesActions.linkFolder() }
+                        .disabled(SpaceFolders.root == nil)
+                        .help("Puts a link to a Markdown folder in the current space's folder. Nothing is copied.")
                     Button("Rescan") { notes.reload() }
                 }
                 LabeledContent("New notes go in") {

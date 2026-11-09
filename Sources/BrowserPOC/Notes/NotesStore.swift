@@ -35,8 +35,10 @@ final class NotesStore: ObservableObject {
         scanning = true
         let urls = rootURLs
         if Settings.shared.value.usesFallbackNotes { Paths.ensure(Paths.defaultNotesDir) }
+        // A root inside another is scanned on its own, and skipped inside the outer one.
+        let skips = urls.map { r in Set(urls.filter { $0.standardizedFileURL.path != r.standardizedFileURL.path && FileSafety.isInside($0, r) }.map { $0.standardizedFileURL.path }) }
         Task.detached(priority: .utility) {
-            let scanned = urls.map { NotesScan.scan($0) }
+            let scanned = zip(urls, skips).map { NotesScan.scan($0, skipping: $1) }
             await MainActor.run {
                 self.roots = scanned
                 self.scanning = false

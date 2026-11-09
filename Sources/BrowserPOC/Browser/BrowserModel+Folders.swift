@@ -99,6 +99,7 @@ extension BrowserModel {
     /// folders already there. Returns false if it can't go there.
     @discardableResult
     func placeFolder(_ id: UUID, in parent: UUID?, at index: Int) -> Bool {
+        if isDiskFolder(id) { return placeDiskFolder(id, in: parent, at: index) }
         guard let i = folders.firstIndex(where: { $0.id == id }) else { return false }
         guard canNest(id, in: parent) else {
             if let parent, parent != id, !descendants(of: id).contains(parent) {

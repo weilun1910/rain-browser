@@ -45,6 +45,15 @@ final class Tab: ObservableObject, Identifiable {
     @Published var loadError: String?
     /// A note whose file is gone from disk.
     @Published var isMissing = false
+    /// The saved page, or the note or file in a space folder, this tab came from. Kept as
+    /// SpaceFolders encodes it: relative to the space folders root when it's inside it.
+    @Published var savedFile: String?
+    /// A card-size picture of the top of the page, taken after it loads, as JPEG. See Thumbnails.
+    var thumbnail: Data?
+    /// The page the thumbnail shows, as URLKey normalizes it.
+    var thumbnailKey: String?
+    /// The page finished loading while the tab was off screen. It's captured when it's shown.
+    var thumbnailPending = false
 
     private(set) var webView: WKWebView?
     private var observers: [NSKeyValueObservation] = []
@@ -92,9 +101,13 @@ final class Tab: ObservableObject, Identifiable {
     /// Keeps a pinned address: pinned web tabs and Essentials.
     var keepsPinnedURL: Bool { kind == .web && (isPinned || isEssential) }
 
-    /// A pinned tab or Essential that has wandered off the address it was pinned at.
+    /// A tab opened from a saved page keeps the page's saved address the way a pinned tab keeps
+    /// its pinned one: closing it in a folder, or Back to Saved Page, goes back there.
+    var keepsSavedURL: Bool { kind == .web && savedFile != nil && pinnedURL != nil && !isPinned && !isEssential }
+
+    /// A pinned tab, Essential or saved page that has wandered off the address it keeps.
     var isAwayFromPin: Bool {
-        guard keepsPinnedURL, let p = pinnedURL, let u = url else { return false }
+        guard keepsPinnedURL || keepsSavedURL, let p = pinnedURL, let u = url else { return false }
         return !Self.samePage(p, u)
     }
 

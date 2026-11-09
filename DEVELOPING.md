@@ -50,6 +50,7 @@ scripts/make-icon.sh                                            # redraws the ap
 .build/debug/BrowserPOC --data-dir <folder> --motion-tour spaces # plays one area's motion in a window for recording, then quits (also rows, peek, split, compact, toasts)
 scripts/mcp-e2e.sh                                              # Claude Code and Codex against a made-up profile, temporary configs only
 build.noindex/Rain.app/Contents/MacOS/BrowserPOC --graph-bench    # the graph's 5,000 node timings on a release build
+.build/debug/BrowserPOC --thumbnail-check [tmp/thumbnail-test.html] # a local test page offscreen: the thumbnail is the top of the page, and nothing is taken after it scrolls
 ```
 
 Both tests use throwaway folders and exit non-zero if a check fails. The self test checks delete with a stand-in Trash folder inside its throwaway folder, so your real Trash is never touched. The dry run prints full URLs from your Chrome history, so keep its output to yourself.
@@ -64,7 +65,7 @@ scripts/demo.sh --reset             # starts the profile over; changes made in i
 scripts/demo.sh --models <folder>   # copies verified model files in instead of downloading them
 ```
 
-The profile lives in `demo-profile.nosync` in the project folder. The script only writes to an empty folder or to a demo profile it made before, and never to my real support folder. Seeding copies the notes in as real Markdown files, indexes the demo Google Docs, Notion pages and Granola meetings as those sources, records six weeks of visits and searches, reads each page's text without cookies, embeds and tags everything, builds the graph and lays out four spaces with Essentials, pins, folders, tabs and splits. Seeded more than a week after the demo moment, times move forward by whole weeks. Outside sources stay off in the demo profile, and auto-archive is off so the layout stays put.
+The profile lives in `demo-profile.nosync` in the project folder. The script only writes to an empty folder or to a demo profile it made before, and never to my real support folder. Seeding copies the notes in as real Markdown files, indexes the demo Google Docs, Notion pages and Granola meetings as those sources, records six weeks of visits and searches, reads each page's text without cookies, embeds and tags everything, builds the graph and lays out four spaces with Essentials, pins, folders, tabs and splits. Each space also gets its folder in `Space Folders/` inside the profile, with saved pages, a Reading folder with a folder inside it, a link to the space's notes and an empty Ideas folder in School. The sidebar's folders are moved onto disk and pinned the way a real profile's are, and Personal pins its linked notes. Seeded more than a week after the demo moment, times move forward by whole weeks. Outside sources stay off in the demo profile, and auto-archive is off so the layout stays put.
 
 The demo docs and meetings open at `demo://` addresses as read-only pages drawn by the app, so nothing ever loads a real Google or Notion page.
 
@@ -74,7 +75,8 @@ BrowserPOC --demo-eval <demo profile>                          # scores Related 
 BrowserPOC --demo-snapshots <out folder> --profile <demo profile>  # the opening moment, each space and the graph, offscreen
 BrowserPOC --sidebar-shots <out folder> --profile <demo profile>   # the sidebar at each width and icons only, offscreen, with drag, right-click menu and hover card checks
 BrowserPOC --drag-shots <out folder> --profile <demo profile>      # folders inside folders, folder drop zones, a tab dragged over the page and the split divider, offscreen
-build.noindex/Rain.app/Contents/MacOS/BrowserPOC --drag-probe --profile <demo profile>  # hands drops to the window as AppKit does in a real drag: a tab onto the page and onto a folder. Run it from the built app, whose Info.plist declares the drag type
+BrowserPOC --folder-shots <out folder> --profile <demo profile>    # the folder popup in light and dark: a space's folder, a folder inside it, an empty one, a linked one, search, save mode and the tab bar, with click, key and save checks
+build.noindex/Rain.app/Contents/MacOS/BrowserPOC --drag-probe --profile <demo profile>  # hands drops to the window as AppKit does in a real drag: a tab onto the page, onto a folder and into the folder popup, a page from the popup onto a pinned folder, and a folder from the popup into the Folders section. Run it from the built app, whose Info.plist declares the drag type
 python3 -I Demo/tools/check_demo.py [--network]                 # checks the demo content itself
 ```
 
@@ -82,11 +84,11 @@ python3 -I Demo/tools/check_demo.py [--network]                 # checks the dem
 
 Tabs, spaces, history, notes and cookies live outside the app, so a new build never replaces them. Three things keep them safe as the app changes:
 
-- The first time a new build opens a profile, it backs the profile up to `Backups/` inside it before reading anything. That covers spaces and tabs, settings, history, the index, Rain's own Notes folder, and WebKit's cookies and site data for the profile and its named profiles. The models and caches are left out. The last five backups are kept, and each has an "About this backup.txt" that says where every part goes back to.
+- The first time a new build opens a profile, it backs the profile up to `Backups/` inside it before reading anything. That covers spaces and tabs, settings, history, the index, Rain's own Notes folder, Rain's order for the space folders, and WebKit's cookies and site data for the profile and its named profiles. The models and caches, page thumbnails included, are left out. The space folders in `~/Documents/Rain` sit outside the profile and aren't copied. The last five backups are kept, and each has an "About this backup.txt" that says where every part goes back to.
 - If the app can't read a file it saved (state.json, settings.json and the rest), it moves the file into `Recovered/` before starting that part over, and says so in a sheet. If only part of a file can't be read, say one tab, it loads the rest and keeps a copy of the whole file in `Recovered/`. A file it can't read or move is never written to.
 - The self test loads frozen samples of every saved format (spaces and tabs, settings, preferences, recently closed, history and the index) and fails if anything goes missing.
 
-So when a change touches how something is saved, the new code has to read the old format too, or move it over once. New fields in state.json are optional or have a default, and old samples in `Tests/DataSafetyTests.swift` stay as they are.
+So when a change touches how something is saved, the new code has to read the old format too, or move it over once. The space folders build moves the sidebar's folders onto disk this way (`Folders/SpaceFolderMigration.swift`): after the launch backup, it writes every folder, saved page and link first, only then changes state.json, records that it finished, and on a failure leaves the old folders working and tries again next launch. New fields in state.json are optional or have a default, and old samples in `Tests/DataSafetyTests.swift` stay as they are.
 
 The bundle ID (`local.browserpoc`) and the profile folder name (`BrowserPOC`) stay fixed. WebKit files cookies and logins under the bundle ID, so changing either one opens an empty profile and signs you out of everything. A rename needs a step that moves the data first. `scripts/build.sh` refuses another bundle ID, and the self test checks both.
 
@@ -96,6 +98,7 @@ The bundle ID (`local.browserpoc`) and the profile folder name (`BrowserPOC`) st
 - Browsing data sits next to it: browser.json (Browsing settings), history.sqlite (visits), closed.json (recently closed and the archive), sessions/ (back and forward for each tab), favicons/ and downloads.json.
 - WebKit keeps site data under `~/Library/WebKit/local.browserpoc`, the default profile's cookies in `~/Library/HTTPStorages/local.browserpoc.binarycookies`, and caches under `~/Library/Caches/local.browserpoc`. Each named profile has its own WebKit store, cookies included, in `~/Library/WebKit/local.browserpoc/WebsiteDataStore/`.
 - Backups/ (one per new build, the last five) and Recovered/ (files the app couldn't read) sit in the app data folder, and last-build.txt says which build opened it last.
+- Space folders: one folder per space under `~/Documents/Rain/` for the default profile. A profile opened with `--data-dir`, the demo profile and every test profile keep theirs in `Space Folders/` inside the profile folder instead, so they never touch `~/Documents/Rain`. Settings, Browsing can move them. Rain's own order for each folder and when things were last opened from one are in space-folders.json in the app data folder, and page thumbnails are in Thumbnails/ there, named from a hash of the page's address, so the folders stay clean. Paths in state.json that point inside the space folders are kept relative to their root, so a copy of a profile finds its own files.
 - Clearing the index removes indexed entries only. Notes stay exactly as they are.
 
 ## Code map

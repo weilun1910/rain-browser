@@ -79,8 +79,13 @@ enum DemoTests {
         check(state?.currentSpace == DemoContent.uuid(focus.space) && sel == focus.split.map(DemoContent.uuid) && focusedSplit?.focused == DemoContent.uuid(focus.item),
               "the demo opens on its focused split and pane")
         let folderCount = c.layout.spaces.reduce(0) { $0 + $1.folders.count }
-        check(state?.folders.count == folderCount && state?.splits?.count == c.layout.spaces.reduce(0) { $0 + $1.splits.count },
-              "folders and splits are laid out", "\(state?.folders.count ?? 0) folders, \(state?.splits?.count ?? 0) splits")
+        // The layout's folders, moved onto disk and pinned, plus Personal's pinned notes.
+        let laidOut = state?.folders.filter { $0.id != DemoContent.uuid("pin-personal-notes") } ?? []
+        check(laidOut.count == folderCount && state?.splits?.count == c.layout.spaces.reduce(0) { $0 + $1.splits.count },
+              "folders and splits are laid out", "\(laidOut.count) folders, \(state?.splits?.count ?? 0) splits")
+        check(state?.diskFolders == 1 && state?.folders.allSatisfy({ $0.path != nil }) == true && state?.folders.count == folderCount + 1
+              && (state?.tabs.filter { $0.folderID != nil }.allSatisfy { $0.savedFile != nil } ?? false),
+              "the demo's folders are on disk and pinned, with a linked folder pinned too")
         let demoTabs = state?.tabs.filter { ($0.url ?? "").hasPrefix("demo://") } ?? []
         check(!demoTabs.isEmpty && demoTabs.allSatisfy { $0.kind == .web } && !(state?.tabs.contains { ($0.url ?? "").contains("docs.google.com") || ($0.url ?? "").contains("notion.so") } ?? true),
               "demo docs open at demo:// addresses, never Google or Notion", "\(demoTabs.count) demo tabs")

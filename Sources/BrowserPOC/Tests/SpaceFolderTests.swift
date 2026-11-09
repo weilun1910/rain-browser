@@ -1,0 +1,419 @@
+import AppKit
+import Foundation
+
+/// Space folders: saved pages, links that survive a move, file changes that only ever reach the
+/// Trash, and the model opening and saving what's in them. Everything happens in a throwaway
+/// folder inside the self test's own, with a stand-in for the Trash.
+enum SpaceFolderTests {
+    static func check(_ ok: Bool, _ label: String, _ detail: String = "") { SelfTest.check(ok, label, detail) }
+
+    /// Space folders on, rooted in `dir`, with a folder standing in for the Trash, for `body`.
+    @MainActor static func withSpaceFolders(_ dir: URL, _ body: (URL, URL) -> Void) {
+        let root = dir.appendingPathComponent("root", isDirectory: true)
+        let trash = dir.appendingPathComponent("fake-trash", isDirectory: true)
+        try? FileManager.default.removeItem(at: dir)
+        Paths.ensure(root)
+        Paths.ensure(trash)
+        let before = (enabled: SpaceFolders.enabled, root: SpaceFolders.overrideRoot, custom: SpaceFolders.customRoot, recycle: NotesStore.recycle)
+        SpaceFolders.enabled = true
+        SpaceFolders.overrideRoot = root
+        SpaceFolders.customRoot = nil
+        NotesStore.recycle = { urls, done in
+            var moved: [URL: URL] = [:]
+            for u in urls {
+                let t = SpaceFolders.uniqueURL(in: trash, base: u.deletingPathExtension().lastPathComponent, ext: u.pathExtension)
+                if (try? FileManager.default.moveItem(at: u, to: t)) != nil { moved[u] = t }
+            }
+            done(moved, nil)
+        }
+        defer {
+            SpaceFolders.enabled = before.enabled
+            SpaceFolders.overrideRoot = before.root
+            SpaceFolders.customRoot = before.custom
+            NotesStore.recycle = before.recycle
+            SpaceFolders.refreshLinkedRoots()
+        }
+        FolderMeta.shared.reload()
+        body(root, trash)
+    }
+
+    static func run(dir: URL) {
+        let base = dir.appendingPathComponent("space-folders", isDirectory: true)
+        MainActor.assumeIsolated {
+            BrowserModel.useEphemeralStore = true
+            webloc(base.appendingPathComponent("webloc"))
+            fileChanges(base.appendingPathComponent("files"))
+            links(base.appendingPathComponent("links"))
+            listing(base.appendingPathComponent("listing"))
+            model(base.appendingPathComponent("model"))
+            filing(base.appendingPathComponent("filing"))
+            popupFlow(base.appendingPathComponent("popup"))
+            thumbnails()
+            try? FileManager.default.removeItem(at: Paths.stateFile)
+            FolderMeta.shared.reload()
+        }
+    }
+
+    static func read(_ u: URL) -> String { (try? String(contentsOf: u, encoding: .utf8)) ?? "" }
+
+    // MARK: .webloc
+
+    @MainActor static func webloc(_ dir: URL) {
+        withSpaceFolders(dir) { root, _ in
+            let page = SavedPage(url: URL(string: "https://example.com/essay?ref=1")!, title: "An essay", savedAt: Date(timeIntervalSince1970: 1_800_000_000))
+            let f = root.appendingPathComponent("An essay.webloc")
+            try? Webloc.write(page, to: f)
+            check(Webloc.read(f) == page, "a saved page reads back with its address, title and date")
+            let plist = (try? PropertyListSerialization.propertyList(from: Data(contentsOf: f), options: [], format: nil)) as? [String: Any]
+            check(plist?["URL"] as? String == "https://example.com/essay?ref=1", "the file keeps the address under URL, where Finder and Safari look")
+            check((try? Webloc.write(SavedPage(url: URL(string: "https://other.example/")!), to: f)) == nil && Webloc.read(f) == page,
+                  "a new saved page never writes over another")
+            // Safari writes a binary list with only the address.
+            let safari = root.appendingPathComponent("From Safari.webloc")
+            if let d = try? PropertyListSerialization.data(fromPropertyList: ["URL": "https://www.apple.com/"], format: .binary, options: 0) { try? d.write(to: safari) }
+            check(Webloc.read(safari)?.url.absoluteString == "https://www.apple.com/" && Webloc.read(safari)?.title == nil,
+                  "a saved page from Safari reads too")
+            try? Data("not a plist".utf8).write(to: root.appendingPathComponent("Broken.webloc"))
+            check(Webloc.read(root.appendingPathComponent("Broken.webloc")) == nil, "a damaged saved page is skipped, not guessed at")
+        }
+    }
+
+    // MARK: Making, renaming, moving and trashing
+
+    @MainActor static func fileChanges(_ dir: URL) {
+        withSpaceFolders(dir) { root, trash in
+            let home = root.appendingPathComponent("Home", isDirectory: true)
+            Paths.ensure(home)
+            let work = try? SpaceFolders.makeFolder(named: "Work", in: home)
+            let work2 = try? SpaceFolders.makeFolder(named: "Work", in: home)
+            check(work?.lastPathComponent == "Work" && work2?.lastPathComponent == "Work 2" && SpaceFolders.isDirectory(work2!),
+                  "a new folder with a name that's taken gets a number")
+            check((try? SpaceFolders.makeFolder(named: "../../Escape", in: home))?.lastPathComponent == "-..-Escape",
+                  "a folder name can't climb out of its folder")
+            let page = try? SpaceFolders.savePage(URL(string: "https://example.com/a")!, title: "Reading: notes/ideas", in: work!)
+            check(page?.lastPathComponent == "Reading- notes-ideas.webloc", "a saved page is named after its title, made safe", page?.lastPathComponent ?? "nil")
+            let renamed = try? SpaceFolders.rename(page!, to: "Good read")
+            check(renamed?.lastPathComponent == "Good read.webloc" && Webloc.read(renamed!)?.url.absoluteString == "https://example.com/a",
+                  "renaming a saved page keeps its extension and its address")
+            let other = try? SpaceFolders.savePage(URL(string: "https://example.com/b")!, title: "Other", in: work!)
+            var clash = false
+            do { _ = try SpaceFolders.rename(other!, to: "Good read") } catch { clash = true }
+            check(clash && SpaceFolders.exists(other!), "renaming onto a name that's taken is refused and changes nothing")
+            let moved = try? SpaceFolders.move(renamed!, into: work2!)
+            check(moved?.deletingLastPathComponent().lastPathComponent == "Work 2" && !SpaceFolders.exists(renamed!), "a saved page moves into another folder")
+            try? Data("x".utf8).write(to: work!.appendingPathComponent("Good read.webloc"))
+            let again = try? SpaceFolders.move(work!.appendingPathComponent("Good read.webloc"), into: work2!)
+            check(again?.lastPathComponent == "Good read 2.webloc", "moving onto a name that's taken there picks a free one")
+            var refused = false
+            do { _ = try SpaceFolders.move(home, into: work!) } catch { refused = true }
+            check(refused && SpaceFolders.isDirectory(home), "a folder can't move inside itself")
+            let outside = dir.appendingPathComponent("elsewhere", isDirectory: true)
+            Paths.ensure(outside)
+            var blocked = false
+            do { _ = try SpaceFolders.makeFolder(named: "Nope", in: outside) } catch { blocked = true }
+            check(blocked && !SpaceFolders.exists(outside.appendingPathComponent("Nope")), "Rain doesn't write outside the space folders and notes folders")
+            var done: Bool?
+            SpaceFolders.trash([work2!]) { done = $0 }
+            _ = SelfTest.spin(5) { done != nil }
+            check(done == true && !SpaceFolders.exists(work2!) && SpaceFolders.exists(trash.appendingPathComponent("Work 2")),
+                  "deleting a folder moves it to the Trash, with what's inside")
+            done = nil
+            SpaceFolders.trash([outside]) { done = $0 }
+            _ = SelfTest.spin(5) { done != nil }
+            check(done == false && SpaceFolders.isDirectory(outside), "nothing outside the folders goes to the Trash from here")
+        }
+    }
+
+    // MARK: Links
+
+    @MainActor static func links(_ dir: URL) {
+        withSpaceFolders(dir) { root, trash in
+            let home = root.appendingPathComponent("Home", isDirectory: true)
+            Paths.ensure(home)
+            // A notes folder somewhere else, like an Obsidian vault.
+            let vault = dir.appendingPathComponent("Vault", isDirectory: true)
+            Paths.ensure(vault.appendingPathComponent("Projects"))
+            let note = vault.appendingPathComponent("Projects/Plan.md")
+            try? Data("# Plan\n\nShip it.\n".utf8).write(to: note)
+            let before = read(note)
+            let link = try? SpaceFolders.link(vault, in: home)
+            check(link?.lastPathComponent == "Vault" && FileLink.isLink(link!), "linking a folder puts an alias to it in the space folder")
+            check(FileLink.resolve(link!)?.path == vault.standardizedFileURL.path && read(note) == before
+                  && ((try? FileManager.default.contentsOfDirectory(atPath: vault.path)) ?? []).sorted() == ["Projects"],
+                  "the alias points at the original, and nothing in it is copied or changed")
+            let moved = dir.appendingPathComponent("Moved vault", isDirectory: true)
+            try? FileManager.default.moveItem(at: vault, to: moved)
+            check(FileLink.resolve(link!)?.path == moved.standardizedFileURL.path, "the alias still finds the folder after it's moved and renamed",
+                  FileLink.resolve(link!)?.path ?? "nil")
+            let noteLink = try? SpaceFolders.link(moved.appendingPathComponent("Projects/Plan.md"), in: home)
+            try? FileManager.default.moveItem(at: moved.appendingPathComponent("Projects/Plan.md"), to: moved.appendingPathComponent("Plan v2.md"))
+            check(noteLink?.lastPathComponent == "Plan" && FileLink.resolve(noteLink!)?.lastPathComponent == "Plan v2.md",
+                  "a link to a note follows it when it's renamed")
+            let e = SpaceFolders.entry(link!)
+            check(e?.kind == .folder && e?.isLink == true && e?.target.path == moved.standardizedFileURL.path, "a linked folder lists as a folder with a link")
+            check(SpaceFolders.entry(noteLink!)?.kind == .note, "a linked note lists as a note")
+            // The linked folder is a notes root, once and only once.
+            check(SpaceFolders.refreshLinkedRoots() && SpaceFolders.notesRoots.map(\.path) == [root.path, moved.standardizedFileURL.path],
+                  "the root and the linked folder are notes roots", SpaceFolders.notesRoots.map(\.lastPathComponent).joined(separator: ", "))
+            var s = AppSettings()
+            s.notesFolders = [moved.path]
+            check(s.notesRoots.map(\.path) == [moved.path, root.path], "a linked folder that's already a notes folder isn't indexed twice",
+                  s.notesRoots.map(\.lastPathComponent).joined(separator: ", "))
+            // Trashing the link takes the alias, never the folder it points at.
+            var done: Bool?
+            SpaceFolders.trash([link!]) { done = $0 }
+            _ = SelfTest.spin(5) { done != nil }
+            check(done == true && !SpaceFolders.exists(link!) && SpaceFolders.isDirectory(moved) && SpaceFolders.exists(moved.appendingPathComponent("Plan v2.md")),
+                  "deleting a link moves the alias to the Trash and leaves the original alone")
+            _ = trash
+            // A link whose original is gone shows as broken.
+            try? FileManager.default.removeItem(at: moved.appendingPathComponent("Plan v2.md"))
+            check(SpaceFolders.entry(noteLink!)?.isBroken == true, "a link whose original is gone is marked, not followed")
+        }
+    }
+
+    // MARK: Listing, order and search
+
+    @MainActor static func listing(_ dir: URL) {
+        withSpaceFolders(dir) { root, _ in
+            let home = root.appendingPathComponent("Home", isDirectory: true)
+            Paths.ensure(home.appendingPathComponent("Zeta"))
+            Paths.ensure(home.appendingPathComponent("Alpha/Deep"))
+            try? SpaceFolders.savePage(URL(string: "https://swift.org/")!, title: "Swift", in: home)
+            try? SpaceFolders.savePage(URL(string: "https://webkit.org/blog/")!, title: "WebKit blog", in: home.appendingPathComponent("Alpha/Deep"))
+            try? Data("# Ideas\n".utf8).write(to: home.appendingPathComponent("Ideas.md"))
+            try? Data("%PDF".utf8).write(to: home.appendingPathComponent("Paper.pdf"))
+            try? Data().write(to: home.appendingPathComponent(".DS_Store"))
+            let list = SpaceFolders.list(home)
+            let kinds = Dictionary(list.map { ($0.name, $0.kind) }, uniquingKeysWith: { a, _ in a })
+            check(kinds == ["Zeta": .folder, "Alpha": .folder, "Swift": .page, "Ideas": .note, "Paper.pdf": .file],
+                  "a folder lists its folders, pages, notes and files, and hides the rest", kinds.map { "\($0.key)=\($0.value.rawValue)" }.sorted().joined(separator: " "))
+            let byName = SpaceFolders.ordered(list, in: home).map(\.name)
+            check(byName == ["Alpha", "Zeta", "Ideas", "Paper.pdf", "Swift"], "folders come first, then the rest, by name until Rain has an order", byName.joined(separator: ", "))
+            FolderMeta.shared.setOrder(["Zeta", "Swift.webloc", "Alpha"], of: home)
+            let custom = SpaceFolders.ordered(list, in: home).map(\.name)
+            check(custom == ["Zeta", "Alpha", "Swift", "Ideas", "Paper.pdf"], "Rain keeps its own order, and things it hasn't seen go at the end by name",
+                  custom.joined(separator: ", "))
+            let found = SpaceFolders.search("webkit", in: home).map(\.name)
+            check(found == ["WebKit blog"], "search finds a page in a folder inside a folder", found.joined(separator: ", "))
+            check(SpaceFolders.search("swift", in: home.appendingPathComponent("Alpha")).isEmpty, "search stays inside the folder you're in")
+            check(SpaceFolders.count(home) == 5, "a folder's card counts what's inside, not hidden files", "\(SpaceFolders.count(home))")
+            check(SpaceFolders.encode(home.appendingPathComponent("Alpha")) == "Home/Alpha" && SpaceFolders.decode("Home/Alpha")?.path == home.appendingPathComponent("Alpha").path
+                  && SpaceFolders.encode(URL(fileURLWithPath: "/tmp/x")) == "/tmp/x",
+                  "paths inside the root are kept relative to it, others in full")
+        }
+    }
+
+    // MARK: The popup's save, open and move flows
+
+    @MainActor static func popupFlow(_ dir: URL) {
+        withSpaceFolders(dir) { root, _ in
+            let m = ArcZenTests.freshModel()
+            let popup = FolderPopup.shared
+            defer { popup.close() }
+            guard let homeDir = m.currentSpace.flatMap({ m.spaceFolderURL($0) }) else { check(false, "a folder for the popup"); return }
+            let inbox = try! SpaceFolders.makeFolder(named: "Inbox", in: homeDir)
+            let t = ArcZenTests.page(m, "https://example.com/popup", "Popup page")
+            m.select(t)
+            m.saveCurrentPage()
+            check(popup.isOpen && popup.mode == .save(t.id) && popup.saveName == "Popup page" && popup.current?.path == homeDir.path,
+                  "Save Page opens the popup on the space's folder with the page's title filled in")
+            if let e = popup.entries.first(where: { $0.name == "Inbox" }) { popup.enter(e) }
+            popup.saveName = "Kept for later"
+            popup.save()
+            check(!popup.isOpen && Webloc.read(inbox.appendingPathComponent("Kept for later.webloc"))?.url.absoluteString == "https://example.com/popup"
+                  && m.savedFiles(for: t).count == 1, "Save puts it in the folder you're looking at, under the name you gave it")
+            // Browsing: a click opens the page as a tab here and closes the popup.
+            let other = try! SpaceFolders.savePage(URL(string: "https://example.com/elsewhere")!, title: "Elsewhere", in: homeDir)
+            popup.open(m)
+            if let e = popup.entries.first(where: { $0.url.path == other.path }) {
+                popup.activate(e)
+                check(!popup.isOpen && m.currentTab?.savedFile == "Home/Elsewhere.webloc", "clicking a page opens it as a tab and closes the popup")
+            } else { check(false, "the popup lists the saved page") }
+            popup.open(m)
+            if let e = popup.entries.first(where: { $0.url.path == other.path }) {
+                let n = m.tabs.count
+                popup.activate(e, background: true)
+                check(popup.isOpen && m.tabs.count == n, "Cmd-click on a page that's open here goes to its tab and keeps the popup open")
+                // Move to...
+                popup.startMove([e.url])
+                if let inboxEntry = popup.entries.first(where: { $0.name == "Inbox" }) { popup.enter(inboxEntry) }
+                popup.moveHere()
+                check(SpaceFolders.exists(inbox.appendingPathComponent("Elsewhere.webloc")) && !SpaceFolders.exists(other) && popup.mode == .browse,
+                      "Move to... moves it into the folder you pick")
+            }
+            check(popup.trail.count == 2 && popup.canGoBack, "the path shows where you are")
+            popup.goBack()
+            check(popup.current?.path == homeDir.path, "back goes to the folder before")
+            _ = root
+        }
+    }
+
+    // MARK: Filing from the popup
+
+    @MainActor static func filing(_ dir: URL) {
+        withSpaceFolders(dir) { root, _ in
+            let m = ArcZenTests.freshModel()
+            guard let home = m.spaces.first, let homeDir = m.spaceFolderURL(home) else { check(false, "a space folder for filing"); return }
+            let work = try! SpaceFolders.makeFolder(named: "Work", in: homeDir)
+            // A vault somewhere else, linked in.
+            let vault = dir.appendingPathComponent("Vault", isDirectory: true)
+            Paths.ensure(vault)
+            let vaultNote = vault.appendingPathComponent("Ideas.md")
+            try? Data("# Ideas\n".utf8).write(to: vaultNote)
+            try? SpaceFolders.link(vault, in: homeDir)
+            SpaceFolders.refreshLinkedRoots()
+
+            // Tabs dropped on a folder.
+            let page = ArcZenTests.page(m, "https://example.com/filed", "Filed page")
+            let local = homeDir.appendingPathComponent("Draft.md")
+            try? Data("# Draft\n".utf8).write(to: local)
+            let draft = m.openNote(local, select: false)
+            let ideas = m.openNote(vaultNote, select: false)
+            let n = m.fileTabs([page.id, draft.id, ideas.id], into: work)
+            let names = ((try? FileManager.default.contentsOfDirectory(atPath: work.path)) ?? []).sorted()
+            check(n == 3 && names == ["Draft.md", "Filed page.webloc", "Ideas"], "tabs dropped on a folder: the page is saved, a note is filed there",
+                  names.joined(separator: ", "))
+            check(!SpaceFolders.exists(local) && draft.url?.path == work.appendingPathComponent("Draft.md").path,
+                  "a note that lives in the space folders moves, and its tab follows it")
+            check(SpaceFolders.exists(vaultNote) && FileLink.resolve(work.appendingPathComponent("Ideas"))?.path == vaultNote.standardizedFileURL.path
+                  && ideas.url?.path == vaultNote.standardizedFileURL.path, "a note from a linked folder gets a link, and the original stays put")
+
+            // Moving cards.
+            let later = try! SpaceFolders.makeFolder(named: "Later", in: homeDir)
+            let saved = work.appendingPathComponent("Filed page.webloc")
+            m.fileEntries([saved], into: later)
+            check(!SpaceFolders.exists(saved) && SpaceFolders.exists(later.appendingPathComponent("Filed page.webloc")), "a saved page moves to another folder")
+            let vaultFile = vault.appendingPathComponent("Plan.md")
+            try? Data("# Plan\n".utf8).write(to: vaultFile)
+            m.fileEntries([vaultFile], into: later)
+            check(SpaceFolders.exists(vaultFile) && FileLink.isLink(later.appendingPathComponent("Plan")),
+                  "something moved out of a linked folder is linked instead, and the original stays")
+            let sub = vault.appendingPathComponent("Sub", isDirectory: true)
+            Paths.ensure(sub)
+            m.fileEntries([vaultFile], into: sub)
+            check(!SpaceFolders.exists(vaultFile) && SpaceFolders.exists(sub.appendingPathComponent("Plan.md")), "inside the same linked folder it moves")
+
+            // Renaming and the Trash.
+            if let e = SpaceFolders.entry(later.appendingPathComponent("Filed page.webloc")), let r = m.renameEntry(e, to: "Kept") {
+                check(r.lastPathComponent == "Kept.webloc", "renaming a card renames the file and keeps it a saved page")
+                var done: Bool?
+                m.trashEntries([SpaceFolders.entry(r)!]) { done = $0 }
+                _ = SelfTest.spin(5) { done != nil }
+                check(done == true && !SpaceFolders.exists(r), "Move to Trash sends it to the Trash")
+            } else {
+                check(false, "a saved page renames")
+            }
+            check(SpaceFolders.isDirectory(root), "nothing else was touched")
+        }
+    }
+
+    // MARK: Thumbnails
+
+    @MainActor static func thumbnails() {
+        let a = URL(string: "https://example.com/essay?utm_source=x")!, b = URL(string: "https://Example.com/essay#part")!
+        check(Thumbnails.file(for: a) == Thumbnails.file(for: b) && Thumbnails.file(for: a).lastPathComponent.count == 36,
+              "a page saved twice, or with tracking bits in its address, shares one thumbnail file")
+        check(Thumbnails.file(for: a).path.hasPrefix(Paths.root.appendingPathComponent("Thumbnails").path), "thumbnails live in the profile, not in the folders")
+        var s = AppSettings()
+        s.excludedDomains = ["bank.example"]
+        check(Thumbnails.decision(URL(string: "https://bank.example/home")!, settings: s) != .fetch, "share images skip excluded domains")
+        check(Thumbnails.decision(URL(string: "https://example.com/login")!, settings: s) != .fetch
+              && Thumbnails.decision(URL(string: "https://example.com/x?token=abc")!, settings: s) != .fetch
+              && Thumbnails.decision(URL(string: "https://example.com/auth/callback?code=1")!, settings: s) != .fetch,
+              "share images skip sign-in and token links")
+        check(Thumbnails.decision(URL(string: "https://mail.google.com/mail/u/0/")!, settings: s) != .fetch, "and logged-in apps")
+        check(Thumbnails.decision(URL(string: "https://example.com/blog/post")!, settings: s) == .fetch
+              && Thumbnails.decision(URL(string: "http://localhost:3000/")!, settings: s) != .fetch, "an ordinary page is fetched, a local one isn't")
+        let page = URL(string: "https://example.com/blog/post")!
+        let html = "<html><head><meta name=\"twitter:image\" content=\"https://cdn.example.com/t.png\">\n"
+            + "<meta content=\"/img/cover.jpg?w=1200&amp;h=630\" property=\"og:image\"></head><body></body></html>"
+        check(Thumbnails.shareImageURL(in: html, page: page)?.absoluteString == "https://example.com/img/cover.jpg?w=1200&h=630",
+              "the share image is the page's og:image, resolved against the page", Thumbnails.shareImageURL(in: html, page: page)?.absoluteString ?? "nil")
+        check(Thumbnails.shareImageURL(in: "<meta name='twitter:image' content='https://cdn.example.com/t.png'>", page: page)?.host == "cdn.example.com",
+              "or the twitter image when there's no og:image")
+        check(Thumbnails.shareImageURL(in: "<meta property='og:image' content='javascript:alert(1)'>", page: page) == nil, "only web addresses count")
+        // Cards shrink pictures with ImageIO.
+        if let ctx = CGContext(data: nil, width: 1600, height: 1000, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                               bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) {
+            ctx.setFillColor(CGColor(red: 0.2, green: 0.4, blue: 0.9, alpha: 1))
+            ctx.fill(CGRect(x: 0, y: 0, width: 1600, height: 1000))
+            if let img = ctx.makeImage(), let jpeg = Thumbnails.jpeg(img, maxWidth: 480) {
+                let small = ThumbnailCache.downsample(jpeg, maxPixels: 240)
+                check(ThumbnailCheck.size(of: jpeg).map { $0.width == 480 && $0.height == 300 } == true && jpeg.count < 60_000
+                      && small.map { max($0.width, $0.height) == 240 } == true,
+                      "a thumbnail is kept as a small JPEG and shrunk to card size for the grid", "\(jpeg.count) bytes")
+            } else { check(false, "a thumbnail encodes") }
+        }
+    }
+
+    // MARK: The model
+
+    @MainActor static func model(_ dir: URL) {
+        withSpaceFolders(dir) { root, _ in
+            let m = ArcZenTests.freshModel()
+            guard let home = m.spaces.first, let homeDir = m.spaceFolderURL(home) else { check(false, "the first space gets a folder"); return }
+            check(homeDir.path == root.appendingPathComponent("Home").path && SpaceFolders.isDirectory(homeDir), "each space gets a folder named after it")
+            let school = m.createSpace(name: "School")
+            check(m.spaceFolderURL(school).map(SpaceFolders.isDirectory) == true, "a new space gets its folder right away")
+            m.updateSpace(school.id) { $0.name = "Classes" }
+            let classes = root.appendingPathComponent("Classes")
+            check(SpaceFolders.isDirectory(classes) && !SpaceFolders.exists(root.appendingPathComponent("School"))
+                  && m.spaces.first { $0.id == school.id }?.folderName == "Classes", "renaming a space renames its folder")
+            Paths.ensure(root.appendingPathComponent("Taken"))
+            m.updateSpace(school.id) { $0.name = "Taken" }
+            check(m.spaces.first { $0.id == school.id }?.folderName == "Classes" && SpaceFolders.isDirectory(classes),
+                  "a space renamed to a folder name that's taken keeps its folder")
+            check(m.newNotesFolder.path == homeDir.path, "new notes in a space go to its folder")
+            check(FileSafety.canWriteNote(homeDir.appendingPathComponent("New idea.md")), "notes can be written in a space folder")
+
+            // Saving a page.
+            let t = ArcZenTests.page(m, "https://example.com/essay", "An essay")
+            let file = m.savePage(t, in: homeDir)
+            check(file.map { Webloc.read($0)?.url.absoluteString } == "https://example.com/essay" && t.savedFile == "Home/An essay.webloc"
+                  && t.pinnedURL?.absoluteString == "https://example.com/essay", "saving a page writes it into the folder, and the tab remembers it")
+            check(SavedPages.shared.isSaved(t.url) && m.savedFiles(for: t).count == 1, "the page shows as saved")
+            check(t.keepsSavedURL && !t.isAwayFromPin, "the tab keeps the saved address")
+            t.url = URL(string: "https://example.com/essay/part-2")
+            check(t.isAwayFromPin, "browsing away inside it shows it's away from the saved page")
+            m.updateSavedAddress(t)
+            check(Webloc.read(file!)?.url.absoluteString == "https://example.com/essay/part-2" && !t.isAwayFromPin,
+                  "Update Saved Address points the saved page at where the tab is")
+
+            // Opening what's in a folder.
+            let tabsBefore = m.tabs.count
+            if let e = SpaceFolders.entry(file!) {
+                let opened = m.openFolderEntry(e)
+                check(opened?.id == t.id && m.tabs.count == tabsBefore && m.currentTab?.id == t.id, "opening a page that's already open in this space goes to that tab")
+            } else { check(false, "the saved page lists") }
+            let other = try? SpaceFolders.savePage(URL(string: "https://example.com/other")!, title: "Other page", in: homeDir)
+            if let other, let e = SpaceFolders.entry(other) {
+                let o = m.openFolderEntry(e, background: true)
+                check(o?.savedFile == "Home/Other page.webloc" && o?.pinnedURL?.absoluteString == "https://example.com/other" && m.currentTab?.id == t.id
+                      && m.tabs.count == tabsBefore + 1, "a page opened in the background is a new tab with its saved address, and you stay where you were")
+                if let o {
+                    o.url = URL(string: "https://example.com/elsewhere")
+                    m.resetPinned(o, load: false)
+                    check(o.url?.absoluteString == "https://example.com/other", "Back to Saved Page goes back to the saved address")
+                    m.close(o)
+                    check(m.tab(o.id) == nil && SpaceFolders.exists(other), "closing a tab opened from a saved page closes it and keeps the file")
+                }
+            } else { check(false, "a second saved page lists") }
+            try? Data("# Plan\n".utf8).write(to: homeDir.appendingPathComponent("Plan.md"))
+            if let e = SpaceFolders.entry(homeDir.appendingPathComponent("Plan.md")) {
+                let n1 = m.openFolderEntry(e), n2 = m.openFolderEntry(e)
+                check(n1?.isNote == true && n1?.id == n2?.id, "a note opens once, and again goes to the same tab")
+            }
+            var removed: Bool?
+            m.removeSavedPage(file!) { removed = $0 }
+            _ = SelfTest.spin(5) { removed != nil }
+            check(removed == true && t.savedFile == nil && !SpaceFolders.exists(file!), "removing a saved page moves it to the Trash and the tab forgets it")
+
+            // Saved state.
+            m.saveNow()
+            let again = BrowserModel()
+            check(again.spaces.first?.folderName == "Home" && again.spaces.first { $0.id == school.id }?.folderName == "Classes",
+                  "space folders are remembered")
+        }
+    }
+}

@@ -25,6 +25,8 @@ struct BrowserPrefsValue: Codable, Equatable {
     var actionScores: [String: Int] = [:]
     /// Tabs in the sidebar or in a bar along the top, like Safari.
     var tabLayout: TabLayout = .sidebar
+    /// Where the space folders live, picked with Change. Nil is the default for the profile.
+    var spaceFoldersRoot: String?
 
     static let archiveChoices: [(String, Double)] = [("12 hours", 12), ("24 hours", 24), ("7 days", 24 * 7), ("30 days", 24 * 30), ("Never", 0)]
 
@@ -46,6 +48,8 @@ struct BrowserPrefsValue: Codable, Equatable {
         offerPasswords = (try? c.decodeIfPresent(Bool.self, forKey: .offerPasswords)) ?? d.offerPasswords
         // Added 6 Nov 2026. Older files have no layout and keep the sidebar.
         tabLayout = (try? c.decodeIfPresent(TabLayout.self, forKey: .tabLayout)) ?? d.tabLayout
+        // Added 8 Nov 2026.
+        spaceFoldersRoot = try? c.decodeIfPresent(String.self, forKey: .spaceFoldersRoot)
     }
 }
 

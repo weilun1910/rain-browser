@@ -22,6 +22,7 @@ struct BrowsingSettings: View {
                 Toggle("Links from other apps open in a small window", isOn: bind(\.littleArc))
                 Toggle("Picture in picture when you leave a playing video", isOn: bind(\.autoPictureInPicture))
             }
+            SpaceFoldersSection()
             Section("Passwords") {
                 Toggle("Offer logins and codes from the Passwords app", isOn: bind(\.offerPasswords))
                 Text("When a login or code field gets focus, Rain offers the Passwords app. You pick a login with Touch ID, or a code from Messages or Mail, and Rain fills it in. Rain doesn't keep passwords, and it can't save new ones to Passwords yet. Edit, then Fill from Passwords (Cmd-\\) does the same for the page you're on.")
@@ -51,5 +52,39 @@ struct BrowsingSettings: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+/// Where the space folders live, with Change to move them.
+struct SpaceFoldersSection: View {
+    @ObservedObject var prefs = BrowserPrefs.shared
+
+    var body: some View {
+        Section("Space folders") {
+            LabeledContent("Space folders are in") {
+                HStack {
+                    Text(SpaceFolders.root?.lastPathComponent ?? "Off")
+                        .foregroundStyle(.secondary)
+                        .help(SpaceFolders.root?.path ?? "")
+                    Button("Change...") { change() }.disabled(SpaceFolders.root == nil)
+                }
+            }
+            Text("Every space has a folder here with its saved pages, its notes and links to folders elsewhere. Change moves them to the folder you pick.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+        .id(prefs.value.spaceFoldersRoot ?? "")
+    }
+
+    @MainActor func change() {
+        let p = NSOpenPanel()
+        p.canChooseDirectories = true
+        p.canChooseFiles = false
+        p.canCreateDirectories = true
+        p.allowsMultipleSelection = false
+        p.prompt = "Move here"
+        p.message = "Pick where the space folders should live."
+        if let r = SpaceFolders.root { p.directoryURL = r.deletingLastPathComponent() }
+        guard p.runModal() == .OK, let u = p.url else { return }
+        AppDelegate.shared?.model.changeSpaceFoldersRoot(to: u)
     }
 }

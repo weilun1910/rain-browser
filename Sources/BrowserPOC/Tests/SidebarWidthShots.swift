@@ -31,10 +31,11 @@ enum SidebarWidthShots {
         Paths.ensure(out)
         defer { try? fm.removeItem(at: tmp) }
         for f in ["state.json", "settings.json", "sources.json", "browser.json", "related.json", "index.sqlite", "index.sqlite-wal",
-                  "index.sqlite-shm", "history.sqlite", "favicons", "demo-items", DemoSeeder.marker] {
+                  "index.sqlite-shm", "history.sqlite", "favicons", "demo-items", DemoSeeder.marker] + ShotProfile.folderFiles {
             try? fm.copyItem(at: profile.appendingPathComponent(f), to: tmp.appendingPathComponent(f))
         }
         Paths.overrideRoot = tmp
+        ShotProfile.useSpaceFolders(in: tmp)
         ModelFiles.overrideDir = profile.appendingPathComponent("Models", isDirectory: true)
         ModelFiles.clearReadyCache()
         Settings.shared.reloadFromDisk()

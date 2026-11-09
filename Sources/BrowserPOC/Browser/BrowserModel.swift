@@ -15,6 +15,10 @@ struct Space: Codable, Identifiable, Equatable {
     var selectedSplit: UUID?
     /// The profile whose cookies and logins this space uses. Nil is the default profile.
     var profile: String?
+    /// The space's folder on disk, by name inside the space folders root. Added 8 Nov 2026.
+    var folderName: String?
+    /// Finds the folder again if it's renamed or moved in Finder.
+    var folderBookmark: Data?
 
     static let palette: [(String, String)] = [
         ("Slate", "#7A8CA8"), ("Blue", "#4C8DF6"), ("Teal", "#2FA8A0"), ("Green", "#5DA55A"),
@@ -34,6 +38,11 @@ struct Folder: Codable, Identifiable, Equatable {
     var order: Double?
     /// The folder it's inside, or nil at the top of the Folders section. Added 8 Nov 2026.
     var parentID: UUID? = nil
+    /// The folder on disk it shows, as SpaceFolders encodes it. Nil for a folder that lives only
+    /// in state.json, from before space folders. Added 8 Nov 2026.
+    var path: String? = nil
+    /// Finds a pinned folder again after it's moved in Finder.
+    var bookmark: Data? = nil
 }
 
 struct TabRecord: Codable {
@@ -52,6 +61,9 @@ struct TabRecord: Codable {
     var order: Double?
     var lastActiveAt: Date?
     var isMuted: Bool?
+    /// The saved page or note in a space folder this tab came from, relative to the space folders
+    /// root when it's inside it. Added 8 Nov 2026.
+    var savedFile: String?
 }
 
 struct SavedState: Codable {
@@ -67,6 +79,8 @@ struct SavedState: Codable {
     var selectedTab: UUID?
     /// Older versions opened notes outside the tab list.
     var selectedDocument: String?
+    /// 1 once the sidebar's folders have moved onto disk. See SpaceFolderMigration. Added 8 Nov 2026.
+    var diskFolders: Int? = nil
 }
 
 // Reading state.json never fails over one bad value. A field that's missing or the wrong shape
@@ -87,6 +101,7 @@ extension SavedState {
         selectedSplit = c.lenient(UUID.self, .selectedSplit, decoder)
         selectedTab = c.lenient(UUID.self, .selectedTab, decoder)
         selectedDocument = c.lenient(String.self, .selectedDocument, decoder)
+        diskFolders = c.lenient(Int.self, .diskFolders, decoder)
     }
 }
 
@@ -102,6 +117,8 @@ extension Space {
         selectedTab = c.lenient(UUID.self, .selectedTab, decoder)
         selectedSplit = c.lenient(UUID.self, .selectedSplit, decoder)
         profile = c.lenient(String.self, .profile, decoder)
+        folderName = c.lenient(String.self, .folderName, decoder)
+        folderBookmark = c.lenient(Data.self, .folderBookmark, decoder)
     }
 }
 
@@ -115,6 +132,8 @@ extension Folder {
         createdAt = c.lenient(Date.self, .createdAt, decoder) ?? Date()
         order = c.lenient(Double.self, .order, decoder)
         parentID = c.lenient(UUID.self, .parentID, decoder)
+        path = c.lenient(String.self, .path, decoder)
+        bookmark = c.lenient(Data.self, .bookmark, decoder)
     }
 }
 
@@ -138,6 +157,7 @@ extension TabRecord {
         order = c.lenient(Double.self, .order, decoder)
         lastActiveAt = c.lenient(Date.self, .lastActiveAt, decoder)
         isMuted = c.lenient(Bool.self, .isMuted, decoder)
+        savedFile = c.lenient(String.self, .savedFile, decoder)
     }
 }
 
@@ -208,6 +228,8 @@ final class BrowserModel: ObservableObject {
     private var profileConfigs: [String: WKWebViewConfiguration] = [:]
     private var upkeepTimer: Timer?
     private var closedSink: AnyCancellable?
+    /// The space folders' watcher and what it watches. See BrowserModel+SpaceFolders.
+    let spaceFolderState = SpaceFolderState()
 
     /// The smoke test uses a throwaway WebKit store so it leaves no cookies or site data behind.
     static var useEphemeralStore = false
@@ -352,18 +374,44 @@ final class BrowserModel: ObservableObject {
     // MARK: - Persistence
 
     private func load() {
+        SpaceFolders.customRoot = BrowserPrefs.shared.value.spaceFoldersRoot.map { URL(fileURLWithPath: $0, isDirectory: true) }
         // A file that can't be read moves into Recovered/ first, so the fresh Home below never
         // gets saved over it.
-        guard let s = SavedFile.read(SavedState.self, from: Paths.stateFile, label: "spaces and tabs") else {
+        guard var s = SavedFile.read(SavedState.self, from: Paths.stateFile, label: "spaces and tabs") else {
             let home = Space(name: "Home")
             spaces = [home]
             currentSpaceID = home.id
+            // A new profile starts with its folders on disk.
+            spaceFolderState.migrated = SpaceFolders.root != nil
+            setUpSpaceFolders()
             return
         }
         // Version 1 had no spaces: everything moves into one called Home.
         var sp = s.spaces ?? []
         if sp.isEmpty {
             sp = [Space(name: "Home", selectedTab: s.selectedTab, selectedSplit: s.selectedSplit)]
+        }
+        // Today's sidebar folders move onto disk, once. The launch backup has already run. If
+        // the move can't finish, the folders stay as they were and it's tried again next launch.
+        var moved = false
+        spaceFolderState.markedMoved = s.diskFolders == SpaceFolderMigration.version
+        if let root = SpaceFolders.root {
+            if s.diskFolders == SpaceFolderMigration.version {
+                spaceFolderState.migrated = true
+            } else {
+                var before = s
+                before.spaces = sp
+                do {
+                    let (after, report) = try SpaceFolderMigration.run(before, notesFolders: Settings.shared.value.notesFolders, root: root)
+                    s = after
+                    sp = after.spaces ?? sp
+                    spaceFolderState.migrated = true
+                    moved = true
+                    appLog.notice("space folders: moved \(report.folders) folders, \(report.pages) pages, \(report.notes) notes, linked \(report.linkedFolders) notes folders, reused \(report.reused)")
+                } catch {
+                    appLog.error("space folders: the move didn't finish: \(String(describing: error), privacy: .public)")
+                }
+            }
         }
         spaces = sp
         let home = sp[0].id
@@ -390,6 +438,8 @@ final class BrowserModel: ObservableObject {
             t.order = r.order ?? (r.isPinned || r.folderID != nil ? Double(i) : Double(byNewest.firstIndex(of: r.id) ?? i))
             t.lastActiveAt = r.lastActiveAt ?? r.createdAt
             t.isMuted = r.isMuted ?? false
+            t.savedFile = r.savedFile
+            if t.kind == .web, t.savedFile != nil, t.pinnedURL == nil { t.pinnedURL = t.url }
             return t
         }
         let ids = Set(tabs.map { $0.id })
@@ -407,6 +457,7 @@ final class BrowserModel: ObservableObject {
             return x
         }
         checkNotesOnDisk()
+        setUpSpaceFolders()
         SessionFiles.prune(keeping: ids.union(closed.items.map { $0.id }))
         let cur = currentSpace
         if let sid = cur?.selectedSplit ?? s.selectedSplit, let sp = splits.first(where: { $0.id == sid && $0.spaceID == currentSpaceID }) {
@@ -416,6 +467,8 @@ final class BrowserModel: ObservableObject {
         } else if let p = s.selectedDocument, FileManager.default.fileExists(atPath: p) {
             openNote(URL(fileURLWithPath: p))
         }
+        // The moved state is saved right away, so the move is recorded as done.
+        if moved { saveNow() }
     }
 
     func scheduleSave() {
@@ -435,9 +488,11 @@ final class BrowserModel: ObservableObject {
             TabRecord(id: $0.id, kind: $0.kind, url: $0.url?.absoluteString, title: $0.title,
                       isPinned: $0.isPinned, folderID: $0.folderID, createdAt: $0.createdAt, spaceID: $0.spaceID,
                       isEssential: $0.isEssential ? true : nil, pinnedURL: $0.pinnedURL?.absoluteString,
-                      customTitle: $0.customTitle, order: $0.order, lastActiveAt: $0.lastActiveAt, isMuted: $0.isMuted ? true : nil)
+                      customTitle: $0.customTitle, order: $0.order, lastActiveAt: $0.lastActiveAt, isMuted: $0.isMuted ? true : nil,
+                      savedFile: $0.savedFile)
         }
         s.splits = splits
+        s.diskFolders = spaceFolderState.migrated || spaceFolderState.markedMoved ? SpaceFolderMigration.version : nil
         switch selection {
         case .tab(let id): s.selectedTab = id
         case .split(let sid): s.selectedSplit = sid
@@ -495,6 +550,8 @@ final class BrowserModel: ObservableObject {
         for t in visibleTabs { t.lastActiveAt = now }
         // Picking something in the sidebar while the bar is open means you're done with the bar.
         if bar.isOpen { bar.close() }
+        // A page that finished loading off screen gets its picture now, if it's still at the top.
+        for t in visibleTabs { Thumbnails.shared.tabShown(t) }
         mediaSelectionChanged(leaving: leaving)
         refreshFocus()
         syncAddress()
@@ -521,6 +578,12 @@ final class BrowserModel: ObservableObject {
         d.onLoaded = { [weak self] doc in self?.noteDidPause(doc) }
         docs[key] = d
         return d
+    }
+
+    /// Files an open document under a note's new address.
+    func docsReplace(_ old: String, _ new: String, _ d: NoteDocument) {
+        docs[old] = nil
+        docs[new] = d
     }
 
     func noteDidPause(_ doc: NoteDocument) {
@@ -700,7 +763,7 @@ final class BrowserModel: ObservableObject {
                 recordClosed([tab], reason: .closed)
                 tabs.removeAll { $0.id == tab.id }
             }
-        } else if tab.keepsPinnedURL {
+        } else if tab.keepsPinnedURL || (tab.keepsSavedURL && tab.folderID != nil) {
             resetPinned(tab, load: false)
         } else if tab.folderID != nil {
             tab.unload()
@@ -762,7 +825,7 @@ final class BrowserModel: ObservableObject {
             dissolveSplit(around: t.id)
             if t.isNote || t.isApp || !(t.isPinned || t.folderID != nil || t.isEssential) {
                 remove(t)
-            } else if t.keepsPinnedURL {
+            } else if t.keepsPinnedURL || (t.keepsSavedURL && t.folderID != nil) {
                 resetPinned(t, load: false)
             } else {
                 t.unload()
@@ -795,6 +858,8 @@ final class BrowserModel: ObservableObject {
     @discardableResult
     func createFolder(named name: String, in parent: UUID? = nil) -> Folder {
         let parent = parent.flatMap { folder($0) != nil && folderDepth($0) + 1 < Folder.maxDepth ? $0 : nil }
+        // On disk: in the space's folder, pinned, or inside a pinned folder's tree.
+        if diskFolders, parent == nil || isDiskFolder(parent), let f = createDiskFolder(named: name, in: parent) { return f }
         let space = parent.flatMap { folder($0)?.spaceID } ?? currentSpaceID
         let first = childFolders(of: parent, space: space).first?.order ?? 0
         let f = Folder(spaceID: space, name: name, order: first - 1, parentID: parent)
@@ -808,6 +873,7 @@ final class BrowserModel: ObservableObject {
         guard let i = folders.firstIndex(where: { $0.id == f.id }) else { return }
         let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !n.isEmpty else { return }
+        if folders[i].path != nil { renameDiskFolder(folders[i], to: n); return }
         folders[i].name = n
         scheduleSave()
     }
@@ -816,6 +882,11 @@ final class BrowserModel: ObservableObject {
     /// and its items go into the folder it was in, or back to Tabs at the top. Notes on disk are
     /// untouched.
     func deleteFolder(_ f: Folder) {
+        // A pinned folder is unpinned and one inside it goes to the Trash. Nothing is deleted outright.
+        if f.path != nil {
+            if f.parentID == nil { unpinFolder(f.id) } else { trashDiskFolder(f) }
+            return
+        }
         let kids = childFolders(of: f.id)
         var siblings = childFolders(of: f.parentID, space: f.spaceID).map(\.id)
         let at = siblings.firstIndex(of: f.id) ?? siblings.count
@@ -915,6 +986,8 @@ final class BrowserModel: ObservableObject {
             let u = URL(fileURLWithPath: p, isDirectory: true)
             if roots.contains(where: { FileSafety.isInside(u, $0) || $0.standardizedFileURL.path == u.standardizedFileURL.path }) { return u }
         }
+        // Otherwise the space's own folder, once space folders are on.
+        if let sp = currentSpace, let u = spaceFolderURL(sp) { return u }
         return Settings.shared.value.defaultNewNotesFolder
     }
 
@@ -1037,11 +1110,14 @@ final class BrowserModel: ObservableObject {
         endDwell(tab)
         tab.captureWork?.cancel()
         tab.contextWork?.cancel()
+        Thumbnails.shared.cancel(tab)
     }
 
     func pageDidFinish(_ tab: Tab) {
         guard let wv = tab.webView, let url = wv.url else { return }
         if isSelected(tab) { startDwell(tab); syncAddress() }
+        // A picture of the top of the page for its card, a second from now if it's on screen.
+        Thumbnails.shared.pageFinished(tab, visible: isVisible(tab))
         HistoryStore.shared.record(url: url, title: wv.title ?? tab.title, spaceID: tab.isEssential ? nil : tab.spaceID)
         Favicons.shared.capture(from: tab)
         if tab.isMuted { MediaWatch.setMuted(true, in: tab) }
@@ -1153,6 +1229,16 @@ final class BrowserModel: ObservableObject {
             return "Already in \(folder.name)"
         }
         let isNote = d.source == .note || d.source == .markdown
+        if folder.path != nil {
+            // A folder on disk: a saved page, or a link to the note.
+            guard let dir = folderDirectory(folder) else { return "Couldn't add" }
+            do {
+                if isNote { try SpaceFolders.link(u, in: dir) } else { try SpaceFolders.savePage(u, title: d.title, in: dir) }
+            } catch { return "Couldn't add" }
+            syncPinnedFolders()
+            setFolder(folder.id, open: true)
+            return "Added to \(folder.name)"
+        }
         let t = Tab(kind: isNote ? .note : .web, url: u, title: isNote ? u.deletingPathExtension().lastPathComponent : d.title, folderID: folder.id)
         t.model = self
         t.order = (tabs(in: folder).map { $0.order }.max() ?? 0) + 1
@@ -1234,14 +1320,17 @@ final class BrowserModel: ObservableObject {
         let pick = Space.palette.first { !used.contains($0.1) }?.1 ?? Space.palette[spaces.count % Space.palette.count].1
         let sp = Space(name: name, icon: icon ?? Space.icons[spaces.count % Space.icons.count], color: color ?? pick)
         spaces.append(sp)
+        ensureSpaceFolder(sp.id)
         scheduleSave()
-        return sp
+        return spaces.first { $0.id == sp.id } ?? sp
     }
 
     func updateSpace(_ id: UUID, _ change: (inout Space) -> Void) {
         guard let i = spaces.firstIndex(where: { $0.id == id }) else { return }
         let oldProfile = spaces[i].profile
+        let oldName = spaces[i].name
         change(&spaces[i])
+        if spaces[i].name != oldName { renameSpaceFolder(id) }
         if spaces[i].profile != oldProfile {
             // A different profile means a different cookie store: pages reload in the new one.
             for t in tabs where t.spaceID == id && !t.isEssential && t.isLoaded {
@@ -1283,6 +1372,15 @@ final class BrowserModel: ObservableObject {
 
     func promptDeleteSpace(_ sp: Space) {
         guard spaces.count > 1 else { Prompt.info(title: "This is your only space", message: "Make another space before deleting this one."); return }
+        // Its folder stays on disk unless you tick the box.
+        if let folder = spaceFolderURL(sp), SpaceFolders.isDirectory(folder) {
+            guard let trashFolder = Prompt.confirmWithOption(title: "Delete the \(sp.name) space?",
+                                                             message: "Its tabs close and its pins and splits go with it. Its folder, \(folder.lastPathComponent), stays on disk.",
+                                                             option: "Also move the \(folder.lastPathComponent) folder to the Trash", ok: "Delete space") else { return }
+            deleteSpace(sp.id)
+            if trashFolder { SpaceFolders.trash([folder]) { [weak self] ok in if !ok { self?.toast("Couldn't move the folder to the Trash") } } }
+            return
+        }
         if Prompt.confirm(title: "Delete the \(sp.name) space?",
                           message: "Its tabs close and its pins, folders and splits go with it. Notes on disk aren't touched.", ok: "Delete space") {
             deleteSpace(sp.id)
@@ -1318,6 +1416,11 @@ final class BrowserModel: ObservableObject {
         guard tab.spaceID != id || tab.isEssential else { return }
         let wasSelected = isSelected(tab)
         if split(containing: tab.id) != nil { dissolveSplit(around: tab.id) }
+        // Out of a folder on disk, the file stays where it is and the tab goes on its own.
+        if isDiskFolder(tab.folderID) {
+            tab.savedFile = nil
+            if tab.isWeb { tab.pinnedURL = nil }
+        }
         if wasSelected { endDwell(tab) }
         let oldProfile = profile(of: tab)
         tab.spaceID = id
@@ -1432,6 +1535,20 @@ enum Prompt {
         a.addButton(withTitle: ok)
         a.addButton(withTitle: "Cancel")
         return a.runModal() == .alertFirstButtonReturn
+    }
+
+    /// A confirmation with a checkbox, off by default. Nil when cancelled, else whether it was ticked.
+    static func confirmWithOption(title: String, message: String, option: String, ok: String) -> Bool? {
+        let a = NSAlert()
+        a.messageText = title
+        a.informativeText = message
+        let box = NSButton(checkboxWithTitle: option, target: nil, action: nil)
+        box.state = .off
+        a.accessoryView = box
+        a.addButton(withTitle: ok)
+        a.addButton(withTitle: "Cancel")
+        guard a.runModal() == .alertFirstButtonReturn else { return nil }
+        return box.state == .on
     }
 }
 
