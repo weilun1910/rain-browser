@@ -37,10 +37,11 @@ enum DragShots {
         let tmp = fm.temporaryDirectory.appendingPathComponent("BrowserPOC-drag-shots-\(UUID().uuidString)", isDirectory: true)
         Paths.ensure(tmp)
         for f in ["state.json", "settings.json", "sources.json", "browser.json", "related.json", "index.sqlite", "index.sqlite-wal",
-                  "index.sqlite-shm", "history.sqlite", "favicons", "demo-items", DemoSeeder.marker] {
+                  "index.sqlite-shm", "history.sqlite", "favicons", "demo-items", DemoSeeder.marker] + ShotProfile.folderFiles {
             try? fm.copyItem(at: profile.appendingPathComponent(f), to: tmp.appendingPathComponent(f))
         }
         Paths.overrideRoot = tmp
+        ShotProfile.useSpaceFolders(in: tmp)
         ModelFiles.overrideDir = profile.appendingPathComponent("Models", isDirectory: true)
         ModelFiles.clearReadyCache()
         Settings.shared.reloadFromDisk()
@@ -194,5 +195,21 @@ enum DragShots {
 
         print(failed == 0 ? "All drag shots rendered." : "\(failed) drag shot checks failed.")
         return failed == 0 ? 0 : 1
+    }
+}
+
+/// What the offscreen shots copy of a demo profile's space folders, and how they point Rain at
+/// the copy. Paths inside the folders are kept relative to their root, so the copy's state finds
+/// the copy's files and never writes to the profile it came from.
+@MainActor
+enum ShotProfile {
+    static let folderFiles = ["Space Folders", "Thumbnails", "space-folders.json"]
+
+    static func useSpaceFolders(in tmp: URL) {
+        SpaceFolders.enabled = true
+        SpaceFolders.customRoot = nil
+        SpaceFolders.overrideRoot = tmp.appendingPathComponent("Space Folders", isDirectory: true)
+        Thumbnails.fetchesShareImages = false
+        FolderMeta.shared.reload()
     }
 }

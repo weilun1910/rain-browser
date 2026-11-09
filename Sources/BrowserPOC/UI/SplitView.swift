@@ -2,13 +2,14 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// What a sidebar drag carries.
+/// What a sidebar drag carries. `entry` is a file or folder from the folder popup, by its path.
 enum DragItem: Equatable {
-    case tab(UUID), split(UUID), folder(UUID)
+    case tab(UUID), split(UUID), folder(UUID), entry(URL)
 }
 
 /// Sidebar items drag as an app-only pasteboard type, so web pages and text views don't take the drop.
-/// The payload is a tab id, or "split:", "folder:" or "multi:" followed by ids, as UTF-8.
+/// The payload is a tab id, or "split:", "folder:" or "multi:" followed by ids, or "entry:"
+/// followed by paths from the folder popup, one per line, as UTF-8.
 ///
 /// The type is declared in Info.plist, and drop targets get it as a `UTType`. Undeclared, its name
 /// alone resolves to no type, so every drop target was registered for nothing and AppKit handed
@@ -30,6 +31,8 @@ enum ItemDrag {
     static func provider(_ id: UUID) -> NSItemProvider { provider(payload: id.uuidString) }
     static func provider(split id: UUID) -> NSItemProvider { provider(payload: "split:\(id.uuidString)") }
     static func provider(folder id: UUID) -> NSItemProvider { provider(payload: "folder:\(id.uuidString)") }
+    /// Files and folders from the folder popup.
+    static func provider(entries urls: [URL]) -> NSItemProvider { provider(payload: "entry:" + urls.map(\.path).joined(separator: "\n")) }
     /// Several tabs at once, from a multi-selection.
     static func provider(ids: [UUID]) -> NSItemProvider {
         if ids.count == 1 { return provider(ids[0]) }
@@ -39,6 +42,9 @@ enum ItemDrag {
     static func parse(_ s: String) -> [DragItem] {
         if s.hasPrefix("split:") { return UUID(uuidString: String(s.dropFirst(6))).map { [.split($0)] } ?? [] }
         if s.hasPrefix("folder:") { return UUID(uuidString: String(s.dropFirst(7))).map { [.folder($0)] } ?? [] }
+        if s.hasPrefix("entry:") {
+            return s.dropFirst(6).split(separator: "\n").filter { $0.hasPrefix("/") }.map { .entry(URL(fileURLWithPath: String($0))) }
+        }
         if s.hasPrefix("multi:") { return s.dropFirst(6).split(separator: ",").compactMap { UUID(uuidString: String($0)) }.map { .tab($0) } }
         return UUID(uuidString: s).map { [.tab($0)] } ?? []
     }

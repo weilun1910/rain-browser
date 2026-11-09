@@ -16,11 +16,11 @@ final class Thumbnails {
     static let shared = Thumbnails()
 
     /// The snapshot's width in points, about 480 px on a card.
-    static let width: CGFloat = 480
+    nonisolated static let width: CGFloat = 480
     /// Cards are 16:10.
-    static let aspect: CGFloat = 10.0 / 16.0
+    nonisolated static let aspect: CGFloat = 10.0 / 16.0
     /// How far down a page can be and still count as the top.
-    static let topSlack: Double = 8
+    nonisolated static let topSlack: Double = 8
     /// The wait after a page finishes, so late images and fonts land.
     nonisolated(unsafe) static var delay: TimeInterval = 1.0
 

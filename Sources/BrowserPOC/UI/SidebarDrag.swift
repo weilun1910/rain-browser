@@ -33,8 +33,11 @@ final class SidebarDrag: ObservableObject {
 
     func begin(items: [DragItem]) {
         self.items = items
-        let ids = items.map { i -> UUID in
-            switch i { case .tab(let id), .split(let id), .folder(let id): return id }
+        let ids = items.compactMap { i -> UUID? in
+            switch i {
+            case .tab(let id), .split(let id), .folder(let id): return id
+            case .entry: return nil
+            }
         }
         // Set on the next turn: SwiftUI asks for the drag's item while it builds the drag image.
         DispatchQueue.main.async {
@@ -67,6 +70,11 @@ final class SidebarDrag: ObservableObject {
     var draggingFolder: UUID? {
         guard case .folder(let id)? = items.first else { return nil }
         return id
+    }
+
+    /// Files and folders dragged out of the folder popup.
+    var draggingEntries: [URL] {
+        items.compactMap { if case .entry(let u) = $0 { return u }; return nil }
     }
 
     func end() {

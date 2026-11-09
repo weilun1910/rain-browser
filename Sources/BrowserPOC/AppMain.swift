@@ -300,6 +300,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         tab.addItem(item("Open Peek as Tab", #selector(expandPeekAction), "o", target: self))
         addSubmenu(main, "Tab", tab)
 
+        let foldersMenu = NSMenu(title: "Folders")
+        foldersMenu.addItem(item("Show Folders", #selector(showFoldersAction), "b", [.command, .option], target: self))
+        addSubmenu(main, "Folders", foldersMenu)
+
         let spacesMenu = NSMenu(title: "Spaces")
         spacesMenu.addItem(item("Next Space", #selector(nextSpaceAction), String(UnicodeScalar(NSRightArrowFunctionKey)!), [.command, .option], target: self))
         spacesMenu.addItem(item("Previous Space", #selector(previousSpaceAction), String(UnicodeScalar(NSLeftArrowFunctionKey)!), [.command, .option], target: self))
@@ -397,6 +401,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc func nextSpaceAction() { model.switchSpace(by: 1) }
     @objc func previousSpaceAction() { model.switchSpace(by: -1) }
     @objc func newSpaceAction() { model.promptNewSpace() }
+    @objc func showFoldersAction() { showMain(); model.showFolders() }
     @objc func restoreClosedItem(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? UUID else { return }
         showMain()
@@ -411,6 +416,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// Returns true when the key was used.
     func handleKey(_ e: NSEvent) -> Bool {
         guard let model, e.window === window || e.window == nil else { return false }
+        // The folder popup takes its keys first while it's up.
+        if FolderPopup.shared.handleKey(e) { return true }
         let mods = e.modifierFlags.intersection([.command, .control, .option, .shift])
         let digit: [UInt16: Int] = [18: 1, 19: 2, 20: 3, 21: 4, 23: 5, 22: 6, 26: 7, 28: 8, 25: 9]
         // Ctrl-Tab and Ctrl-Shift-Tab: recent tabs, like Arc.

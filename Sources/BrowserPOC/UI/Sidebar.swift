@@ -203,7 +203,11 @@ struct SpacePage: View {
     }
 
     private var foldersSection: some View {
-        SectionBox(title: "Folders", trailing: AnyView(SmallIconButton(symbol: "plus", help: "New folder") { model.promptNewFolder() }),
+        SectionBox(title: "Folders", trailing: AnyView(HStack(spacing: 0) {
+                       SmallIconButton(symbol: FolderPopup.icon, help: "Show Folders (Option-Cmd-B)") { model.showFolders(from: "folders-header") }
+                           .folderPopupAnchor("folders-header")
+                       SmallIconButton(symbol: "plus", help: "New folder") { model.promptNewFolder() }
+                   }),
                    onDropItems: { items in
                        // A folder dropped on the header goes back to the top level, first.
                        if case .folder(let fid)? = items.first { Motion.run(Motion.insert) { model.placeFolder(fid, in: nil, at: 0) } }
@@ -242,7 +246,11 @@ struct SpacePage: View {
             }
             SmallIconButton(symbol: "square.and.pencil", help: "New note") { model.newNote() }
         }
-        return SectionBox(title: iconsOnly ? "" : "Tabs", trailing: AnyView(trailing), onDropItems: { items in model.place(items.compactMap(\.sidebarRef), in: .today, at: 0) }) {
+        return SectionBox(title: iconsOnly ? "" : "Tabs", trailing: AnyView(trailing), onDropItems: { items in
+            model.place(items.compactMap(\.sidebarRef), in: .today, at: 0)
+            // Pages and notes dragged out of the folder popup open here.
+            model.openEntriesAsTabs(items.compactMap { if case .entry(let u) = $0 { return u }; return nil })
+        }) {
             Button { model.newTabCommand() } label: {
                 HStack(spacing: Theme.Space.rowIconGap) {
                     Image(systemName: "plus").font(.system(size: 12, weight: .medium)).frame(width: Theme.Space.rowIcon)
@@ -270,7 +278,7 @@ extension DragItem {
         switch self {
         case .tab(let id): return .tab(id)
         case .split(let id): return .split(id)
-        case .folder: return nil
+        case .folder, .entry: return nil
         }
     }
 }
@@ -1016,6 +1024,8 @@ struct IconSidebarMenu: View {
 
     var body: some View {
         Menu {
+            Button("Show Folders") { model.showFolders(from: "icon-menu") }
+            Divider()
             Button("New Note") { model.newNote() }
             Button("New Folder...") { model.promptNewFolder() }
             Button("New Space...") { model.promptNewSpace() }
@@ -1031,6 +1041,7 @@ struct IconSidebarMenu: View {
         .buttonStyle(IconButtonStyle(width: 28, height: 24, symbolSize: 12))
         .menuIndicator(.hidden)
         .fixedSize()
+        .folderPopupAnchor("icon-menu")
         .help("More")
     }
 }

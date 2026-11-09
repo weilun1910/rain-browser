@@ -42,6 +42,8 @@ enum BarActions {
     private static func web(_ m: BrowserModel) -> Tab? { m.currentWebTab }
 
     static let fixed: [BarAction] = [
+        BarAction(id: "folders.show", title: "Show folders", icon: FolderPopup.icon, shortcut: "⌥⌘B", keywords: ["bookmarks", "saved", "files", "finder"],
+                  available: { $0.spaceFoldersOn }) { $0.showFolders() },
         BarAction(id: "tab.copyURL", title: "Copy link", icon: "link", shortcut: "⇧⌘C", keywords: ["url", "address", "copy url"],
                   available: { $0.currentTab?.url != nil && $0.currentTab?.isApp == false }) { $0.copyCurrentURL() },
         BarAction(id: "tab.copyMarkdown", title: "Copy link as Markdown", icon: "link", shortcut: "⌥⇧⌘C", keywords: ["url", "markdown"],

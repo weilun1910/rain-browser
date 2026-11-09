@@ -46,6 +46,7 @@ enum SpaceFolderTests {
             links(base.appendingPathComponent("links"))
             listing(base.appendingPathComponent("listing"))
             model(base.appendingPathComponent("model"))
+            filing(base.appendingPathComponent("filing"))
             thumbnails()
             try? FileManager.default.removeItem(at: Paths.stateFile)
             FolderMeta.shared.reload()
@@ -199,6 +200,65 @@ enum SpaceFolderTests {
             check(SpaceFolders.encode(home.appendingPathComponent("Alpha")) == "Home/Alpha" && SpaceFolders.decode("Home/Alpha")?.path == home.appendingPathComponent("Alpha").path
                   && SpaceFolders.encode(URL(fileURLWithPath: "/tmp/x")) == "/tmp/x",
                   "paths inside the root are kept relative to it, others in full")
+        }
+    }
+
+    // MARK: Filing from the popup
+
+    @MainActor static func filing(_ dir: URL) {
+        withSpaceFolders(dir) { root, _ in
+            let m = ArcZenTests.freshModel()
+            guard let home = m.spaces.first, let homeDir = m.spaceFolderURL(home) else { check(false, "a space folder for filing"); return }
+            let work = try! SpaceFolders.makeFolder(named: "Work", in: homeDir)
+            // A vault somewhere else, linked in.
+            let vault = dir.appendingPathComponent("Vault", isDirectory: true)
+            Paths.ensure(vault)
+            let vaultNote = vault.appendingPathComponent("Ideas.md")
+            try? Data("# Ideas\n".utf8).write(to: vaultNote)
+            try? SpaceFolders.link(vault, in: homeDir)
+            SpaceFolders.refreshLinkedRoots()
+
+            // Tabs dropped on a folder.
+            let page = ArcZenTests.page(m, "https://example.com/filed", "Filed page")
+            let local = homeDir.appendingPathComponent("Draft.md")
+            try? Data("# Draft\n".utf8).write(to: local)
+            let draft = m.openNote(local, select: false)
+            let ideas = m.openNote(vaultNote, select: false)
+            let n = m.fileTabs([page.id, draft.id, ideas.id], into: work)
+            let names = ((try? FileManager.default.contentsOfDirectory(atPath: work.path)) ?? []).sorted()
+            check(n == 3 && names == ["Draft.md", "Filed page.webloc", "Ideas"], "tabs dropped on a folder: the page is saved, a note is filed there",
+                  names.joined(separator: ", "))
+            check(!SpaceFolders.exists(local) && draft.url?.path == work.appendingPathComponent("Draft.md").path,
+                  "a note that lives in the space folders moves, and its tab follows it")
+            check(SpaceFolders.exists(vaultNote) && FileLink.resolve(work.appendingPathComponent("Ideas"))?.path == vaultNote.standardizedFileURL.path
+                  && ideas.url?.path == vaultNote.standardizedFileURL.path, "a note from a linked folder gets a link, and the original stays put")
+
+            // Moving cards.
+            let later = try! SpaceFolders.makeFolder(named: "Later", in: homeDir)
+            let saved = work.appendingPathComponent("Filed page.webloc")
+            m.fileEntries([saved], into: later)
+            check(!SpaceFolders.exists(saved) && SpaceFolders.exists(later.appendingPathComponent("Filed page.webloc")), "a saved page moves to another folder")
+            let vaultFile = vault.appendingPathComponent("Plan.md")
+            try? Data("# Plan\n".utf8).write(to: vaultFile)
+            m.fileEntries([vaultFile], into: later)
+            check(SpaceFolders.exists(vaultFile) && FileLink.isLink(later.appendingPathComponent("Plan")),
+                  "something moved out of a linked folder is linked instead, and the original stays")
+            let sub = vault.appendingPathComponent("Sub", isDirectory: true)
+            Paths.ensure(sub)
+            m.fileEntries([vaultFile], into: sub)
+            check(!SpaceFolders.exists(vaultFile) && SpaceFolders.exists(sub.appendingPathComponent("Plan.md")), "inside the same linked folder it moves")
+
+            // Renaming and the Trash.
+            if let e = SpaceFolders.entry(later.appendingPathComponent("Filed page.webloc")), let r = m.renameEntry(e, to: "Kept") {
+                check(r.lastPathComponent == "Kept.webloc", "renaming a card renames the file and keeps it a saved page")
+                var done: Bool?
+                m.trashEntries([SpaceFolders.entry(r)!]) { done = $0 }
+                _ = SelfTest.spin(5) { done != nil }
+                check(done == true && !SpaceFolders.exists(r), "Move to Trash sends it to the Trash")
+            } else {
+                check(false, "a saved page renames")
+            }
+            check(SpaceFolders.isDirectory(root), "nothing else was touched")
         }
     }
 

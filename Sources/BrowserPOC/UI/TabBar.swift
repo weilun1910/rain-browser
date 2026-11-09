@@ -215,6 +215,7 @@ struct TabBarLayout: View {
         .overlay { HoverCardLayer() }
         .background(TabBarTint(strip: SpaceStrip.of(model)))
         .overlay { CommandBarOverlay(bar: model.bar) }
+        .overlay { FolderPopupLayer() }
         .overlay { if let s = model.switcher { SwitcherOverlay(state: s).modifier(DelayedAppear(delay: Motion.Timing.switcherDelay)) } }
         .overlay { StartupOverlayHost() }
         .background(TrafficLights(hidden: false))
@@ -269,6 +270,8 @@ struct TabBarToolbar: View {
                 .layoutPriority(1)
             WindowDragArea().frame(minWidth: Theme.Space.l)
             DownloadsButton()
+            NavButton(symbol: FolderPopup.icon, help: "Folders (Option-Cmd-B)") { model.showFolders(from: "toolbar") }
+                .folderPopupAnchor("toolbar")
             RelatedToggleButton()
             NavButton(symbol: "clock", help: "History (Cmd-Y)") { model.openAppPage("history") }
             NavButton(symbol: GraphTab.icon, help: "Graph (Cmd-Option-G)") { model.openGraph() }
