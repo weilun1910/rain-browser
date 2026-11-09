@@ -198,6 +198,9 @@ struct ContentArea: View {
 
     @State private var dropTarget: DropTarget?
     @State private var frames: [UUID: CGRect] = [:]
+    @ObservedObject private var drag = SidebarDrag.shared
+    /// Offscreen shots can't start a real drag, so they hand in the target a drag would make.
+    nonisolated(unsafe) static var tourDrop: (@MainActor (CGSize, [UUID: CGRect]) -> DropTarget?)?
     @Environment(\.spaceAccent) private var spaceAccent
     @ObservedObject private var peekMotion = PeekMotion.shared
     @Namespace private var paneSpace
@@ -205,8 +208,16 @@ struct ContentArea: View {
     /// A Peek is up and not on its way out.
     var underPeek: Bool { model.peek != nil && peekMotion.phase != .closing }
 
+    /// Room the page leaves for a tab about to land beside it: it moves into the half it'll keep.
+    static func room(for t: DropTarget?, in size: CGSize) -> EdgeInsets {
+        guard let t, t.single else { return EdgeInsets() }
+        return EdgeInsets(top: t.staying.minY, leading: t.staying.minX,
+                          bottom: max(0, size.height - t.staying.maxY), trailing: max(0, size.width - t.staying.maxX))
+    }
+
     var body: some View {
         GeometryReader { g in
+            let drop = dropTarget ?? Self.tourDrop?(g.size, frames)
             ZStack {
                 Group {
                     if let sp = model.currentSplit, sp.items.allSatisfy({ model.tab($0) != nil }) {
@@ -215,6 +226,9 @@ struct ContentArea: View {
                     } else {
                         PaneView(tab: model.currentTab).paneCard()
                             .matchedPane(model.currentTab?.id, in: paneSpace)
+                            // A tab dragged over the page: the page slides into the half it'll keep.
+                            .padding(Self.room(for: drop, in: g.size))
+                            .motion(Motion.dropPreview, value: drop.map { $0.single ? $0.side : nil } ?? nil)
                             .transition(.identity)
                     }
                 }
@@ -227,14 +241,24 @@ struct ContentArea: View {
                 .scaleEffect(!underPeek || Motion.reduceMotion ? 1 : 0.985)
                 .opacity(underPeek ? 0.7 : 1)
                 .motion(peekMotion.phase == .closing ? Motion.peekOut : Motion.peek, value: underPeek)
-                if let t = dropTarget {
-                    Theme.Radius.shape(Theme.Radius.card)
-                        .fill(spaceAccent.opacity(0.12))
-                        .overlay(Theme.Radius.shape(Theme.Radius.card).strokeBorder(spaceAccent.opacity(0.5), lineWidth: 1))
-                        .frame(width: t.preview.width, height: t.preview.height)
-                        .position(x: t.preview.midX, y: t.preview.midY)
+                if let t = drop {
+                    if !t.single {
+                        // Over a split, the half of the pane that stays dims a little.
+                        Theme.Radius.shape(Theme.Radius.card)
+                            .fill(Color.black.opacity(0.16))
+                            .frame(width: t.staying.width, height: t.staying.height)
+                            .position(x: t.staying.midX, y: t.staying.midY)
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                    }
+                    // A card for the tab in the half it would take. Crossing the middle sends it to
+                    // the other side: it fades out here and slides in from that edge.
+                    SplitDropCard(tab: t.tab.flatMap { model.tab($0) })
+                        .frame(width: t.incoming.width, height: t.incoming.height)
+                        .position(x: t.incoming.midX, y: t.incoming.midY)
                         .allowsHitTesting(false)
-                        .motion(Motion.hover, value: t)
+                        .id("\(t.pane?.uuidString ?? "")-\(t.side)")
+                        .transition(Self.cardTransition(t.side))
                 }
                 if model.find.visible, model.currentWebTab != nil {
                     FindBar()
@@ -267,7 +291,32 @@ struct ContentArea: View {
             .onDrop(of: [ItemDrag.type], delegate: ContentDropDelegate(frames: model.currentSplit == nil ? [:] : frames,
                                                                       bounds: CGRect(origin: .zero, size: g.size),
                                                                       target: $dropTarget, model: model))
+            .motion(Motion.dropPreview, value: drop)
+            // A drag let go somewhere else, or cancelled with Esc, takes the preview with it.
+            .onChange(of: drag.dragging.isEmpty) { _, empty in
+                guard empty, dropTarget != nil else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    if SidebarDrag.shared.dragging.isEmpty, dropTarget != nil { Motion.run(Motion.dropPreview) { dropTarget = nil } }
+                }
+            }
         }
+    }
+
+    /// The drop card arrives from the edge it'll sit against and fades when it goes.
+    static func cardTransition(_ side: PaneSide) -> AnyTransition {
+        if Motion.suppressed { return .identity }
+        if Motion.reduceMotion { return .opacity }
+        let d: CGFloat = 24
+        let offset: CGSize = {
+            switch side {
+            case .left: return CGSize(width: -d, height: 0)
+            case .right: return CGSize(width: d, height: 0)
+            case .top: return CGSize(width: 0, height: -d)
+            case .bottom: return CGSize(width: 0, height: d)
+            }
+        }()
+        return .asymmetric(insertion: .opacity.combined(with: .offset(offset)).combined(with: .scale(scale: 0.98)),
+                           removal: .opacity.animation(Motion.conceal))
     }
 
     /// The find bar sits at the top right of the focused pane.

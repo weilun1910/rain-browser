@@ -30,8 +30,10 @@ struct Folder: Codable, Identifiable, Equatable {
     var name: String
     var isExpanded: Bool = true
     var createdAt: Date = Date()
-    /// Sort key in the Folders section. Filled in on load for older files.
+    /// Sort key among the folders beside it. Filled in on load for older files.
     var order: Double?
+    /// The folder it's inside, or nil at the top of the Folders section. Added 8 Nov 2026.
+    var parentID: UUID? = nil
 }
 
 struct TabRecord: Codable {
@@ -112,6 +114,7 @@ extension Folder {
         isExpanded = c.lenient(Bool.self, .isExpanded, decoder) ?? true
         createdAt = c.lenient(Date.self, .createdAt, decoder) ?? Date()
         order = c.lenient(Double.self, .order, decoder)
+        parentID = c.lenient(UUID.self, .parentID, decoder)
     }
 }
 
@@ -369,6 +372,7 @@ final class BrowserModel: ObservableObject {
             if f.order == nil { f.order = Double(i) }
             return f
         }
+        repairFolderTree()
         // Older files had no order: Today was newest first, the rest in file order.
         let byNewest = s.tabs.sorted { $0.createdAt > $1.createdAt }.map { $0.id }
         tabs = s.tabs.enumerated().map { i, r in
@@ -785,11 +789,15 @@ final class BrowserModel: ObservableObject {
 
     // MARK: - Folders
 
+    /// A new folder at the top of the Folders section, or first among `parent`'s subfolders.
     @discardableResult
-    func createFolder(named name: String) -> Folder {
-        let first = spaceFolders.first?.order ?? 0
-        let f = Folder(spaceID: currentSpaceID, name: name, order: first - 1)
+    func createFolder(named name: String, in parent: UUID? = nil) -> Folder {
+        let parent = parent.flatMap { folder($0) != nil && folderDepth($0) + 1 < Folder.maxDepth ? $0 : nil }
+        let space = parent.flatMap { folder($0)?.spaceID } ?? currentSpaceID
+        let first = childFolders(of: parent, space: space).first?.order ?? 0
+        let f = Folder(spaceID: space, name: name, order: first - 1, parentID: parent)
         folders.append(f)
+        if let parent { openFolderPath(to: parent) }
         scheduleSave()
         return f
     }
@@ -802,10 +810,26 @@ final class BrowserModel: ObservableObject {
         scheduleSave()
     }
 
-    /// Items in the folder go back to Tabs. Notes on disk are untouched.
+    /// What was inside moves up a level: subfolders take the folder's place among its neighbours,
+    /// and its items go into the folder it was in, or back to Tabs at the top. Notes on disk are
+    /// untouched.
     func deleteFolder(_ f: Folder) {
-        for t in tabs where t.folderID == f.id { t.folderID = nil; t.order = topOrder(today: f.spaceID ?? currentSpaceID) }
-        folders.removeAll { $0.id == f.id }
+        let kids = childFolders(of: f.id)
+        var siblings = childFolders(of: f.parentID, space: f.spaceID).map(\.id)
+        let at = siblings.firstIndex(of: f.id) ?? siblings.count
+        siblings.removeAll { $0 == f.id }
+        siblings.insert(contentsOf: kids.map(\.id), at: min(at, siblings.count))
+        for (n, id) in siblings.enumerated() {
+            if let i = folders.firstIndex(where: { $0.id == id }) { folders[i].parentID = f.parentID; folders[i].order = Double(n) }
+        }
+        if let up = f.parentID, folder(up) != nil {
+            let items = refs(in: .folder(f.id))
+            folders.removeAll { $0.id == f.id }
+            place(items, in: .folder(up), at: Int.max)
+        } else {
+            for t in tabs where t.folderID == f.id { t.folderID = nil; t.order = topOrder(today: f.spaceID ?? currentSpaceID) }
+            folders.removeAll { $0.id == f.id }
+        }
         objectWillChange.send()
         scheduleSave()
     }
@@ -826,9 +850,11 @@ final class BrowserModel: ObservableObject {
 
     /// What a closed folder still shows: the items on screen, like Arc and Zen keep the active tab
     /// visible under a collapsed folder.
+    /// A closed folder hides its subfolders too, so it shows what's on screen anywhere inside it.
     func shownInClosedFolder(_ f: Folder) -> [SidebarRef] {
         let shown = Set(visibleTabs.map { $0.id })
-        return refs(in: .folder(f.id)).filter { shown.contains($0.id) }
+        guard !shown.isEmpty else { return [] }
+        return ([f.id] + descendants(of: f.id)).flatMap { refs(in: .folder($0)) }.filter { shown.contains($0.id) }
     }
 
     func setAllFolders(expanded: Bool) {
@@ -840,14 +866,14 @@ final class BrowserModel: ObservableObject {
     func openFolder(_ id: UUID) {
         guard let i = folders.firstIndex(where: { $0.id == id }) else { return }
         if folders[i].spaceID != currentSpaceID, let sid = folders[i].spaceID { switchSpace(to: sid) }
-        folders[i].isExpanded = true
+        openFolderPath(to: id)
         if let first = tabs(in: folders[i]).first { select(first) }
         scheduleSave()
     }
 
-    func promptNewFolder(moving tab: Tab? = nil) {
-        guard let name = Prompt.text(title: "New folder", message: "Name", defaultValue: ""), !name.isEmpty else { return }
-        let f = createFolder(named: name)
+    func promptNewFolder(moving tab: Tab? = nil, in parent: UUID? = nil) {
+        guard let name = Prompt.text(title: parent == nil ? "New folder" : "New subfolder", message: "Name", defaultValue: ""), !name.isEmpty else { return }
+        let f = createFolder(named: name, in: parent)
         if let tab { move(tab, to: f.id) }
         for id in multiSelection where id != tab?.id { if let t = self.tab(id) { move(t, to: f.id) } }
     }

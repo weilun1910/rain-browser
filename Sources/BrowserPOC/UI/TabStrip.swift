@@ -55,11 +55,14 @@ struct TabStripLayout: Equatable {
         var fixed: CGFloat = 0
         var units = 0.0
         var items = 0
-        for f in rows.folders {
-            fixed += BarFolderChip.width(f, count: model.tabs(in: f).count)
+        // Folders inside an open folder show after its chip, before its tabs.
+        func add(_ f: Folder) {
+            fixed += BarFolderChip.width(f, count: model.tabCount(inTree: f))
             items += 1
+            if f.isExpanded { for sub in model.childFolders(of: f.id) { add(sub) } }
             for r in model.barRows(folder: f) { units += unitCount(r, model); items += 1 }
         }
+        for f in rows.folders { add(f) }
         if !rows.folders.isEmpty && !rows.today.isEmpty { fixed += TabBarRules.groupGap }
         for r in rows.today { units += unitCount(r, model); items += 1 }
         let gaps = max(0, items - 1)
@@ -527,6 +530,8 @@ struct TabBarDropDelegate: DropDelegate {
     func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [ItemDrag.type]) }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
+        // Folders only go beside or inside other folders.
+        if MainActor.assumeIsolated({ SidebarDrag.shared.draggingFolder != nil }) { indicator = nil; return DropProposal(operation: .forbidden) }
         // With a gap open before the item, the item itself starts after it.
         let x = info.location.x - (indicator == .before ? TabBarMetrics.dropGap : 0)
         let middle = canSplit && x > width * 0.3 && x < width * 0.7
@@ -737,7 +742,7 @@ struct BarSplit: View {
         .contentShape(Rectangle())
         .simultaneousGesture(TapGesture().modifiers(.option).onEnded { model.separate(split) })
         .onHover { hovering = $0 }
-        .onDrag { SidebarDrag.shared.begin([split.id]); return ItemDrag.provider(split: split.id) }
+        .onDrag { SidebarDrag.shared.begin(items: [.split(split.id)]); return ItemDrag.provider(split: split.id) }
         .contextMenu { SplitMenu(split: split) }
         .help(split.items.compactMap { model.tab($0)?.displayTitle }.joined(separator: " | "))
         .accessibilityElement(children: .contain)
@@ -756,14 +761,19 @@ struct TabBarFolderGroup: View {
 
     var body: some View {
         let rows = model.barRows(folder: folder)
+        let subs = folder.isExpanded ? model.childFolders(of: folder.id) : []
         HStack(spacing: TabBarRules.gap) {
             BarFolderChip(folder: folder)
+            // Subfolders sit after the chip, each with its own tabs and line.
+            ForEach(subs) { sub in
+                AnyView(TabBarFolderGroup(folder: sub, tabWidth: tabWidth))
+            }
             ForEach(rows, id: \.self) { r in
                 TabBarItem(ref: r, place: .folder, tabWidth: tabWidth)
             }
         }
         .background(alignment: .bottom) {
-            if folder.isExpanded && !rows.isEmpty {
+            if folder.isExpanded && !(rows.isEmpty && subs.isEmpty) {
                 Capsule().fill(accent.opacity(0.55)).frame(height: 2)
                     .padding(.horizontal, Theme.Space.s)
                     .offset(y: 3)
@@ -779,7 +789,13 @@ struct BarFolderChip: View {
     let folder: Folder
     @EnvironmentObject var model: BrowserModel
     @State private var hovering = false
-    @State private var targeted = false
+    @State private var zone: FolderDropZone?
+    @State private var spring = SpringOpen()
+    @ObservedObject private var drag = SidebarDrag.shared
+    @Environment(\.spaceAccent) private var accent
+
+    /// The drag over this folder, or the tour's stand-in for one.
+    private var shown: FolderDropZone? { zone ?? drag.folderPreview.flatMap { $0.folder == folder.id ? $0.zone : nil } }
 
     static let font = NSFont.systemFont(ofSize: 12, weight: .medium)
     static let maxName: CGFloat = 120
@@ -792,7 +808,8 @@ struct BarFolderChip: View {
     }
 
     var body: some View {
-        let count = model.tabs(in: folder).count
+        let count = model.tabCount(inTree: folder)
+        let width = Self.width(folder, count: count)
         HStack(spacing: Theme.Space.s) {
             FolderGlyph(isOpen: folder.isExpanded, size: 16)
             Text(folder.name)
@@ -804,28 +821,28 @@ struct BarFolderChip: View {
             }
         }
         .padding(.horizontal, Theme.Space.m)
-        .frame(width: Self.width(folder, count: count), height: TabBarMetrics.itemHeight)
-        .modifier(RowBackground(selected: targeted, hovering: hovering))
+        .frame(width: width, height: TabBarMetrics.itemHeight)
+        .modifier(RowBackground(selected: shown == .into, hovering: hovering))
+        .overlay {
+            if shown == .into {
+                Theme.Radius.shape(Theme.Radius.row).strokeBorder(accent.opacity(0.8), lineWidth: 1.5)
+                    .allowsHitTesting(false)
+            }
+        }
         .sidebarCursor(model.sidebarCursor == .folder(folder.id))
         .contentShape(Rectangle())
         .onTapGesture { withAnimation(FolderMotion.toggle) { model.toggleFolder(folder) } }
         .onHover { hovering = $0 }
-        .onDrag { ItemDrag.provider(folder: folder.id) }
-        .onDrop(of: [ItemDrag.type], isTargeted: $targeted) { providers in
-            ItemDrag.loadItems(providers) { items in
-                if case .folder(let fid)? = items.first {
-                    model.placeFolder(fid, next: folder.id, after: false)
-                } else {
-                    let refs = items.compactMap(\.sidebarRef)
-                    SidebarDrag.shared.land(refs.first) { model.place(refs, in: .folder(folder.id), at: Int.max) }
-                }
-            }
+        .opacity(drag.dragging.contains(folder.id) ? SidebarDrag.dimmed : 1)
+        .padding(.leading, shown == .before ? TabBarMetrics.dropGap : 0)
+        .padding(.trailing, shown == .after ? TabBarMetrics.dropGap : 0)
+        .motion(Motion.insert, value: shown)
+        .onDrag {
+            SidebarDrag.shared.begin(items: [.folder(folder.id)])
+            return ItemDrag.provider(folder: folder.id)
         }
-        .contextMenu {
-            Button(folder.isExpanded ? "Close folder" : "Open folder") { withAnimation(FolderMotion.toggle) { model.toggleFolder(folder) } }
-            Button("Rename...") { model.promptRename(folder) }
-            Button("Delete folder") { model.deleteFolder(folder) }
-        }
+        .onDrop(of: [ItemDrag.type], delegate: FolderDropDelegate(folder: folder, length: width, horizontal: true, model: model, zone: $zone, spring: spring))
+        .contextMenu { FolderMenu(folder: folder, showToggle: true) }
         .help(folder.isExpanded ? folder.name : "\(folder.name), \(count) tabs. Click to open.")
         .accessibilityLabel("Folder \(folder.name)")
         .accessibilityAddTraits(.isButton)

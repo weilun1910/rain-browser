@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// What a sidebar drag carries.
 enum DragItem: Equatable {
@@ -7,23 +8,32 @@ enum DragItem: Equatable {
 }
 
 /// Sidebar items drag as an app-only pasteboard type, so web pages and text views don't take the drop.
-/// The payload is a tab id, or "split:", "folder:" or "multi:" followed by ids.
+/// The payload is a tab id, or "split:", "folder:" or "multi:" followed by ids, as UTF-8.
+///
+/// The type is declared in Info.plist, and drop targets get it as a `UTType`. Undeclared, its name
+/// alone resolves to no type, so every drop target was registered for nothing and AppKit handed
+/// drags to none of them. `--drag-probe` checks that drops reach the views.
 enum ItemDrag {
-    static let type = "local.browserpoc.item"
+    static let identifier = "local.browserpoc.item"
+    static let type = UTType(exportedAs: identifier, conformingTo: .data)
 
-    static func provider(_ id: UUID) -> NSItemProvider {
-        NSItemProvider(item: id.uuidString as NSString, typeIdentifier: type)
+    /// The payload as plain bytes, which is what goes on the drag's pasteboard.
+    private static func provider(payload: String) -> NSItemProvider {
+        let p = NSItemProvider()
+        p.registerDataRepresentation(forTypeIdentifier: identifier, visibility: .all) { done in
+            done(Data(payload.utf8), nil)
+            return nil
+        }
+        return p
     }
-    static func provider(split id: UUID) -> NSItemProvider {
-        NSItemProvider(item: "split:\(id.uuidString)" as NSString, typeIdentifier: type)
-    }
-    static func provider(folder id: UUID) -> NSItemProvider {
-        NSItemProvider(item: "folder:\(id.uuidString)" as NSString, typeIdentifier: type)
-    }
+
+    static func provider(_ id: UUID) -> NSItemProvider { provider(payload: id.uuidString) }
+    static func provider(split id: UUID) -> NSItemProvider { provider(payload: "split:\(id.uuidString)") }
+    static func provider(folder id: UUID) -> NSItemProvider { provider(payload: "folder:\(id.uuidString)") }
     /// Several tabs at once, from a multi-selection.
     static func provider(ids: [UUID]) -> NSItemProvider {
         if ids.count == 1 { return provider(ids[0]) }
-        return NSItemProvider(item: ("multi:" + ids.map { $0.uuidString }.joined(separator: ",")) as NSString, typeIdentifier: type)
+        return provider(payload: "multi:" + ids.map { $0.uuidString }.joined(separator: ","))
     }
 
     static func parse(_ s: String) -> [DragItem] {
@@ -36,17 +46,17 @@ enum ItemDrag {
     /// Every dragged item.
     @discardableResult
     static func loadItems(_ providers: [NSItemProvider], _ done: @escaping @MainActor ([DragItem]) -> Void) -> Bool {
-        let ps = providers.filter { $0.hasItemConformingToTypeIdentifier(type) }
+        let ps = providers.filter { $0.hasItemConformingToTypeIdentifier(identifier) }
         guard !ps.isEmpty else { return false }
         let lock = NSLock()
         var items: [DragItem] = []
         let group = DispatchGroup()
         for p in ps {
             group.enter()
-            p.loadItem(forTypeIdentifier: type, options: nil) { item, _ in
-                var s = (item as? NSString) as String?
-                if s == nil, let d = item as? Data { s = String(data: d, encoding: .utf8) }
-                if let s { lock.lock(); items.append(contentsOf: parse(s)); lock.unlock() }
+            _ = p.loadDataRepresentation(forTypeIdentifier: identifier) { data, _ in
+                if let data, let s = String(data: data, encoding: .utf8) {
+                    lock.lock(); items.append(contentsOf: parse(s)); lock.unlock()
+                }
                 group.leave()
             }
         }
@@ -183,37 +193,83 @@ struct SplitBranch: View {
     }
 
     func divider(_ i: Int, avail: CGFloat) -> some View {
-        Color.clear
-            .frame(width: axis == .row ? Self.gap : nil, height: axis == .column ? Self.gap : nil)
-            .contentShape(Rectangle())
-            .onHover { inside in
-                if inside { (axis == .row ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).push() } else { NSCursor.pop() }
+        SplitDivider(axis: axis) { translation in
+            let start = dragStart ?? sizes
+            if dragStart == nil { dragStart = start }
+            model.setSplitSizes(Self.resized(start, at: i, by: Double(translation / avail), avail: avail), at: path, in: split.id, save: false)
+        } onEnd: {
+            dragStart = nil
+            model.scheduleSave()
+        } onReset: {
+            Motion.run(Motion.split) {
+                model.setSplitSizes(Array(repeating: 1.0 / Double(kids.count), count: kids.count), at: path, in: split.id, save: true)
             }
-            .gesture(
-                DragGesture(minimumDistance: 1)
-                    .onChanged { v in
-                        let start = dragStart ?? sizes
-                        if dragStart == nil { dragStart = start }
-                        let delta = Double((axis == .row ? v.translation.width : v.translation.height) / avail)
-                        let minShare = min(Double(Self.minPane / avail), (start[i] + start[i + 1]) / 2)
-                        let pair = start[i] + start[i + 1]
-                        let a = min(pair - minShare, max(minShare, start[i] + delta))
-                        var s = start
-                        s[i] = a
-                        s[i + 1] = pair - a
-                        model.setSplitSizes(s, at: path, in: split.id, save: false)
-                    }
-                    .onEnded { _ in
-                        dragStart = nil
-                        model.scheduleSave()
-                    }
-            )
-            .simultaneousGesture(TapGesture(count: 2).onEnded {
-                Motion.run(Motion.split) {
-                    model.setSplitSizes(Array(repeating: 1.0 / Double(kids.count), count: kids.count), at: path, in: split.id, save: true)
+        }
+    }
+
+    /// How close, in points, the divider has to come to an even split to settle on it.
+    static let evenDetent: CGFloat = 12
+
+    /// Sizes after dragging divider `i` by `delta`, a share of the room: the two panes beside it
+    /// trade room, neither goes under the narrowest pane, and near an even split it settles there.
+    static func resized(_ start: [Double], at i: Int, by delta: Double, avail: CGFloat) -> [Double] {
+        let pair = start[i] + start[i + 1]
+        let minShare = min(Double(minPane / avail), pair / 2)
+        var a = min(pair - minShare, max(minShare, start[i] + delta))
+        if abs(a - pair / 2) * Double(avail) <= Double(evenDetent) { a = pair / 2 }
+        var s = start
+        s[i] = a
+        s[i + 1] = pair - a
+        return s
+    }
+}
+
+/// The gap between two panes, with a handle in the middle that you drag to change how much room
+/// each one gets. The handle is a short bar that brightens and grows when the pointer is on the
+/// gap, and takes the space's colour while you drag. Double-click evens the panes out.
+struct SplitDivider: View {
+    let axis: SplitAxis
+    let onDrag: (CGFloat) -> Void
+    let onEnd: () -> Void
+    let onReset: () -> Void
+    @State private var hovering = false
+    @State private var dragging = false
+    @Environment(\.spaceAccent) private var accent
+
+    /// The handle: 4 points thick, 36 long at rest and 56 while it's in use.
+    static let thickness: CGFloat = 4
+    static let restLength: CGFloat = 36
+    static let activeLength: CGFloat = 56
+
+    var body: some View {
+        let row = axis == .row
+        let length = hovering || dragging ? Self.activeLength : Self.restLength
+        ZStack {
+            Color.clear
+            Capsule()
+                .fill(dragging ? accent.opacity(0.9) : Color.primary.opacity(hovering ? 0.5 : 0.24))
+                .frame(width: row ? Self.thickness : length, height: row ? length : Self.thickness)
+                .motion(Motion.hover, value: hovering || dragging)
+        }
+        .frame(width: row ? SplitBranch.gap : nil, height: row ? nil : SplitBranch.gap)
+        .contentShape(Rectangle())
+        .pointerStyle(row ? .columnResize : .rowResize)
+        .onHover { hovering = $0 }
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { v in
+                    if !dragging { dragging = true }
+                    onDrag(row ? v.translation.width : v.translation.height)
                 }
-            })
-            .help("Drag to resize. Double-click to even out.")
+                .onEnded { _ in
+                    dragging = false
+                    onEnd()
+                }
+        )
+        .simultaneousGesture(TapGesture(count: 2).onEnded { onReset() })
+        .help("Drag to resize. Double-click to even out.")
+        .accessibilityElement()
+        .accessibilityLabel("Split divider")
     }
 }
 
@@ -272,8 +328,8 @@ struct PaneControls: View {
                 .font(.system(size: 10, weight: .semibold))
                 .frame(width: 24, height: 22)
                 .contentShape(Rectangle())
-                .onDrag { ItemDrag.provider(tab.id) }
-                .help("Drag to another pane's edge to move this pane")
+                .onDrag { SidebarDrag.shared.begin([tab.id]); return ItemDrag.provider(tab.id) }
+                .help("Drag to another pane to move this pane")
             PaneControlButton(symbol: "rectangle.portrait.and.arrow.right", help: "Unsplit this pane. Shift-click to stay in the split.") {
                 model.popOut(tab.id, stay: NSEvent.modifierFlags.contains(.shift))
             }
@@ -329,15 +385,27 @@ struct PaneClickCatcher: NSViewRepresentable {
     func updateNSView(_ v: CatcherView, context: Context) { v.onClick = onClick }
 }
 
-/// Where a dragged item would land: a pane (nil for the empty start view) and an edge of it.
+/// Where a dragged tab would land: a pane, the side of it, and where the new pane and the page
+/// it joins would sit once it lands.
 struct DropTarget: Equatable {
     var pane: UUID?
     var side: PaneSide
-    var preview: CGRect
+    /// The pane under the pointer, or the whole page area with no split yet.
+    var rect: CGRect
+    /// Where the new pane goes.
+    var incoming: CGRect
+    /// Where the page already there moves to.
+    var staying: CGRect
+    /// The tab being dragged, for the card's icon and name.
+    var tab: UUID?
+    /// No split yet, so the page itself moves aside to make room.
+    var single: Bool
 }
 
-/// Dropping a sidebar item near any pane's edge splits that pane in that direction, like Zen.
-/// The middle of a pane adds to its right, like Arc.
+/// A tab dragged over the page shows where it would land before you let go, like Arc. Left of the
+/// middle the page slides over to the right half and a card for the tab takes the left, and the
+/// other way round on the right. Near the top or bottom edge it stacks instead. Over a split, the
+/// card takes half of the pane under the pointer. Folders and splits don't drop here.
 struct ContentDropDelegate: DropDelegate {
     let frames: [UUID: CGRect]
     let bounds: CGRect
@@ -346,28 +414,97 @@ struct ContentDropDelegate: DropDelegate {
 
     func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [ItemDrag.type]) }
 
-    @MainActor func compute(_ p: CGPoint) -> DropTarget {
-        let pane = frames.first { $0.value.contains(p) }
-        let rect = pane?.value ?? bounds
-        let side = DropMath.edge(at: p, in: rect) ?? .right
-        return DropTarget(pane: pane?.key ?? model.currentTab?.id, side: side, preview: DropMath.preview(side, in: rect))
+    /// The target for a drag at `p`, or nil where it has nowhere to go. Pure apart from reading
+    /// the model, so the tests and the offscreen shots can use it.
+    @MainActor static func compute(_ p: CGPoint, frames: [UUID: CGRect], bounds: CGRect, model: BrowserModel, dragged: [DragItem]) -> DropTarget? {
+        let tabID: UUID?
+        switch dragged.first {
+        case .tab(let id)?: tabID = id
+        case nil: tabID = nil
+        default: return nil
+        }
+        if let sp = model.currentSplit, !frames.isEmpty {
+            guard let hit = frames.first(where: { $0.value.contains(p) }) else { return nil }
+            if let tabID, tabID == hit.key { return nil }
+            if sp.count >= SplitNode.maxPanes, let tabID, !sp.items.contains(tabID) { return nil }
+            let side = DropMath.side(at: p, in: hit.value)
+            let h = DropMath.halves(side, in: hit.value, gap: SplitBranch.gap)
+            return DropTarget(pane: hit.key, side: side, rect: hit.value, incoming: h.incoming, staying: h.staying, tab: tabID, single: false)
+        }
+        guard let cur = model.currentTab, tabID != cur.id else { return nil }
+        let side = DropMath.side(at: p, in: bounds)
+        let h = DropMath.halves(side, in: bounds, gap: SplitBranch.gap)
+        return DropTarget(pane: cur.id, side: side, rect: bounds, incoming: h.incoming, staying: h.staying, tab: tabID, single: true)
+    }
+
+    @MainActor private var dragged: [DragItem] { SidebarDrag.shared.items }
+
+    func dropEntered(info: DropInfo) {
+        // Grown Essentials boxes cover part of the page. They step aside once the drag is on it.
+        MainActor.assumeIsolated {
+            EssentialsBloom.shared.close()
+            TabBarState.shared.closeEssentials()
+        }
+        _ = dropUpdated(info: info)
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        let t = MainActor.assumeIsolated { compute(info.location) }
+        let (t, allowed) = MainActor.assumeIsolated { () -> (DropTarget?, Bool) in
+            let d = dragged
+            let t = Self.compute(info.location, frames: frames, bounds: bounds, model: model, dragged: d)
+            // Over the start view a tab just opens. In the gap between panes the last target holds.
+            let isTab: Bool = { if case .tab? = d.first { return true }; return d.isEmpty }()
+            if t == nil, isTab, model.currentSplit != nil, !frames.values.contains(where: { $0.contains(info.location) }) { return (target, target != nil) }
+            return (t, t != nil || (isTab && model.currentTab == nil))
+        }
         if t != target { target = t }
-        return DropProposal(operation: .move)
+        return DropProposal(operation: allowed ? .move : .forbidden)
     }
 
     func dropExited(info: DropInfo) { target = nil }
 
     func performDrop(info: DropInfo) -> Bool {
-        let t = target ?? MainActor.assumeIsolated { compute(info.location) }
-        target = nil
+        let t = target ?? MainActor.assumeIsolated { Self.compute(info.location, frames: frames, bounds: bounds, model: model, dragged: dragged) }
+        let m = model, binding = $target
         return ItemDrag.loadItems(info.itemProviders(for: [ItemDrag.type])) { items in
-            guard case .tab(let id)? = items.first else { return }
-            model.drop(tabID: id, side: t.side, onPane: t.pane)
+            // The split and the preview going away happen together, so the page stays where the
+            // preview put it and the new pane takes the card's place.
+            Motion.run(Motion.split) {
+                if case .tab(let id)? = items.first { m.drop(tabID: id, side: t?.side ?? .right, onPane: t?.pane) }
+                binding.wrappedValue = nil
+            }
+            SidebarDrag.shared.end()
         }
+    }
+}
+
+/// The card standing in for a tab while it's dragged over the page: its icon, name and site, in
+/// the half it would take.
+struct SplitDropCard: View {
+    let tab: Tab?
+    @Environment(\.spaceAccent) private var accent
+
+    var body: some View {
+        let shape = Theme.Radius.shape(Theme.Radius.card)
+        VStack(spacing: Theme.Space.s) {
+            ItemIcon(tab: tab, size: 28)
+                .padding(.bottom, Theme.Space.xs)
+            if let tab {
+                Text(tab.displayTitle)
+                    .font(Theme.Font.rowEmphasis)
+                    .lineLimit(1)
+                if let d = tab.hoverDetail {
+                    Text(d).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+        }
+        .frame(maxWidth: 280)
+        .padding(Theme.Space.l)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(shape.fill(Theme.Palette.sheet))
+        .background(shape.fill(accent.opacity(0.08)))
+        .overlay(shape.strokeBorder(accent.opacity(0.85), lineWidth: 1.5))
+        .themeShadow(.popover)
     }
 }
 
@@ -395,6 +532,7 @@ struct SplitRow: View {
                             .opacity(selected && split.focused != id ? 0.55 : 1)
                             .contentShape(Rectangle())
                             .onTapGesture { model.selectSplit(split, focusItem: id) }
+                            .hoverCard(id: "split-\(id)", title: model.tab(id)?.displayTitle ?? "", detail: model.tab(id)?.hoverDetail)
                     }
                 }
                 .fixedSize()
@@ -417,7 +555,7 @@ struct SplitRow: View {
         .contentShape(Rectangle())
         .simultaneousGesture(TapGesture().modifiers(.option).onEnded { model.separate(split) })
         .onHover { hovering = $0 }
-        .onDrag { SidebarDrag.shared.begin([split.id]); return ItemDrag.provider(split: split.id) }
+        .onDrag { SidebarDrag.shared.begin(items: [.split(split.id)]); return ItemDrag.provider(split: split.id) }
         .contextMenu { SplitMenu(split: split) }
         .help(split.items.compactMap { model.tab($0)?.displayTitle }.joined(separator: " | "))
     }

@@ -203,74 +203,31 @@ struct SpacePage: View {
     }
 
     private var foldersSection: some View {
-        SectionBox(title: "Folders", trailing: AnyView(SmallIconButton(symbol: "plus", help: "New folder") { model.promptNewFolder() })) {
-            ForEach(model.folders(in: spaceID)) { f in
-                FolderRow(folder: f)
-                FolderReveal(isOpen: f.isExpanded) {
-                    VStack(spacing: Theme.Space.rowGap) {
-                        let rows = model.refs(in: .folder(f.id))
-                        ForEach(rows, id: \.self) { row($0).transition(Motion.Transitions.tabRow) }
-                        if rows.isEmpty {
-                            Text("Empty")
-                                .font(Theme.Font.secondary).foregroundStyle(.secondary)
-                                .padding(.leading, Theme.Space.rowInset).frame(height: 24)
-                        }
-                    }
-                    .padding(.top, Theme.Space.rowGap)
-                    // Child icons line up under the folder's name.
-                    .padding(.leading, Theme.Space.folderIndent)
-                }
-                if !f.isExpanded {
-                    // A closed folder still shows what's on screen, like Arc and Zen.
-                    let shown = model.shownInClosedFolder(f)
-                    if !shown.isEmpty {
-                        VStack(spacing: Theme.Space.rowGap) { ForEach(shown, id: \.self) { row($0) } }
-                            .padding(.leading, Theme.Space.folderIndent)
-                            .transition(.opacity)
-                    }
-                }
+        SectionBox(title: "Folders", trailing: AnyView(SmallIconButton(symbol: "plus", help: "New folder") { model.promptNewFolder() }),
+                   onDropItems: { items in
+                       // A folder dropped on the header goes back to the top level, first.
+                       if case .folder(let fid)? = items.first { Motion.run(Motion.insert) { model.placeFolder(fid, in: nil, at: 0) } }
+                       SidebarDrag.shared.end()
+                   }) {
+            ForEach(model.childFolders(of: nil, space: spaceID)) { f in
+                FolderTree(folder: f, row: { AnyView(row($0)) })
             }
         }
-        .motion(Motion.insert, value: model.folders(in: spaceID).map { model.refs(in: .folder($0.id)) })
+        .motion(Motion.insert, value: model.folderSignature(space: spaceID))
     }
 
     /// Folders in the icon column: no header, children not indented, and a thin line in the
     /// space's colour down the edge of an open folder so you can see where it ends.
     @ViewBuilder private var iconFolders: some View {
-        let folders = model.folders(in: spaceID)
+        let folders = model.childFolders(of: nil, space: spaceID)
         if !folders.isEmpty {
             VStack(spacing: Theme.Space.rowGap) {
                 ForEach(folders) { f in
-                    VStack(spacing: Theme.Space.rowGap) {
-                        FolderRow(folder: f)
-                        FolderReveal(isOpen: f.isExpanded) {
-                            VStack(spacing: Theme.Space.rowGap) {
-                                ForEach(model.refs(in: .folder(f.id)), id: \.self) { row($0).transition(Motion.Transitions.tabRow) }
-                            }
-                            .padding(.top, Theme.Space.rowGap)
-                        }
-                        if !f.isExpanded {
-                            let shown = model.shownInClosedFolder(f)
-                            if !shown.isEmpty {
-                                VStack(spacing: Theme.Space.rowGap) { ForEach(shown, id: \.self) { row($0) } }
-                                    .transition(.opacity)
-                            }
-                        }
-                    }
-                    .background(alignment: .leading) {
-                        Capsule()
-                            .fill(spaceAccent.opacity(0.6))
-                            .frame(width: 2)
-                            .padding(.vertical, Theme.Space.s)
-                            // 6 pt in from the sidebar's edge, where Chrome draws its open group's line.
-                            .offset(x: -(Theme.Space.sidebarInset - 6))
-                            .opacity(f.isExpanded && !model.refs(in: .folder(f.id)).isEmpty ? 1 : 0)
-                            .motion(Motion.expand, value: f.isExpanded, fadeOnly: true)
-                    }
+                    FolderTree(folder: f, row: { AnyView(row($0)) })
                 }
                 SectionDivider()
             }
-            .motion(Motion.insert, value: folders.map { model.refs(in: .folder($0.id)) })
+            .motion(Motion.insert, value: model.folderSignature(space: spaceID))
         }
     }
 
@@ -414,7 +371,7 @@ struct EssentialTile: View {
         .onTapGesture { model.select(tab) }
         .simultaneousGesture(TapGesture(count: 2).onEnded { if tab.isAwayFromPin { model.resetPinned(tab) } })
         .onHover { hovering = $0 }
-        .onDrag { ItemDrag.provider(tab.id) }
+        .onDrag { SidebarDrag.shared.begin([tab.id]); return ItemDrag.provider(tab.id) }
         .contextMenu { TabMenu(tab: tab) }
         .help(tab.displayTitle)
     }
@@ -528,6 +485,8 @@ struct RowDropDelegate: DropDelegate {
     func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [ItemDrag.type]) }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
+        // Folders only go beside or inside other folders.
+        if MainActor.assumeIsolated({ SidebarDrag.shared.draggingFolder != nil }) { indicator = nil; return DropProposal(operation: .forbidden) }
         // With a gap open above the row, the row itself starts below it.
         let y = info.location.y - (indicator == .above ? SidebarDrag.gap : 0)
         let middle = canSplit && y > height * 0.25 && y < height * 0.75
@@ -767,7 +726,7 @@ struct TabMenu: View {
         Button("Open \(n) in split view") { model.split(items: multi.map { $0.id }) }
             .disabled(n > SplitNode.maxPanes)
         Menu("Move \(n) to folder") {
-            ForEach(model.spaceFolders) { f in Button(f.name) { model.place(multi.map { .tab($0.id) }, in: .folder(f.id), at: Int.max); model.multiSelection = [] } }
+            ForEach(model.folderTree().map(\.folder)) { f in Button(model.folderPath(f)) { model.place(multi.map { .tab($0.id) }, in: .folder(f.id), at: Int.max); model.multiSelection = [] } }
             if !model.spaceFolders.isEmpty { Divider() }
             Button("New folder...") { model.promptNewFolder(moving: tab) }
         }
@@ -795,8 +754,8 @@ struct TabMenu: View {
         }
         .disabled(!tab.isEssential && model.essentials.count >= BrowserModel.essentialsLimit)
         Menu("Move to folder") {
-            ForEach(model.spaceFolders) { f in
-                Button(f.name) { model.move(tab, to: f.id) }
+            ForEach(model.folderTree().map(\.folder)) { f in
+                Button(model.folderPath(f)) { model.move(tab, to: f.id) }
                     .disabled(tab.folderID == f.id)
             }
             if !model.spaceFolders.isEmpty { Divider() }
@@ -863,17 +822,24 @@ struct FolderRow: View {
     let folder: Folder
     @EnvironmentObject var model: BrowserModel
     @State private var hovering = false
-    @State private var targeted = false
+    @State private var zone: FolderDropZone?
+    @State private var spring = SpringOpen()
+    @ObservedObject private var drag = SidebarDrag.shared
     @Environment(\.sidebarIconsOnly) private var iconsOnly
+    @Environment(\.spaceAccent) private var spaceAccent
+
+    /// The drag over this folder, or the tour's stand-in for one.
+    private var shown: FolderDropZone? { zone ?? drag.folderPreview.flatMap { $0.folder == folder.id ? $0.zone : nil } }
 
     var body: some View {
+        let count = model.tabCount(inTree: folder)
         HStack(spacing: Theme.Space.rowIconGap) {
             // The glyph opens and closes with the folder, like Arc and Zen.
             FolderGlyph(isOpen: folder.isExpanded)
             if !iconsOnly {
                 Text(folder.name).font(Theme.Font.row).lineLimit(1)
                 Spacer(minLength: 0)
-                Text("\(model.tabs(in: folder).count)")
+                Text("\(count)")
                     .font(Theme.Font.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
@@ -881,26 +847,56 @@ struct FolderRow: View {
         .frame(maxWidth: iconsOnly ? .infinity : nil)
         .padding(.horizontal, iconsOnly ? 0 : Theme.Space.rowInset)
         .frame(height: Theme.Space.rowHeight)
-        .modifier(RowBackground(selected: targeted, hovering: hovering))
+        .modifier(RowBackground(selected: shown == .into, hovering: hovering))
+        .overlay {
+            // Something about to go inside: the row lights up with a ring in the space's colour.
+            if shown == .into {
+                Theme.Radius.shape(Theme.Radius.row).strokeBorder(spaceAccent.opacity(0.8), lineWidth: 1.5)
+                    .allowsHitTesting(false)
+            }
+        }
         .sidebarCursor(model.sidebarCursor == .folder(folder.id))
         .contentShape(Rectangle())
         .onTapGesture { withAnimation(FolderMotion.toggle) { model.toggleFolder(folder) } }
         .onHover { hovering = $0 }
-        .onDrag { ItemDrag.provider(folder: folder.id) }
-        .onDrop(of: [ItemDrag.type], isTargeted: $targeted) { providers in
-            ItemDrag.loadItems(providers) { items in
-                if case .folder(let fid)? = items.first {
-                    model.placeFolder(fid, next: folder.id, after: false)
-                } else {
-                    model.place(items.compactMap(\.sidebarRef), in: .folder(folder.id), at: Int.max)
-                }
+        .opacity(drag.dragging.contains(folder.id) ? SidebarDrag.dimmed : 1)
+        // A folder about to land beside this one opens a gap there, like a row does.
+        .padding(.top, shown == .before ? SidebarDrag.gap : 0)
+        .padding(.bottom, shown == .after ? SidebarDrag.gap : 0)
+        .motion(Motion.insert, value: shown)
+        .onDrag {
+            HoverCards.shared.hide()
+            SidebarDrag.shared.begin(items: [.folder(folder.id)])
+            return ItemDrag.provider(folder: folder.id)
+        }
+        .onDrop(of: [ItemDrag.type], delegate: FolderDropDelegate(folder: folder, length: Theme.Space.rowHeight, model: model, zone: $zone, spring: spring))
+        .contextMenu { FolderMenu(folder: folder) }
+        .hoverCard(id: folder.id, title: folder.name, detail: Self.count(count), enabled: iconsOnly)
+    }
+
+    static func count(_ n: Int) -> String { n == 1 ? "1 tab" : "\(n) tabs" }
+}
+
+/// Right-click on a folder, in the sidebar or the tab bar.
+struct FolderMenu: View {
+    let folder: Folder
+    var showToggle = false
+    @EnvironmentObject var model: BrowserModel
+
+    var body: some View {
+        if showToggle {
+            Button(folder.isExpanded ? "Close folder" : "Open folder") { withAnimation(FolderMotion.toggle) { model.toggleFolder(folder) } }
+        }
+        Button("New subfolder...") { model.promptNewFolder(in: folder.id) }
+            .disabled(model.folderDepth(folder.id) + 1 >= Folder.maxDepth)
+        if let up = folder.parentID, let parent = model.folder(up) {
+            Button("Move out of \(parent.name)") {
+                Motion.run(Motion.insert) { model.placeFolder(folder.id, next: up, after: true) }
             }
         }
-        .contextMenu {
-            Button("Rename...") { model.promptRename(folder) }
-            Button("Delete folder") { model.deleteFolder(folder) }
-        }
-        .help(iconsOnly ? "\(folder.name)  (\(model.tabs(in: folder).count))" : "")
+        Divider()
+        Button("Rename...") { model.promptRename(folder) }
+        Button("Delete folder") { model.deleteFolder(folder) }
     }
 }
 

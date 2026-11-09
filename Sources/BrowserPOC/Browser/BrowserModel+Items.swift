@@ -158,18 +158,8 @@ extension BrowserModel {
         case .folder(let f):
             t.isEssential = false; t.isPinned = false; t.folderID = f; t.pinnedURL = nil
             if let fs = folders.first(where: { $0.id == f })?.spaceID { t.spaceID = fs }
-            if let i = folders.firstIndex(where: { $0.id == f }) { folders[i].isExpanded = true }
+            openFolderPath(to: f)
         }
-    }
-
-    /// Folders reorder among themselves.
-    func placeFolder(_ id: UUID, next target: UUID, after: Bool) {
-        guard id != target else { return }
-        var list = spaceFolders.map { $0.id }.filter { $0 != id }
-        guard let i = list.firstIndex(of: target) else { return }
-        list.insert(id, at: after ? i + 1 : i)
-        for (n, fid) in list.enumerated() { if let j = folders.firstIndex(where: { $0.id == fid }) { folders[j].order = Double(n) } }
-        scheduleSave()
     }
 
     // MARK: Pinning and Essentials
@@ -303,7 +293,13 @@ extension BrowserModel {
     /// Rows top to bottom as they show, for Shift-click ranges and Cmd-1 to 9.
     var visibleRowOrder: [SidebarRef] {
         var out = refs(in: .essentials) + refs(in: .pinned)
-        for f in spaceFolders where f.isExpanded { out += refs(in: .folder(f.id)) }
+        func walk(_ parent: UUID?) {
+            for f in childFolders(of: parent) where f.isExpanded {
+                walk(f.id)
+                out += refs(in: .folder(f.id))
+            }
+        }
+        walk(nil)
         // The tab bar lists other tabs oldest first, so Cmd-1 to 9 count them as they're shown.
         return out + (BrowserPrefs.shared.value.tabLayout == .horizontal ? TabBarRules.barOrder(refs(in: .today)) : refs(in: .today))
     }

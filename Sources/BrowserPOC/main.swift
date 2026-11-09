@@ -82,6 +82,10 @@ if args.contains("--quit-check") { exit(EngineQuitCheck.run(args)) }
 if args.contains("--demo-snapshots") { exit(MainActor.assumeIsolated { DemoSnapshots.commandLine(args) }) }
 // --sidebar-shots <out> --profile <demo profile>: the sidebar at each width and icons only, offscreen.
 if args.contains("--sidebar-shots") { exit(MainActor.assumeIsolated { SidebarWidthShots.commandLine(args) }) }
+// --drag-shots <out> --profile <demo profile>: nested folders, folder drop zones, the page drop preview and the split divider, offscreen.
+if args.contains("--drag-shots") { exit(MainActor.assumeIsolated { DragShots.commandLine(args) }) }
+// --drag-probe --profile <demo profile>: hands drops to the window the way AppKit does in a real drag.
+if args.contains("--drag-probe") { exit(MainActor.assumeIsolated { DragProbe.commandLine(args) }) }
 
 // Engine: resurfacing quality and read-only source checks.
 if args.contains("--eval") {
@@ -127,7 +131,7 @@ let known: Set<String> = ["--selftest", "--smoketest", "--chrome-dry-run", "--wo
                           "--eval", "--models-dir", "--verbose", "--notion-dry-run", "--granola-dry-run", "--download-models", "--scale",
                           "--mcp", "--mcp-fixture", "--graph-bench", "--shelf-demo",
                           "--seed-demo", "--demo-content", "--models-from", "--offline", "--no-topics", "--keep-dates",
-                          "--demo-eval", "--demo-snapshots", "--sidebar-shots", "--demo-diag", "--case", "--quit-check", "--reasons", "--panel", "--passages", "--context-file", "--parts", "--rr"]
+                          "--demo-eval", "--demo-snapshots", "--sidebar-shots", "--drag-shots", "--drag-probe", "--demo-diag", "--case", "--quit-check", "--reasons", "--panel", "--passages", "--context-file", "--parts", "--rr"]
 if let unknown = args.dropFirst().first(where: { $0.hasPrefix("--") && !known.contains($0) }) {
     print("Unknown flag \(unknown). Flags: --selftest, --smoketest, --chrome-dry-run, each with optional --workdir <dir> for the tests, --data-dir <dir> to run the app on a separate profile, --mcp to serve the index to AI clients, and --mcp-fixture <dir> to write a test profile.")
     exit(2)

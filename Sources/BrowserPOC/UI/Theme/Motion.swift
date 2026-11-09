@@ -50,6 +50,10 @@ enum Motion {
     static let barResize = Animation.spring(duration: 0.22, bounce: 0)
     /// Split panes settling into their widths.
     static let split = Animation.spring(duration: 0.28, bounce: 0)
+    /// A tab dragged over the page: the page making room and the card for the tab, quick enough
+    /// to follow the pointer across the middle. Zen's preview moves over 0.1 s ease-out
+    /// (notes/research/2026-11-08-drag-and-split.md).
+    static let dropPreview = Animation.easeOut(duration: 0.12)
     /// The load progress line.
     static let progress = Animation.easeOut(duration: 0.25)
     /// Related cards arriving, one after another.

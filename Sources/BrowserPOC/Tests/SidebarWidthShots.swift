@@ -319,7 +319,7 @@ enum SidebarWidthShots {
     }
 
     /// Grey dots where the traffic lights are, the way the quiet dots look at rest.
-    private static func drawTrafficLights(on url: URL, window: NSWindow) {
+    static func drawTrafficLights(on url: URL, window: NSWindow) {
         guard let close = window.standardWindowButton(.closeButton), let data = try? Data(contentsOf: url),
               let image = NSImage(data: data), let source = NSBitmapImageRep(data: data),
               let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: source.pixelsWide, pixelsHigh: source.pixelsHigh,

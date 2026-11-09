@@ -12,11 +12,16 @@ extension BrowserModel {
     /// Every stop top to bottom, as the sidebar shows them.
     var sidebarStops: [SidebarStop] {
         var out: [SidebarStop] = refs(in: .essentials).map { .row($0) } + refs(in: .pinned).map { .row($0) }
-        for f in spaceFolders {
-            out.append(.folder(f.id))
-            let children = f.isExpanded ? refs(in: .folder(f.id)) : shownInClosedFolder(f)
-            out += children.map { .row($0) }
+        // Subfolders come before a folder's items, as the sidebar lists them.
+        func walk(_ parent: UUID?) {
+            for f in childFolders(of: parent) {
+                out.append(.folder(f.id))
+                if f.isExpanded { walk(f.id) }
+                let children = f.isExpanded ? refs(in: .folder(f.id)) : shownInClosedFolder(f)
+                out += children.map { .row($0) }
+            }
         }
+        walk(nil)
         return out + refs(in: .today).map { .row($0) }
     }
 
@@ -54,11 +59,13 @@ extension BrowserModel {
         }
     }
 
-    /// Left: closes a folder, or from an item inside one, moves up to the folder.
+    /// Left: closes a folder, or from an item inside one, or a closed subfolder, moves up to the
+    /// folder it's in.
     func sidebarCursorLeft() {
         guard let cur = sidebarCursor else { return }
         switch cur {
-        case .folder(let id): setFolder(id, open: false)
+        case .folder(let id):
+            if isFolderOpen(id) { setFolder(id, open: false) } else if let up = folder(id)?.parentID { sidebarCursor = .folder(up) }
         case .row(let r):
             if case .folder(let f)? = section(of: r) { sidebarCursor = .folder(f) }
         }
@@ -68,6 +75,7 @@ extension BrowserModel {
     func sidebarCursorRight() {
         guard case .folder(let id)? = sidebarCursor else { return }
         if !isFolderOpen(id) { setFolder(id, open: true); return }
+        if let sub = childFolders(of: id).first { sidebarCursor = .folder(sub.id); return }
         if let first = refs(in: .folder(id)).first { sidebarCursor = .row(first) }
     }
 }

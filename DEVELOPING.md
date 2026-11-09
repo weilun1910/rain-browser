@@ -71,7 +71,9 @@ The demo docs and meetings open at `demo://` addresses as read-only pages drawn 
 BrowserPOC --seed-demo <empty folder> [--models-from <folder>] [--offline] [--no-topics]
 BrowserPOC --demo-eval <demo profile>                          # scores Related against Demo/expected.json, on a copy
 BrowserPOC --demo-snapshots <out folder> --profile <demo profile>  # the opening moment, each space and the graph, offscreen
-BrowserPOC --sidebar-shots <out folder> --profile <demo profile>   # the sidebar at each width and icons only, offscreen, with drag checks
+BrowserPOC --sidebar-shots <out folder> --profile <demo profile>   # the sidebar at each width and icons only, offscreen, with drag, right-click menu and hover card checks
+BrowserPOC --drag-shots <out folder> --profile <demo profile>      # folders inside folders, folder drop zones, a tab dragged over the page and the split divider, offscreen
+build.noindex/Rain.app/Contents/MacOS/BrowserPOC --drag-probe --profile <demo profile>  # hands drops to the window as AppKit does in a real drag: a tab onto the page and onto a folder. Run it from the built app, whose Info.plist declares the drag type
 python3 -I Demo/tools/check_demo.py [--network]                 # checks the demo content itself
 ```
 

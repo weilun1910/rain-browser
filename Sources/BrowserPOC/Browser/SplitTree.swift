@@ -289,6 +289,40 @@ enum DropMath {
         return best?.0
     }
 
+    /// How close to the top or bottom, as a share of the pane's height, a drag has to be to stack
+    /// the new pane there rather than put it beside.
+    static let stackBand: CGFloat = 0.2
+
+    /// The side a tab dragged over a page lands on. Left of the middle puts it on the left and
+    /// right of the middle on the right, so the whole page is a target and the preview flips as
+    /// the pointer crosses the middle. Near the top or bottom edge, and nearer it than either
+    /// side, it stacks instead.
+    static func side(at p: CGPoint, in r: CGRect) -> PaneSide {
+        guard r.width > 0, r.height > 0 else { return .right }
+        let top = (p.y - r.minY) / r.height, bottom = (r.maxY - p.y) / r.height
+        let left = (p.x - r.minX) / r.width, right = (r.maxX - p.x) / r.width
+        let vertical = min(top, bottom)
+        if vertical < stackBand && vertical < min(left, right) { return top < bottom ? .top : .bottom }
+        return p.x < r.midX ? .left : .right
+    }
+
+    /// Where the two panes go once a tab lands on `side` of a pane at `r`, with the split's gap
+    /// between them: the new pane's frame and the old one's.
+    static func halves(_ side: PaneSide, in r: CGRect, gap: CGFloat) -> (incoming: CGRect, staying: CGRect) {
+        switch side {
+        case .left, .right:
+            let w = max(0, (r.width - gap) / 2)
+            let l = CGRect(x: r.minX, y: r.minY, width: w, height: r.height)
+            let rr = CGRect(x: r.maxX - w, y: r.minY, width: w, height: r.height)
+            return side == .left ? (l, rr) : (rr, l)
+        case .top, .bottom:
+            let h = max(0, (r.height - gap) / 2)
+            let t = CGRect(x: r.minX, y: r.minY, width: r.width, height: h)
+            let b = CGRect(x: r.minX, y: r.maxY - h, width: r.width, height: h)
+            return side == .top ? (t, b) : (b, t)
+        }
+    }
+
     /// The part of a pane the new pane would take, for the drop preview.
     static func preview(_ side: PaneSide, in r: CGRect) -> CGRect {
         switch side {

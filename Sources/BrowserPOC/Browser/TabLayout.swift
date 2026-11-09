@@ -173,7 +173,7 @@ extension BrowserModel {
     /// What the tab bar shows for a space, left to right: pinned tabs and splits, then folders,
     /// then other tabs and splits, oldest first.
     func barRows(space: UUID) -> (pinned: [SidebarRef], folders: [Folder], today: [SidebarRef]) {
-        (refs(in: .pinned, space: space), folders(in: space), TabBarRules.barOrder(refs(in: .today, space: space)))
+        (refs(in: .pinned, space: space), childFolders(of: nil, space: space), TabBarRules.barOrder(refs(in: .today, space: space)))
     }
 
     /// The rows of an open folder, or the one a closed folder keeps on screen, as the bar shows them.
