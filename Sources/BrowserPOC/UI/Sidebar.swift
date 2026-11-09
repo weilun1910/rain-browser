@@ -774,11 +774,20 @@ struct TabMenu: View {
         }
     }
 
+    /// A tab opened from a saved page: back to the saved address, or save where it is now.
+    @ViewBuilder var savedMenu: some View {
+        if tab.keepsSavedURL {
+            Button("Back to Saved Page") { model.resetPinned(tab); model.select(tab) }.disabled(!tab.isAwayFromPin)
+            Button("Update Saved Address") { model.updateSavedAddress(tab) }.disabled(!tab.isAwayFromPin)
+        }
+    }
+
     @ViewBuilder var webMenu: some View {
         splitMenu
         Divider()
         folderMenu
         pinMenu
+        savedMenu
         Divider()
         Button("Rename...") { model.promptRenameTab(tab) }
         if tab.customTitle != nil { Button("Use page title") { model.rename(tab, to: nil) } }

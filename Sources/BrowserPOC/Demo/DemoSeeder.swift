@@ -25,6 +25,7 @@ enum DemoSeeder {
     struct Summary {
         var notes = 0, items = 0, pages = 0, fetched = 0, visits = 0, searches = 0
         var embedder = "", vectors = 0, tagged = 0, edges = 0
+        var savedPages = 0
         var seconds = 0.0
     }
 
@@ -85,6 +86,7 @@ enum DemoSeeder {
             print(String(format: "Demo profile ready in %.0f s: %@", s.seconds, target.path))
             print("  \(s.notes) notes, \(s.items) docs and meetings, \(s.pages) pages (text fetched for \(s.fetched)), \(s.visits) visits, \(s.searches) searches")
             print("  vectors \(s.vectors) from \(s.embedder), topics for \(s.tagged) items, \(s.edges) graph edges")
+            print("  \(s.savedPages) saved pages in the space folders")
             print("Open it: build.noindex/Rain.app/Contents/MacOS/BrowserPOC --data-dir \"\(target.path)\"")
             return 0
         } catch {
@@ -257,7 +259,8 @@ enum DemoSeeder {
         }
 
         // The layout, then the graph, which reads it for splits.
-        let state = buildState(c, noteURL: noteURL, notesRoot: notesRoot, now: o.now)
+        var state = buildState(c, noteURL: noteURL, notesRoot: notesRoot, now: o.now)
+        sum.savedPages = try seedSpaceFolders(c, state: &state, notesRoot: notesRoot, at: at)
         try JSONEncoder.pretty.encode(state).write(to: root.appendingPathComponent("state.json"))
         let graph = GraphStore.reset(indexURL: indexURL, index: store)
         func key(_ it: DemoContent.Layout.Item) -> String? { indexKey(it.ref, c, noteURL) }
@@ -273,6 +276,48 @@ enum DemoSeeder {
         try writeMarker(root, anchor: c.anchor, shift: shift, done: true)
         sum.seconds = Date().timeIntervalSince(started)
         return sum
+    }
+
+    /// Each space's folder, inside the profile: a few saved pages at the top, a Reading folder
+    /// with a folder inside it, a link to the space's notes, and an empty folder in the first
+    /// space. The pages are ones Theo read in that space that aren't already in the sidebar.
+    static func seedSpaceFolders(_ c: DemoContent, state: inout SavedState, notesRoot: URL, at: (String) -> Date?) throws -> Int {
+        SpaceFolders.enabled = true
+        SpaceFolders.overrideRoot = nil
+        SpaceFolders.customRoot = nil
+        guard let root = SpaceFolders.root else { return 0 }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        var inLayout = Set<String>()
+        for it in c.layout.essentials { inLayout.insert(it.ref) }
+        for s in c.layout.spaces {
+            for it in s.pinned + s.tabs + s.folders.flatMap(\.items) + s.splits.flatMap({ [$0.left, $0.right] }) { inLayout.insert(it.ref) }
+        }
+        var saved = 0
+        for (n, s) in c.layout.spaces.enumerated() {
+            guard let i = state.spaces?.firstIndex(where: { $0.id == DemoContent.uuid(s.id) }) else { continue }
+            let dir = root.appendingPathComponent(SpaceFolders.safeName(s.name), isDirectory: true)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            state.spaces?[i].folderName = dir.lastPathComponent
+            state.spaces?[i].folderBookmark = FolderBookmark.make(dir)
+            let pages = c.pages.filter { $0.space == s.id && !inLayout.contains($0.id) }.sorted { ($0.visitCount, $1.title) > ($1.visitCount, $0.title) }
+            func save(_ p: DemoContent.History.Page, in d: URL) throws {
+                guard let u = URL(string: p.url) else { return }
+                try SpaceFolders.savePage(u, title: p.title, in: d, savedAt: at(p.lastVisit) ?? Date())
+                saved += 1
+            }
+            for p in pages.prefix(3) { try save(p, in: dir) }
+            let reading = dir.appendingPathComponent("Reading", isDirectory: true)
+            try FileManager.default.createDirectory(at: reading, withIntermediateDirectories: true)
+            for p in pages.dropFirst(3).prefix(5) { try save(p, in: reading) }
+            let later = reading.appendingPathComponent("Later", isDirectory: true)
+            try FileManager.default.createDirectory(at: later, withIntermediateDirectories: true)
+            for p in pages.dropFirst(8).prefix(3) { try save(p, in: later) }
+            // The space's notes, linked in. Nothing is copied.
+            let notes = notesRoot.appendingPathComponent(s.notesFolder, isDirectory: true)
+            if SpaceFolders.isDirectory(notes) { try SpaceFolders.link(notes, in: dir, name: "\(s.name) notes") }
+            if n == 0 { try FileManager.default.createDirectory(at: dir.appendingPathComponent("Ideas", isDirectory: true), withIntermediateDirectories: true) }
+        }
+        return saved
     }
 
     static func writeMarker(_ root: URL, anchor: Date, shift: TimeInterval, done: Bool) throws {

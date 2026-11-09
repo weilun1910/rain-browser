@@ -144,4 +144,7 @@ if !args.contains("--shelf-demo") && !args.contains("--motion-tour") { MainActor
 // The app itself. A build that hasn't opened this profile before backs it up first, before
 // anything in it is read or written.
 MainActor.assumeIsolated { DataSafety.prepareLaunch() }
+// Every space gets a folder on disk: in ~/Documents/Rain for the default profile, and inside the
+// profile's own folder for one opened with --data-dir.
+SpaceFolders.enabled = true
 MainActor.assumeIsolated { AppMain.run() }

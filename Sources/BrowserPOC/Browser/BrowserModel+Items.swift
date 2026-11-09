@@ -211,7 +211,7 @@ extension BrowserModel {
 
     /// Back to the pinned address. Closing does this too, and also unloads the page.
     func resetPinned(_ tab: Tab, load: Bool = true) {
-        guard tab.keepsPinnedURL, let p = tab.pinnedURL else { if !load { tab.unload() }; return }
+        guard tab.keepsPinnedURL || tab.keepsSavedURL, let p = tab.pinnedURL else { if !load { tab.unload() }; return }
         if load {
             tab.load(p)
         } else {

@@ -95,6 +95,7 @@ The bundle ID (`local.browserpoc`) and the profile folder name (`BrowserPOC`) st
 - Browsing data sits next to it: browser.json (Browsing settings), history.sqlite (visits), closed.json (recently closed and the archive), sessions/ (back and forward for each tab), favicons/ and downloads.json.
 - WebKit keeps site data under `~/Library/WebKit/local.browserpoc`, the default profile's cookies in `~/Library/HTTPStorages/local.browserpoc.binarycookies`, and caches under `~/Library/Caches/local.browserpoc`. Each named profile has its own WebKit store, cookies included, in `~/Library/WebKit/local.browserpoc/WebsiteDataStore/`.
 - Backups/ (one per new build, the last five) and Recovered/ (files the app couldn't read) sit in the app data folder, and last-build.txt says which build opened it last.
+- Space folders: one folder per space under `~/Documents/Rain/` for the default profile. A profile opened with `--data-dir`, the demo profile and every test profile keep theirs in `Space Folders/` inside the profile folder instead, so they never touch `~/Documents/Rain`. Settings, Browsing can move them. Rain's own order for each folder and when things were last opened from one are in space-folders.json in the app data folder, so the folders stay clean. Paths in state.json that point inside the space folders are kept relative to their root, so a copy of a profile finds its own files.
 - Clearing the index removes indexed entries only. Notes stay exactly as they are.
 
 ## Code map

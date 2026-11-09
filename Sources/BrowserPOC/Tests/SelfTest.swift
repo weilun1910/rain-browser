@@ -245,6 +245,7 @@ enum SelfTest {
         ArcZenTests.run(dir: dir)
         SidebarWidthTests.run(dir: dir)
         DragTests.run(dir: dir)
+        SpaceFolderTests.run(dir: dir)
         ShelfTests.run(dir: dir)
         RelatedPowerTests.run(dir: dir)
         MCPTests.run(dir: dir)
