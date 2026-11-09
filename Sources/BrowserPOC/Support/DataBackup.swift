@@ -35,7 +35,7 @@ enum DataBackup {
 
     /// Profile entries that aren't copied: backups, set-aside files, the models (downloaded again
     /// from Settings), the favicon cache and scratch space.
-    static let skippedInProfile: Set<String> = ["Backups", "Recovered", "Models", "favicons", "tmp", "last-build.txt"]
+    static let skippedInProfile: Set<String> = ["Backups", "Recovered", "Models", "favicons", "Thumbnails", "tmp", "last-build.txt"]
     /// WebKit folders that only hold caches.
     static let skippedInWebKit: Set<String> = ["NetworkCache", "MediaCache", "CacheStorage", "JavaScriptCoreDebug", "ContentRuleLists"]
 

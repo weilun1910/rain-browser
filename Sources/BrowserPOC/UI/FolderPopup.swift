@@ -507,6 +507,15 @@ struct FolderColumn: View {
                         SpaceIcon(icon: sp.icon, size: 12).foregroundStyle(Theme.Palette.accent(sp.color))
                     } action: { popup.goSpace(sp) }
                 }
+                let pinned = model.pinnedFolders.compactMap { f in model.folderDirectory(f).map { (f, $0) } }
+                if !pinned.isEmpty {
+                    label("Pinned").padding(.top, 10)
+                    ForEach(pinned, id: \.0.id) { f, dir in
+                        FolderColumnRow(title: f.name, selected: popup.current?.path == dir.path, target: dir) {
+                            FolderGlyph(isOpen: false, size: 14, ground: Theme.Palette.card)
+                        } action: { popup.go(popup.trail(for: dir), direction: 0) }
+                    }
+                }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 10)

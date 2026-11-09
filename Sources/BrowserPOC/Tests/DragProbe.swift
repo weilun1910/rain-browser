@@ -43,6 +43,8 @@ enum DragProbe {
     }
 
     static func commandLine(_ args: [String]) -> Int32 {
+        // Each line as it's printed, so a crash still shows how far the probe got.
+        setvbuf(stdout, nil, _IOLBF, 0)
         func arg(_ n: String) -> String? { args.firstIndex(of: n).flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil } }
         guard let p = arg("--profile") else {
             print("Usage: --drag-probe --profile <demo profile>")
@@ -55,7 +57,15 @@ enum DragProbe {
         }
         guard let h = DragShots.open(profile: profile) else { return 1 }
         defer { h.close() }
-        return run(h.model, h.window)
+        let code = run(h.model, h.window)
+        // The probe hands SwiftUI's drop views stand-in drags that AppKit never ends. Letting the
+        // window go and the run loop settle before the process exits keeps teardown from tripping
+        // over them.
+        h.window.orderOut(nil)
+        h.window.close()
+        _ = SmokeTest.wait(0.5) { false }
+        fflush(stdout)
+        return code
     }
 
     /// Whether a view takes a drag with these types. AppKit goes by type conformance: SwiftUI's
@@ -200,6 +210,92 @@ enum DragProbe {
             check(opened != nil, "resting a tab's drag on a closed folder opens it", opened?.name ?? "\(rows.count) rows tried")
         } else {
             check(false, "found a loose tab to drag")
+        }
+        SidebarDrag.shared.end()
+
+        // The folder popup: a tab dropped in it is saved in the folder it shows.
+        let popup = FolderPopup.shared
+        if let schoolDir = model.spaceFolderURL(school) {
+            model.select(page)
+            spin(0.5)
+            if let tab = Optional(page), let u = tab.url {
+                popup.open(model)
+                spin(0.8)
+                let size = FolderPopupLayer.panelSize(in: content.bounds.size)
+                let x0 = (content.bounds.width - size.width) / 2, y0 = (content.bounds.height - size.height) / 2
+                // Low in the grid, past the cards.
+                let at = NSPoint(x: x0 + size.width - 70, y: y0 + 50)
+                let op = drag(ItemDrag.provider(tab.id), from: NSPoint(x: 40, y: at.y), to: at, items: [.tab(tab.id)])
+                spin(0.5)
+                let saved = SpaceFolders.list(schoolDir).contains { $0.page.map { URLKey.key(for: $0) == URLKey.key(for: u) } ?? false }
+                check(op?.isEmpty == false && saved, "a tab dropped into the popup is saved in the folder it shows", tab.displayTitle)
+                popup.close()
+                spin(0.5)
+            } else {
+                check(false, "found a page to drop into the popup")
+            }
+
+            // Something from the popup dropped on a pinned folder moves into it.
+            if let item = SpaceFolders.list(schoolDir).first(where: { $0.kind == .page }), let pb = pasteboard(ItemDrag.provider(entries: [item.url])) {
+                defer { pb.releaseGlobally() }
+                for f in model.childFolders(of: nil) { model.setFolder(f.id, open: false) }
+                spin(0.6)
+                var rows: [NSRect] = []
+                for v in allViews(content) where takes(v, [rainType]) {
+                    let r: NSRect = v.convert(v.bounds, to: nil)
+                    if r.minX < 120 && r.width > 150 && r.height >= 28 && r.height <= 40 { rows.append(r) }
+                }
+                rows.sort { $0.maxY > $1.maxY }
+                var into: Folder?
+                for r in rows {
+                    let at = NSPoint(x: r.midX, y: r.midY)
+                    guard let (dest, d, _) = hover(pb, from: NSPoint(x: at.x + 500, y: at.y), to: at, items: [.entry(item.url)]) else { continue }
+                    spin(SpringOpen.delay + 0.3)
+                    if let f = model.childFolders(of: nil).first(where: { $0.isExpanded }) {
+                        into = f
+                        drop(dest, d)
+                        spin(0.6)
+                        let dir = model.folderDirectory(f)
+                        let moved = dir.map { SpaceFolders.exists($0.appendingPathComponent(item.url.lastPathComponent)) } ?? false
+                        let shown = model.tabs.contains { $0.folderID == f.id && $0.savedFile?.hasSuffix("/" + item.url.lastPathComponent) == true }
+                        check(moved && !SpaceFolders.exists(item.url) && shown, "a page dragged from the popup onto a pinned folder moves into it", f.name)
+                        break
+                    }
+                    dest.draggingExited?(d)
+                    spin(0.3)
+                }
+                check(into != nil, "a drag from the popup resting on a closed pinned folder opens it", into?.name ?? "\(rows.count) rows tried")
+            } else {
+                check(false, "found a saved page to drag out of the popup")
+            }
+
+            // A folder from the popup dropped on the Folders header is pinned.
+            let reading = schoolDir.appendingPathComponent("Reading", isDirectory: true)
+            if SpaceFolders.isDirectory(reading), let pb = pasteboard(ItemDrag.provider(entries: [reading])) {
+                defer { pb.releaseGlobally() }
+                let before = model.pinnedFolders.count
+                var headers: [NSRect] = []
+                for v in allViews(content) where takes(v, [rainType]) {
+                    let r: NSRect = v.convert(v.bounds, to: nil)
+                    if r.minX < 120 && r.width > 150 && r.height >= 14 && r.height < 28 { headers.append(r) }
+                }
+                headers.sort { $0.maxY > $1.maxY }
+                var pinned = false
+                for r in headers {
+                    let at = NSPoint(x: r.midX, y: r.midY)
+                    guard let (dest, d, op) = hover(pb, from: NSPoint(x: at.x + 500, y: at.y), to: at, items: [.entry(reading)]) else { continue }
+                    if op.isEmpty { dest.draggingExited?(d); continue }
+                    drop(dest, d)
+                    spin(0.5)
+                    if model.pinnedFolders.count == before + 1 { pinned = true; break }
+                }
+                check(pinned && model.pinnedFolders.first?.path == SpaceFolders.encode(reading) && SpaceFolders.isDirectory(reading),
+                      "a folder dragged from the popup into the Folders section is pinned, and stays where it is", "\(headers.count) headers tried")
+            } else {
+                check(false, "the School folder has a Reading folder to pin")
+            }
+        } else {
+            check(false, "the School space has a folder")
         }
         SidebarDrag.shared.end()
 

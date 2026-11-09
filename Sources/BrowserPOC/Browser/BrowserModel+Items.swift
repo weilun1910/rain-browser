@@ -99,21 +99,37 @@ extension BrowserModel {
     /// nothing moved.
     @discardableResult
     func place(_ moving: [SidebarRef], in section: SidebarSection, at index: Int) -> Bool {
+        // A folder on disk: what lands in it is filed there on disk.
+        let diskTarget: UUID? = { if case .folder(let f) = section, isDiskFolder(f) { return f }; return nil }()
         var moved: [SidebarRef] = []
         for ref in moving where !moved.contains(ref) {
             switch ref {
             case .tab(let id):
-                guard let t = tab(id) else { continue }
-                if section == .essentials && !t.isEssential && essentials.count >= Self.essentialsLimit {
+                guard let orig = tab(id) else { continue }
+                if section == .essentials && !orig.isEssential && essentials.count >= Self.essentialsLimit {
                     toast("Essentials hold up to \(Self.essentialsLimit)")
                     continue
                 }
-                if let sp = split(containing: id) {
+                var t = orig
+                if diskTarget == nil, isDiskFolder(orig.folderID), orig.isNote {
+                    // A note can't leave the disk: it stays in its folder and opens as a tab here.
+                    let copy = Tab(kind: orig.kind, url: orig.url, title: orig.title)
+                    copy.model = self
+                    copy.spaceID = orig.spaceID
+                    tabs.append(copy)
+                    t = copy
+                } else if let sp = split(containing: id) {
                     // Dragging a member out of a split.
                     removeFromSplit(id, sp)
                 }
-                convert(t, to: section)
-                moved.append(ref)
+                if let f = diskTarget {
+                    guard fileIntoDiskFolder(t, f) else { continue }
+                } else {
+                    // A page taken out of a folder on disk: its saved page goes to the Trash.
+                    if isDiskFolder(t.folderID) { takeOutOfDiskFolder(t) }
+                    convert(t, to: section)
+                }
+                moved.append(.tab(t.id))
             case .split(let id):
                 guard let i = splits.firstIndex(where: { $0.id == id }) else { continue }
                 switch section {
@@ -130,8 +146,26 @@ extension BrowserModel {
         let at = max(0, min(index, list.count))
         list.insert(contentsOf: moved, at: at)
         for (n, r) in list.enumerated() { setOrder(r, Double(n)) }
+        // Rain's order for the folder on disk follows.
+        if let f = diskTarget { writeOrder(of: f) }
         objectWillChange.send()
         scheduleSave()
+        return true
+    }
+
+    /// Files a tab in a folder on disk and makes it that folder's row.
+    private func fileIntoDiskFolder(_ t: Tab, _ fid: UUID) -> Bool {
+        guard let f = folder(fid), let dir = folderDirectory(f), let file = fileTabOnDisk(t, into: dir) else { return false }
+        t.isEssential = false
+        t.isPinned = false
+        t.folderID = fid
+        t.spaceID = f.spaceID
+        t.savedFile = SpaceFolders.encode(file)
+        if t.isWeb || t.isApp {
+            t.customTitle = file.deletingPathExtension().lastPathComponent
+            if t.isWeb, t.pinnedURL == nil { t.pinnedURL = t.url }
+        }
+        openFolderPath(to: fid)
         return true
     }
 
@@ -165,6 +199,8 @@ extension BrowserModel {
     // MARK: Pinning and Essentials
 
     func togglePin(_ tab: Tab) {
+        // Pinning something from a folder on disk is the same as dragging it to Pinned.
+        if !tab.isPinned, isDiskFolder(tab.folderID) { place([.tab(tab.id)], in: .pinned, at: Int.max); return }
         if tab.isPinned {
             tab.isPinned = false
             tab.pinnedURL = nil
@@ -263,6 +299,12 @@ extension BrowserModel {
     /// Notes rename their file. Pages and app pages get a name of their own.
     func promptRenameTab(_ tab: Tab) {
         if tab.isNote { promptRenameNote(tab); return }
+        // A saved page in a folder on disk: its file is renamed.
+        if isDiskFolder(tab.folderID), let e = tab.savedFile.flatMap(SpaceFolders.decode).flatMap(SpaceFolders.entry) {
+            promptRenameEntry(e)
+            syncPinnedFolders()
+            return
+        }
         if let name = Prompt.text(title: "Rename tab", message: "Leave it empty to use the page title.", defaultValue: tab.customTitle ?? tab.displayTitle) {
             rename(tab, to: name)
         }

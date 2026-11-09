@@ -27,6 +27,7 @@ enum SavedDataTests {
         MainActor.assumeIsolated {
             BrowserModel.useEphemeralStore = true
             currentState(sub)
+            spaceFolderState(sub)
             olderState(sub)
             lenientState(sub)
             unreadableState(sub)
@@ -129,6 +130,68 @@ enum SavedDataTests {
         check(DataNotices.take().isEmpty, "today's state file reads without notices")
         m.saveNow()
         checkV3(BrowserModel(), "saved and read back")
+        try? FileManager.default.removeItem(at: Paths.stateFile)
+    }
+
+    static let fLater = "33333333-3333-4333-8333-333333333335"
+
+    /// state.json as Rain wrote it on 8 Nov 2026, with space folders: each space's folder, pinned
+    /// folders and the folders under them kept by path, the saved page each tab came from, and
+    /// the mark that the sidebar's folders moved onto disk.
+    static var stateSpaceFolders: String {
+        """
+        {
+          "currentSpace" : "\(home)",
+          "diskFolders" : 1,
+          "folders" : [
+            { "bookmark" : "Ym9va21hcmsgZGF0YQ==", "createdAt" : "2026-11-08T09:00:00Z", "id" : "\(fReading)", "isExpanded" : true, "name" : "Reading",
+              "order" : 0, "path" : "Home/Reading", "spaceID" : "\(home)" },
+            { "createdAt" : "2026-11-08T09:00:00Z", "id" : "\(fLater)", "isExpanded" : false, "name" : "Later", "order" : 0, "parentID" : "\(fReading)",
+              "path" : "Home/Reading/Later", "spaceID" : "\(home)" },
+            { "bookmark" : "Ym9va21hcmsgZGF0YQ==", "createdAt" : "2026-11-08T09:00:00Z", "id" : "\(fClients)", "isExpanded" : true, "name" : "Vault",
+              "order" : 1, "path" : "/tmp/rain-sample/Vault", "spaceID" : "\(home)" }
+          ],
+          "spaces" : [
+            { "color" : "#7A8CA8", "folderBookmark" : "Ym9va21hcmsgZGF0YQ==", "folderName" : "Home", "icon" : "house", "id" : "\(home)", "name" : "Home",
+              "selectedTab" : "\(t[1])" }
+          ],
+          "tabs" : [
+            { "createdAt" : "2026-11-08T10:00:00Z", "customTitle" : "An essay", "folderID" : "\(fReading)", "id" : "\(t[0])", "isPinned" : false, "kind" : "web",
+              "order" : 0, "pinnedURL" : "https://example.com/essay", "savedFile" : "Home/Reading/An essay.webloc", "spaceID" : "\(home)",
+              "title" : "An essay", "url" : "https://example.com/essay/page-2" },
+            { "createdAt" : "2026-11-08T10:05:00Z", "id" : "\(t[1])", "isPinned" : false, "kind" : "web", "order" : 1,
+              "pinnedURL" : "https://example.com/saved", "savedFile" : "Home/Saved.webloc", "spaceID" : "\(home)", "title" : "Saved", "url" : "https://example.com/saved" },
+            { "createdAt" : "2026-11-08T10:10:00Z", "folderID" : "\(fLater)", "id" : "\(t[2])", "isPinned" : false, "kind" : "note", "order" : 0,
+              "savedFile" : "Home/Reading/Later/Plan", "spaceID" : "\(home)", "title" : "Plan", "url" : "file:///tmp/rain-sample/Vault/Plan.md" }
+          ],
+          "version" : 3
+        }
+        """
+    }
+
+    @MainActor
+    static func checkSpaceFolders(_ m: BrowserModel, _ what: String) {
+        check(m.spaces.first?.folderName == "Home" && m.spaces.first?.folderBookmark == Data("bookmark data".utf8), "\(what): a space keeps its folder")
+        check(m.folders.map(\.id) == [uuid(fReading), uuid(fLater), uuid(fClients)] && m.folder(uuid(fReading))?.path == "Home/Reading"
+              && m.folder(uuid(fLater))?.parentID == uuid(fReading) && m.folder(uuid(fClients))?.path == "/tmp/rain-sample/Vault"
+              && m.folder(uuid(fReading))?.bookmark == Data("bookmark data".utf8), "\(what): pinned folders and the folders under them, by path")
+        let a = m.tab(uuid(t[0])), b = m.tab(uuid(t[1])), c = m.tab(uuid(t[2]))
+        check(a?.savedFile == "Home/Reading/An essay.webloc" && a?.pinnedURL?.absoluteString == "https://example.com/essay" && a?.folderID == uuid(fReading)
+              && a?.url?.absoluteString == "https://example.com/essay/page-2", "\(what): a page in a folder keeps its saved page and where it was")
+        check(b?.savedFile == "Home/Saved.webloc" && b?.keepsSavedURL == true && b?.folderID == nil, "\(what): a tab opened from a saved page remembers it")
+        check(c?.kind == .note && c?.savedFile == "Home/Reading/Later/Plan" && c?.folderID == uuid(fLater), "\(what): a linked note in a subfolder")
+    }
+
+    @MainActor
+    static func spaceFolderState(_ sub: URL) {
+        try? Data(stateSpaceFolders.utf8).write(to: Paths.stateFile)
+        let m = BrowserModel()
+        checkSpaceFolders(m, "the space folders state file")
+        check(DataNotices.take().isEmpty, "the space folders state file reads without notices")
+        m.saveNow()
+        let text = (try? String(contentsOf: Paths.stateFile, encoding: .utf8)) ?? ""
+        check(text.contains("\"diskFolders\" : 1"), "the mark that the folders moved stays")
+        checkSpaceFolders(BrowserModel(), "space folders saved and read back")
         try? FileManager.default.removeItem(at: Paths.stateFile)
     }
 

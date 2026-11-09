@@ -87,7 +87,7 @@ struct FolderEmptyView: View {
         VStack(spacing: 10) {
             if searching {
                 Image(systemName: "magnifyingglass").font(.system(size: 26, weight: .light)).foregroundStyle(.tertiary)
-                Text("Nothing here matches \u{201C}\(query)\u{201D}").font(Theme.Font.heading)
+                Text("Nothing here matches \"\(query)\"").font(Theme.Font.heading)
                 Text("Search looks in this folder and every folder inside it.").font(Theme.Font.secondary).foregroundStyle(.secondary)
             } else {
                 FolderGlyph(isOpen: true, size: 40, ground: Theme.Palette.card, stroke: Color.secondary.opacity(0.7))
@@ -224,6 +224,16 @@ struct FolderEntryMenu: View {
         Divider()
         Button("Rename...") { model.promptRenameEntry(entry) }
         Button("Move to...") { popup.startMove([entry.url]) }
+        if entry.kind == .folder && model.diskFolders && !entry.isBroken {
+            if model.isPinnedFolder(entry.url) {
+                Button("Unpin from Sidebar") {
+                    let enc = SpaceFolders.encode(entry.url)
+                    if let f = model.pinnedFolders.first(where: { $0.path == enc }) { model.unpinFolder(f.id) }
+                }
+            } else {
+                Button("Pin to Sidebar") { _ = model.pinFolder(entry.url) }
+            }
+        }
         Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([entry.url]) }
         if let u = entry.page {
             Button("Copy Link") {

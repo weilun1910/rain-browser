@@ -7,6 +7,10 @@ final class SpaceFolderState {
     var watcher: FolderWatcher?
     var watchedPaths: [String] = []
     var observer: NSObjectProtocol?
+    /// The sidebar's folders are on disk: they moved there, or the profile started that way.
+    var migrated = false
+    /// The state said they'd moved, even if space folders are off in this run, so saving keeps it.
+    var markedMoved = false
 }
 
 // Space folders in the model: each space's folder on disk, opening what's in them as tabs, and
@@ -18,7 +22,6 @@ extension BrowserModel {
     /// Makes the root and every space's folder, and starts watching them. Called once the saved
     /// state is loaded.
     func setUpSpaceFolders() {
-        SpaceFolders.customRoot = BrowserPrefs.shared.value.spaceFoldersRoot.map { URL(fileURLWithPath: $0, isDirectory: true) }
         guard let root = SpaceFolders.root else { return }
         do {
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -36,6 +39,7 @@ extension BrowserModel {
         refreshSpaceFolderWatch()
         if SpaceFolders.refreshLinkedRoots() { NotificationCenter.default.post(name: .notesNeedRescan, object: nil) }
         SavedPages.shared.rescan()
+        syncPinnedFolders()
     }
 
     /// Something changed in the folders, from Rain or from Finder.
@@ -47,6 +51,7 @@ extension BrowserModel {
             NotificationCenter.default.post(name: .notesNeedRescan, object: nil)
         }
         SavedPages.shared.rescan()
+        syncPinnedFolders()
         checkNotesOnDisk()
         objectWillChange.send()
     }

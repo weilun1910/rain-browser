@@ -260,7 +260,22 @@ enum DemoSeeder {
 
         // The layout, then the graph, which reads it for splits.
         var state = buildState(c, noteURL: noteURL, notesRoot: notesRoot, now: o.now)
+        let folderFlags = (SpaceFolders.enabled, SpaceFolders.overrideRoot, SpaceFolders.customRoot)
+        defer { (SpaceFolders.enabled, SpaceFolders.overrideRoot, SpaceFolders.customRoot) = folderFlags }
         sum.savedPages = try seedSpaceFolders(c, state: &state, notesRoot: notesRoot, at: at)
+        // The sidebar's folders move onto disk and are pinned, the way a real profile's do the
+        // first time it opens this build, and Personal pins its linked notes too.
+        if let folderRoot = SpaceFolders.root {
+            state = try SpaceFolderMigration.run(state, notesFolders: [notesRoot.path], root: folderRoot).0
+            if let i = state.spaces?.firstIndex(where: { $0.name == "Personal" }), let sp = state.spaces?[i], let name = sp.folderName {
+                let link = folderRoot.appendingPathComponent(name).appendingPathComponent("Personal notes")
+                if FileLink.isLink(link) {
+                    let after = (state.folders.filter { $0.spaceID == sp.id && $0.parentID == nil }.compactMap(\.order).max() ?? -1) + 1
+                    state.folders.append(Folder(id: DemoContent.uuid("pin-personal-notes"), spaceID: sp.id, name: "Personal notes", isExpanded: false,
+                                                createdAt: o.now, order: after, parentID: nil, path: SpaceFolders.encode(link), bookmark: FolderBookmark.make(link)))
+                }
+            }
+        }
         try JSONEncoder.pretty.encode(state).write(to: root.appendingPathComponent("state.json"))
         let graph = GraphStore.reset(indexURL: indexURL, index: store)
         func key(_ it: DemoContent.Layout.Item) -> String? { indexKey(it.ref, c, noteURL) }

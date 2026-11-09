@@ -125,7 +125,7 @@ enum FolderShots {
         // A linked folder: the space's notes, kept where they are.
         popup.go(popup.trail(for: schoolDir), direction: -1)
         settle()
-        if let link = popup.entries.first(where: { $0.isLink && $0.kind == .folder }) {
+        if let link = popup.entries.first(where: { $0.isLink && $0.kind == .folder && $0.name == "School notes" }) {
             popup.enter(link)
             settle()
             check(popup.entries.contains { $0.kind == .note } && popup.current?.path == link.target.path, "a linked folder opens on its original, with its notes")
@@ -179,6 +179,31 @@ enum FolderShots {
             popup.open(model)
             settle()
         }
+
+        // Pinned folders in the sidebar, the icon column and the tab bar.
+        popup.close()
+        settle()
+        LookRenders.skipWeb = false
+        let readingDir = schoolDir.appendingPathComponent("Reading", isDirectory: true)
+        let pin = model.pinFolder(readingDir)
+        for f in model.childFolders(of: nil) { model.setFolder(f.id, open: f.id == pin?.id || f.name == "Drafts") }
+        settle(1)
+        check(model.pinnedFolders.count >= 3 && model.pinnedFolders.allSatisfy { $0.path != nil }, "the Folders section shows pinned folders",
+              model.pinnedFolders.map(\.name).joined(separator: ", "))
+        check(pin.map { !model.refs(in: .folder($0.id)).isEmpty && !model.childFolders(of: $0.id).isEmpty } == true,
+              "a pinned folder shows what's on disk in it, subfolders first")
+        shoot("9-sidebar-pinned")
+        BrowserPrefs.shared.update { $0.sidebarIconsOnly = true }
+        settle()
+        shoot("10-icons-pinned")
+        BrowserPrefs.shared.update { $0.sidebarIconsOnly = false; $0.tabLayout = .horizontal }
+        settle(1)
+        shoot("11-tabbar-pinned")
+        BrowserPrefs.shared.update { $0.tabLayout = .sidebar }
+        settle()
+        LookRenders.skipWeb = true
+        popup.open(model)
+        settle()
 
         // Esc closes it.
         if let esc = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,

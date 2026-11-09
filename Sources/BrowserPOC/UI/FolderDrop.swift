@@ -47,6 +47,8 @@ enum FolderDropMath {
     static let edgeShare: CGFloat = 0.2
     @MainActor
     static func zone(at offset: CGFloat, length: CGFloat, folder: Folder, dragging: [DragItem], model: BrowserModel) -> FolderDropZone? {
+        // Files and folders from the popup go inside a folder on disk.
+        if case .entry? = dragging.first { return folder.path != nil ? .into : nil }
         if case .folder(let fid)? = dragging.first {
             guard fid != folder.id else { return nil }
             let edge = length * edgeShare
@@ -67,6 +69,18 @@ enum FolderDropMath {
     /// Carries out a drop in a zone.
     @MainActor
     static func perform(_ items: [DragItem], zone: FolderDropZone, on folder: Folder, model: BrowserModel) {
+        let entries = items.compactMap { if case .entry(let u) = $0 { return u }; return nil }
+        if !entries.isEmpty {
+            if let dir = model.folderDirectory(folder) {
+                Motion.run(Motion.insert) {
+                    model.fileEntries(entries.filter { $0.standardizedFileURL.path != dir.path }, into: dir)
+                    model.syncPinnedFolders()
+                    model.setFolder(folder.id, open: true)
+                }
+            }
+            SidebarDrag.shared.end()
+            return
+        }
         if case .folder(let fid)? = items.first {
             Motion.run(Motion.insert) {
                 switch zone {
