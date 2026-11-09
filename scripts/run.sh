@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 "$ROOT/scripts/build.sh" release
 if [ "$#" -gt 0 ]; then
-  open "$ROOT/build/Rain.app" --args "$@"
+  open "$ROOT/build.noindex/Rain.app" --args "$@"
 else
-  open "$ROOT/build/Rain.app"
+  open "$ROOT/build.noindex/Rain.app"
 fi

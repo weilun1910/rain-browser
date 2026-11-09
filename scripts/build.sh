@@ -1,5 +1,7 @@
 #!/bin/bash
-# Builds the Swift package and wraps it in build/Rain.app, signed ad hoc.
+# Builds the Swift package and wraps it in build.noindex/Rain.app, signed ad hoc. The folder ends
+# in .noindex so Spotlight skips it, and the copy is taken off macOS's list of apps after each
+# build. Otherwise every build shows up as another Rain next to the one in /Applications.
 # Usage: scripts/build.sh [release|debug]
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -15,7 +17,7 @@ BIN_DIR="$(swift build -c "$CONFIG" --disable-keychain --scratch-path "$ROOT/.bu
 # The bundle is put together and signed in a temp folder outside iCloud Drive. iCloud's file
 # provider tags .app and .framework folders with Finder info while they sit in the project,
 # and codesign refuses to sign anything that carries it.
-OUT="$ROOT/build/Rain.app"
+OUT="$ROOT/build.noindex/Rain.app"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 APP="$STAGE/Rain.app"
@@ -73,7 +75,8 @@ if [ -d "$APP/Contents/Frameworks/llama.framework" ]; then
 fi
 codesign --force --sign "$IDENTITY" --timestamp=none "$APP"
 rm -rf "$OUT"
-mkdir -p "$ROOT/build"
+mkdir -p "$(dirname "$OUT")"
 ditto "$APP" "$OUT"
 codesign --verify "$OUT"
+"/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister" -u "$OUT" >/dev/null 2>&1 || true
 echo "Built $OUT (signed with ${IDENTITY/#-/ad hoc})"

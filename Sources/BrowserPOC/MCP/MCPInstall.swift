@@ -78,7 +78,7 @@ enum MCPInstall {
                         chatGPTMac: chatgpt)
     }
 
-    /// The repo's `integrations/` folder: next to `build/Rain.app`, or found from this source file.
+    /// The repo's `integrations/` folder: next to `build.noindex/Rain.app`, or found from this source file.
     static func integrationsFolder() -> URL? {
         if screenshotInstall { return URL(fileURLWithPath: "/Users/theo/Code/rain/integrations") }
         var candidates: [URL] = []

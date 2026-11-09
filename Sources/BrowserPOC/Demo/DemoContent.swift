@@ -149,7 +149,7 @@ struct DemoContent {
     // MARK: Finding and loading
 
     /// The `Demo/` folder: the one given, else the first one found walking up from the binary
-    /// or the working folder. Both `.build/debug/BrowserPOC` and `build/Rain.app` sit in the repo.
+    /// or the working folder. Both `.build/debug/BrowserPOC` and `build.noindex/Rain.app` sit in the repo.
     static func locate(_ given: String?) -> URL? {
         let fm = FileManager.default
         if let given {

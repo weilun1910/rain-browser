@@ -1,4 +1,5 @@
 .build/
+build.noindex/
 build/
 *.app
 .DS_Store

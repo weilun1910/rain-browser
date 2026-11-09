@@ -9,12 +9,12 @@ You need Xcode 26 (or its command line tools) on macOS 26 or later.
 From the repo folder:
 
 ```
-scripts/build.sh        # builds build/Rain.app (release)
+scripts/build.sh        # builds build.noindex/Rain.app (release)
 scripts/run.sh          # builds, then opens it
 scripts/install.sh      # builds, waits until Rain is closed, then swaps the copy in /Applications
 ```
 
-The app ends up at `build/Rain.app`. Quit a running copy before rebuilding. `scripts/install.sh` keeps the copy it replaces in `build/previous/Rain.app`.
+The app ends up at `build.noindex/Rain.app`. The folder ends in `.noindex` so Spotlight skips it, and the scripts take the build off macOS's list of apps, so only the copy in /Applications shows up there. Quit a running copy before rebuilding. `scripts/install.sh` keeps the copy it replaces in `build.noindex/previous/Rain.app`.
 
 The build is signed ad hoc, so every build has a different signature. macOS ties some permissions to the signature, so after a rebuild it may ask again before the app can read Chrome's history. To keep that permission across builds, sign with a certificate from your keychain:
 
@@ -25,7 +25,7 @@ SIGN_IDENTITY="Apple Development: Your Name (TEAMID)" scripts/build.sh
 To run the app on a separate profile, with its own support folder and its own cookies, pass `--data-dir`. Your normal profile isn't read or touched:
 
 ```
-build/Rain.app/Contents/MacOS/BrowserPOC --data-dir ~/Desktop/test-profile
+build.noindex/Rain.app/Contents/MacOS/BrowserPOC --data-dir ~/Desktop/test-profile
 ```
 
 Tests and checks from the command line:
@@ -33,7 +33,7 @@ Tests and checks from the command line:
 ```
 scripts/selftest.sh                                             # index, notes, sections, splits, spaces, sidebar, command bar, Related shelf, MCP and look checks
 .build/debug/BrowserPOC --smoketest                             # drives the real browser headless, no window on screen
-build/Rain.app/Contents/MacOS/BrowserPOC --chrome-dry-run # what a Chrome import would do, fetches nothing
+build.noindex/Rain.app/Contents/MacOS/BrowserPOC --chrome-dry-run # what a Chrome import would do, fetches nothing
 .build/debug/BrowserPOC --extract-check <url>                   # what capture reads from one public page
 .build/debug/BrowserPOC --eval --models-dir <folder>            # resurfacing quality, old pipeline against new
 .build/debug/BrowserPOC --demo-diag <demo profile> [--reasons] # where each labelled demo item lands, and the reasons cards would show
@@ -48,7 +48,7 @@ scripts/make-icon.sh                                            # redraws the ap
 .build/debug/BrowserPOC --data-dir <folder> --motion-tour glass dark --reduce-transparency  # each glass layer over a bright, busy and dark page, in a window; light or dark, and the solid fallback with --reduce-transparency
 .build/debug/BrowserPOC --data-dir <folder> --motion-tour spaces # plays one area's motion in a window for recording, then quits (also rows, peek, split, compact, toasts)
 scripts/mcp-e2e.sh                                              # Claude Code and Codex against a made-up profile, temporary configs only
-build/Rain.app/Contents/MacOS/BrowserPOC --graph-bench    # the graph's 5,000 node timings on a release build
+build.noindex/Rain.app/Contents/MacOS/BrowserPOC --graph-bench    # the graph's 5,000 node timings on a release build
 ```
 
 Both tests use throwaway folders and exit non-zero if a check fails. The self test checks delete with a stand-in Trash folder inside its throwaway folder, so your real Trash is never touched. The dry run prints full URLs from your Chrome history, so keep its output to yourself.
