@@ -517,6 +517,8 @@ final class BrowserModel: ObservableObject {
         for t in visibleTabs { t.lastActiveAt = now }
         // Picking something in the sidebar while the bar is open means you're done with the bar.
         if bar.isOpen { bar.close() }
+        // A page that finished loading off screen gets its picture now, if it's still at the top.
+        for t in visibleTabs { Thumbnails.shared.tabShown(t) }
         mediaSelectionChanged(leaving: leaving)
         refreshFocus()
         syncAddress()
@@ -1067,11 +1069,14 @@ final class BrowserModel: ObservableObject {
         endDwell(tab)
         tab.captureWork?.cancel()
         tab.contextWork?.cancel()
+        Thumbnails.shared.cancel(tab)
     }
 
     func pageDidFinish(_ tab: Tab) {
         guard let wv = tab.webView, let url = wv.url else { return }
         if isSelected(tab) { startDwell(tab); syncAddress() }
+        // A picture of the top of the page for its card, a second from now if it's on screen.
+        Thumbnails.shared.pageFinished(tab, visible: isVisible(tab))
         HistoryStore.shared.record(url: url, title: wv.title ?? tab.title, spaceID: tab.isEssential ? nil : tab.spaceID)
         Favicons.shared.capture(from: tab)
         if tab.isMuted { MediaWatch.setMuted(true, in: tab) }

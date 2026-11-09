@@ -46,6 +46,7 @@ enum SpaceFolderTests {
             links(base.appendingPathComponent("links"))
             listing(base.appendingPathComponent("listing"))
             model(base.appendingPathComponent("model"))
+            thumbnails()
             try? FileManager.default.removeItem(at: Paths.stateFile)
             FolderMeta.shared.reload()
         }
@@ -198,6 +199,45 @@ enum SpaceFolderTests {
             check(SpaceFolders.encode(home.appendingPathComponent("Alpha")) == "Home/Alpha" && SpaceFolders.decode("Home/Alpha")?.path == home.appendingPathComponent("Alpha").path
                   && SpaceFolders.encode(URL(fileURLWithPath: "/tmp/x")) == "/tmp/x",
                   "paths inside the root are kept relative to it, others in full")
+        }
+    }
+
+    // MARK: Thumbnails
+
+    @MainActor static func thumbnails() {
+        let a = URL(string: "https://example.com/essay?utm_source=x")!, b = URL(string: "https://Example.com/essay#part")!
+        check(Thumbnails.file(for: a) == Thumbnails.file(for: b) && Thumbnails.file(for: a).lastPathComponent.count == 36,
+              "a page saved twice, or with tracking bits in its address, shares one thumbnail file")
+        check(Thumbnails.file(for: a).path.hasPrefix(Paths.root.appendingPathComponent("Thumbnails").path), "thumbnails live in the profile, not in the folders")
+        var s = AppSettings()
+        s.excludedDomains = ["bank.example"]
+        check(Thumbnails.decision(URL(string: "https://bank.example/home")!, settings: s) != .fetch, "share images skip excluded domains")
+        check(Thumbnails.decision(URL(string: "https://example.com/login")!, settings: s) != .fetch
+              && Thumbnails.decision(URL(string: "https://example.com/x?token=abc")!, settings: s) != .fetch
+              && Thumbnails.decision(URL(string: "https://example.com/auth/callback?code=1")!, settings: s) != .fetch,
+              "share images skip sign-in and token links")
+        check(Thumbnails.decision(URL(string: "https://mail.google.com/mail/u/0/")!, settings: s) != .fetch, "and logged-in apps")
+        check(Thumbnails.decision(URL(string: "https://example.com/blog/post")!, settings: s) == .fetch
+              && Thumbnails.decision(URL(string: "http://localhost:3000/")!, settings: s) != .fetch, "an ordinary page is fetched, a local one isn't")
+        let page = URL(string: "https://example.com/blog/post")!
+        let html = "<html><head><meta name=\"twitter:image\" content=\"https://cdn.example.com/t.png\">\n"
+            + "<meta content=\"/img/cover.jpg?w=1200&amp;h=630\" property=\"og:image\"></head><body></body></html>"
+        check(Thumbnails.shareImageURL(in: html, page: page)?.absoluteString == "https://example.com/img/cover.jpg?w=1200&h=630",
+              "the share image is the page's og:image, resolved against the page", Thumbnails.shareImageURL(in: html, page: page)?.absoluteString ?? "nil")
+        check(Thumbnails.shareImageURL(in: "<meta name='twitter:image' content='https://cdn.example.com/t.png'>", page: page)?.host == "cdn.example.com",
+              "or the twitter image when there's no og:image")
+        check(Thumbnails.shareImageURL(in: "<meta property='og:image' content='javascript:alert(1)'>", page: page) == nil, "only web addresses count")
+        // Cards shrink pictures with ImageIO.
+        if let ctx = CGContext(data: nil, width: 1600, height: 1000, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                               bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) {
+            ctx.setFillColor(CGColor(red: 0.2, green: 0.4, blue: 0.9, alpha: 1))
+            ctx.fill(CGRect(x: 0, y: 0, width: 1600, height: 1000))
+            if let img = ctx.makeImage(), let jpeg = Thumbnails.jpeg(img, maxWidth: 480) {
+                let small = ThumbnailCache.downsample(jpeg, maxPixels: 240)
+                check(ThumbnailCheck.size(of: jpeg).map { $0.width == 480 && $0.height == 300 } == true && jpeg.count < 60_000
+                      && small.map { max($0.width, $0.height) == 240 } == true,
+                      "a thumbnail is kept as a small JPEG and shrunk to card size for the grid", "\(jpeg.count) bytes")
+            } else { check(false, "a thumbnail encodes") }
         }
     }
 

@@ -48,8 +48,8 @@ final class Tab: ObservableObject, Identifiable {
     /// The saved page, or the note or file in a space folder, this tab came from. Kept as
     /// SpaceFolders encodes it: relative to the space folders root when it's inside it.
     @Published var savedFile: String?
-    /// A card-size picture of the top of the page, taken after it loads. See Thumbnails.
-    var thumbnail: CGImage?
+    /// A card-size picture of the top of the page, taken after it loads, as JPEG. See Thumbnails.
+    var thumbnail: Data?
     /// The page the thumbnail shows, as URLKey normalizes it.
     var thumbnailKey: String?
     /// The page finished loading while the tab was off screen. It's captured when it's shown.

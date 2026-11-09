@@ -49,6 +49,7 @@ scripts/make-icon.sh                                            # redraws the ap
 .build/debug/BrowserPOC --data-dir <folder> --motion-tour spaces # plays one area's motion in a window for recording, then quits (also rows, peek, split, compact, toasts)
 scripts/mcp-e2e.sh                                              # Claude Code and Codex against a made-up profile, temporary configs only
 build.noindex/Rain.app/Contents/MacOS/BrowserPOC --graph-bench    # the graph's 5,000 node timings on a release build
+.build/debug/BrowserPOC --thumbnail-check [tmp/thumbnail-test.html] # a local test page offscreen: the thumbnail is the top of the page, and nothing is taken after it scrolls
 ```
 
 Both tests use throwaway folders and exit non-zero if a check fails. The self test checks delete with a stand-in Trash folder inside its throwaway folder, so your real Trash is never touched. The dry run prints full URLs from your Chrome history, so keep its output to yourself.
@@ -95,7 +96,7 @@ The bundle ID (`local.browserpoc`) and the profile folder name (`BrowserPOC`) st
 - Browsing data sits next to it: browser.json (Browsing settings), history.sqlite (visits), closed.json (recently closed and the archive), sessions/ (back and forward for each tab), favicons/ and downloads.json.
 - WebKit keeps site data under `~/Library/WebKit/local.browserpoc`, the default profile's cookies in `~/Library/HTTPStorages/local.browserpoc.binarycookies`, and caches under `~/Library/Caches/local.browserpoc`. Each named profile has its own WebKit store, cookies included, in `~/Library/WebKit/local.browserpoc/WebsiteDataStore/`.
 - Backups/ (one per new build, the last five) and Recovered/ (files the app couldn't read) sit in the app data folder, and last-build.txt says which build opened it last.
-- Space folders: one folder per space under `~/Documents/Rain/` for the default profile. A profile opened with `--data-dir`, the demo profile and every test profile keep theirs in `Space Folders/` inside the profile folder instead, so they never touch `~/Documents/Rain`. Settings, Browsing can move them. Rain's own order for each folder and when things were last opened from one are in space-folders.json in the app data folder, so the folders stay clean. Paths in state.json that point inside the space folders are kept relative to their root, so a copy of a profile finds its own files.
+- Space folders: one folder per space under `~/Documents/Rain/` for the default profile. A profile opened with `--data-dir`, the demo profile and every test profile keep theirs in `Space Folders/` inside the profile folder instead, so they never touch `~/Documents/Rain`. Settings, Browsing can move them. Rain's own order for each folder and when things were last opened from one are in space-folders.json in the app data folder, and page thumbnails are in Thumbnails/ there, named from a hash of the page's address, so the folders stay clean. Paths in state.json that point inside the space folders are kept relative to their root, so a copy of a profile finds its own files.
 - Clearing the index removes indexed entries only. Notes stay exactly as they are.
 
 ## Code map

@@ -228,6 +228,7 @@ extension BrowserModel {
                 tab.savedFile = SpaceFolders.encode(file)
                 if tab.isWeb { tab.pinnedURL = u }
             }
+            Thumbnails.shared.pageSaved(tab, url: u)
             if !quiet { toast("Saved to \(dir.lastPathComponent)") }
             scheduleSave()
             return file
@@ -247,6 +248,7 @@ extension BrowserModel {
         tab.pinnedURL = u
         SavedPages.shared.noteRemoved(file)
         SavedPages.shared.noteSaved(file, page: u)
+        Thumbnails.shared.pageSaved(tab, url: u)
         SpaceFolders.changed()
         toast("Saved address is now this page")
         scheduleSave()
