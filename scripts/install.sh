@@ -4,7 +4,8 @@
 # opens. Rain has to be closed for the swap, so this waits until you quit it.
 # The new build replaces /Applications/Rain.app in place, so there's only ever one Rain in the app
 # list. The copy it replaces goes to build.noindex/previous/Rain.app, in case you want to go back,
-# and neither that nor the build itself stays on macOS's list of apps.
+# and neither that nor the build itself stays on macOS's list of apps. Every other Rain macOS
+# has seen, in the Trash, a worktree or a test folder, comes off that list too.
 # Usage: scripts/install.sh [--no-build]
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -38,16 +39,23 @@ ditto --noextattr --noqtn "$BUILT" "$NEW"
 xattr -cr "$NEW"
 codesign --verify --deep --strict "$NEW"
 
+# The old copy is copied aside and then deleted, not moved. macOS and the Dock follow a moved
+# app to its new folder and list it again, which is how old copies kept showing up from
+# build.noindex/previous and the Trash. A copy is a new file they don't know.
 if [ -d "$DEST" ]; then
   mkdir -p "$(dirname "$PREVIOUS")"
   rm -rf "$PREVIOUS"
-  mv "$DEST" "$PREVIOUS"
+  ditto "$DEST" "$PREVIOUS"
+  "$LSREGISTER" -u "$DEST" >/dev/null 2>&1 || true
+  rm -rf "$DEST"
 fi
 mv "$NEW" "$DEST"
-# One Rain on the list of apps: the one in /Applications.
+# One Rain on the list of apps: the one in /Applications. The sweep also clears copies in the
+# Trash, worktree builds and test copies.
 "$LSREGISTER" -u "$PREVIOUS" >/dev/null 2>&1 || true
 "$LSREGISTER" -u "$BUILT" >/dev/null 2>&1 || true
 "$LSREGISTER" -f "$DEST" >/dev/null 2>&1 || true
+"$ROOT/scripts/forget-copies.sh" "$DEST"
 BUILD="$(/usr/libexec/PlistBuddy -c 'Print :RainBuild' "$DEST/Contents/Info.plist" 2>/dev/null || echo unknown)"
 echo "Installed build $BUILD at $DEST."
 [ -d "$PREVIOUS" ] && echo "The copy it replaced is in build.noindex/previous/Rain.app."

@@ -12,9 +12,10 @@ From the repo folder:
 scripts/build.sh        # builds build.noindex/Rain.app (release)
 scripts/run.sh          # builds, then opens it
 scripts/install.sh      # builds, waits until Rain is closed, then swaps the copy in /Applications
+scripts/forget-copies.sh  # takes every Rain but /Applications/Rain.app off macOS's list of apps
 ```
 
-The app ends up at `build.noindex/Rain.app`. The folder ends in `.noindex` so Spotlight skips it, and the scripts take the build off macOS's list of apps, so only the copy in /Applications shows up there. Quit a running copy before rebuilding. `scripts/install.sh` keeps the copy it replaces in `build.noindex/previous/Rain.app`.
+The app ends up at `build.noindex/Rain.app`. The folder ends in `.noindex` so Spotlight skips it, and the scripts take the build off macOS's list of apps, so only the copy in /Applications shows up there. Quit a running copy before rebuilding. `scripts/install.sh` keeps the copy it replaces in `build.noindex/previous/Rain.app`. It copies the old app there and deletes it rather than moving it, because macOS and the Dock follow a moved app and list it again. Then it runs `scripts/forget-copies.sh`, which takes every other Rain macOS has seen off the list, including copies in the Trash, worktree builds and test copies whose bundle IDs start with `local.browserpoc`. It only touches that list, never the files.
 
 The build is signed ad hoc, so every build has a different signature. macOS ties some permissions to the signature, so after a rebuild it may ask again before the app can read Chrome's history. To keep that permission across builds, sign with a certificate from your keychain:
 
