@@ -6,8 +6,8 @@ import WebKit
 /// profile): sets up the README's screenshots one after another in a 1440 by 900 window and writes
 /// `ready <scene> <window number>` to `<data dir>/readme-tour.log` once each has settled, so a
 /// script can capture that window. Every scene waits for its pages to finish loading and its
-/// cards to arrive. The scenes are hero, command-bar, split, graph, ai-clients and shelf. The app quits
-/// at the end.
+/// cards to arrive. The scenes are hero, command-bar, split, graph, ai-clients, shelf, tab-bar
+/// and folders. Shelf and folders are shot in light, the rest in dark. The app quits at the end.
 @MainActor
 enum ReadmeTour {
     static let size = NSSize(width: 1440, height: 900)
@@ -28,6 +28,24 @@ enum ReadmeTour {
         NSApp.windows.first { $0.isVisible && $0.frameAutosaveName == "BrowserPOCMain" } ?? NSApp.windows.first { $0.isVisible }
     }
 
+    /// The window at 1440 by 900 in the middle of its screen. A window macOS restored tiled comes
+    /// back at the tile's size after the first try, so this runs again once the app has settled.
+    static func fitWindow(_ label: String) {
+        // The window runs on a screen someone is using, so it may have been hidden or minimized
+        // since the last scene. It comes back before anything is set up.
+        if let w = NSApp.windows.first(where: { $0.frameAutosaveName == "BrowserPOCMain" }), !w.isVisible || NSApp.isHidden {
+            note("\(label) window was \(NSApp.isHidden ? "hidden" : w.isMiniaturized ? "minimized" : "off screen"), bringing it back")
+            if NSApp.isHidden { NSApp.unhide(nil) }
+            if w.isMiniaturized { w.deminiaturize(nil) }
+            w.orderFrontRegardless()
+        }
+        guard let w = mainWindow else { note("\(label) no window"); return }
+        let vis = (w.screen ?? NSScreen.main)?.visibleFrame ?? .zero
+        let want = NSRect(x: vis.midX - size.width / 2, y: vis.midY - size.height / 2, width: size.width, height: size.height)
+        if w.frame != want { w.setFrame(want, display: true) }
+        note("\(label) window \(Int(w.frame.width))x\(Int(w.frame.height)) on a \(Int(vis.width))x\(Int(vis.height)) screen")
+    }
+
     /// No red spelling underlines in a screenshot: they mark made-up names like Swapshelf.
     static func quietSpelling(_ v: NSView?) {
         guard let v else { return }
@@ -39,9 +57,14 @@ enum ReadmeTour {
     }
 
     static func ready(_ name: String, window: NSWindow? = nil) async {
+        if window == nil, mainWindow?.frame.size != size {
+            fitWindow(name)
+            await pause(1.0)
+        }
         let w = window ?? mainWindow
         quietSpelling(w?.contentView)
         await pause(0.4)
+        if let w, w.frame.contains(NSEvent.mouseLocation) { note("\(name): the pointer is over the window") }
         note("ready \(name) \(w?.windowNumber ?? 0)")
         await pause(hold)
     }
@@ -122,23 +145,25 @@ enum ReadmeTour {
         // this build folder's paths.
         MCPInstall.screenshotInstall = true
         BrowserModel.keepPaintingWhenHidden = true
-        let all = ["hero", "command-bar", "split", "graph", "ai-clients", "shelf", "queries"]
+        // The tab bar comes before folders, which saves three more pages into Paper sources.
+        let all = ["hero", "command-bar", "split", "graph", "ai-clients", "shelf", "tab-bar", "folders", "queries"]
         let asked = all.filter { args.contains($0) }
         let scenes = asked.isEmpty ? all.filter { $0 != "queries" } : asked
 
         Task { @MainActor in
             await pause(0.5)
+            fitWindow("launch")
             if let w = mainWindow {
-                let screen = w.screen ?? NSScreen.main
-                let vis = screen?.visibleFrame ?? .zero
-                w.setFrame(NSRect(x: vis.midX - size.width / 2, y: vis.midY - size.height / 2, width: size.width, height: size.height), display: true)
                 w.level = .floating
+                // Clicks from whoever is using the screen go to the windows behind it.
+                w.ignoresMouseEvents = true
                 w.orderFrontRegardless()
                 NSApp.activate()
             }
             // The launch animation, and the models settling in.
             await pause(2.5)
             _ = await until(60) { ModelStore.shared.overallProgress == nil }
+            fitWindow("start")
             for s in scenes {
                 switch s {
                 case "hero": await hero(model)
@@ -148,6 +173,8 @@ enum ReadmeTour {
                 case "ai-clients": await aiClients(model)
                 case "queries": await queries(model)
                 case "shelf": await shelf(model)
+                case "folders": await folders(model)
+                case "tab-bar": await tabBar(model)
                 default: break
                 }
             }
@@ -290,5 +317,152 @@ enum ReadmeTour {
         await ready("shelf")
         ShelfState.shared.closeNow()
         await pause(0.4)
+    }
+
+    /// Cookie and fundraising banners a reader would have dismissed long ago. The tour's WebKit
+    /// store is thrown away each run, so every site asks again. With `inPlace` a banner in the
+    /// page is only hidden, so nothing below it moves.
+    static func quietBanners(inPlace: Bool) -> String {
+        let gone = inPlace ? "e.style.visibility = 'hidden'" : "e.remove()"
+        return """
+        document.querySelectorAll('#siteNotice, #centralNotice, [id^="frb"], [class^="frb"]').forEach(e => \(gone));
+        for (const e of Array.from(document.querySelectorAll('body *'))) {
+          const s = getComputedStyle(e), t = e.innerText || '';
+          if (!/cookie|consent/i.test(t) || t.length > 4000) continue;
+          if (s.position === 'fixed') e.style.display = 'none';
+          else if (s.position === 'sticky') \(gone);
+        }
+        true
+        """
+    }
+
+    /// Shows a saved page until it has loaded, takes its banners down and takes its picture again,
+    /// so the folder popup's card shows the top of the page as a reader sees it.
+    static func picture(_ t: Tab, _ page: URL, inPlace: Bool = false) async -> Bool {
+        if let m = t.model { keepPainting(m) }
+        _ = await until(30) { t.webView.map { !$0.isLoading && $0.estimatedProgress >= 1 } ?? false }
+        // Banners arrive a moment after the page.
+        await pause(2.5)
+        _ = try? await t.webView?.evaluateJavaScript(quietBanners(inPlace: inPlace))
+        await pause(0.4)
+        let ok = await withCheckedContinuation { c in Thumbnails.shared.capture(t) { c.resume(returning: $0) } }
+        // The picture is written in the background.
+        await pause(0.6)
+        return ok && Thumbnails.exists(for: page)
+    }
+
+    /// Waits a while for the pointer to be off the window. Hover still follows the pointer while
+    /// the window ignores clicks, so a card or row under it would show lifted.
+    static func pointerAway(_ label: String) async {
+        guard let w = mainWindow else { return }
+        if !(await until(30) { !w.frame.contains(NSEvent.mouseLocation) }) { note("\(label) the pointer stayed over the window") }
+    }
+
+    /// True if the pointer stays off the window for `seconds`.
+    static func pointerStaysAway(_ seconds: Double) async -> Bool {
+        guard let w = mainWindow else { return true }
+        var t = 0.0
+        while t < seconds {
+            if w.frame.contains(NSEvent.mouseLocation) { return false }
+            await pause(0.1)
+            t += 0.1
+        }
+        return true
+    }
+
+    static func school(_ model: BrowserModel) {
+        if let school = model.spaces.firstIndex(where: { $0.name == "School" }) { model.switchSpace(index: school) }
+    }
+
+    /// School's paper draft split, selected with the draft focused, the way the demo opens.
+    static func selectDraftSplit(_ model: BrowserModel) {
+        guard let draft = model.tabs.first(where: { $0.displayTitle.hasPrefix("Paper draft - section 2") }),
+              let sp = model.splits.first(where: { $0.contains(draft.id) }) else { note("no paper draft split"); return }
+        model.selectSplit(sp, focusItem: draft.id)
+    }
+
+    /// Run in light. The folder popup over a page in School, open on Paper sources: saved pages,
+    /// each with a picture of the top of its page, and two linked notes. The sidebar's Folders
+    /// section lists the pinned folders, all closed. Three of School's open tabs are saved into
+    /// the folder first, the way Save Page does it, so the grid fills its rows, and every page in
+    /// it is shown once so its card gets a fresh picture without cookie or donation banners. The
+    /// shelf steps aside while the popup is up, so its cards don't peek out under it.
+    static func folders(_ model: BrowserModel) async {
+        fitWindow("folders")
+        ShelfState.shared.closeNow()
+        TabLayoutSwitch.set(.sidebar)
+        school(model)
+        guard let sp = model.currentSpace, let root = model.spaceFolderURL(sp) else { note("folders: no space folder"); return }
+        let dir = root.appendingPathComponent("Paper sources", isDirectory: true)
+        let had = Set(SpaceFolders.list(dir).compactMap { $0.page.map(URLKey.key(for:)) })
+        for words in ["History of Facebook", "Critical mass", "kickstart"] {
+            guard let t = model.spaceTabs.first(where: { $0.isWeb && $0.folderID == nil && $0.displayTitle.localizedCaseInsensitiveContains(words) }),
+                  let u = t.url, !had.contains(URLKey.key(for: u)) else { continue }
+            model.savePage(t, in: dir, quiet: true)
+        }
+        let entries = SpaceFolders.ordered(SpaceFolders.list(dir), in: dir)
+        note("folders \(dir.lastPathComponent): " + entries.map { "\($0.kind.rawValue):\($0.name)" }.joined(separator: " | "))
+        // Every page is shown once, so its card has a fresh picture of the top of the page. The
+        // page that goes under the popup comes last, with its banners hidden in place, so its
+        // title stays behind the popup.
+        let under = entries.first { $0.kind == .page && $0.name.hasPrefix("Two-sided market") }
+        for e in entries where e.kind == .page && e.id != under?.id {
+            guard let page = e.page, let t = model.openFolderEntry(e) else { continue }
+            note("folders picture \(await picture(t, page)) \(e.name)")
+        }
+        let open = model.pinnedFolders.map { ($0.id, $0.isExpanded) }
+        for f in model.pinnedFolders { model.setFolder(f.id, open: false) }
+        let hadShelf = !RelatedPrefs.shared.value.shelfHidden
+        RelatedPrefs.shared.update { $0.shelfHidden = true }
+        if let e = under, let page = e.page, let t = model.openFolderEntry(e) {
+            note("folders picture \(await picture(t, page, inPlace: true)) \(e.name)")
+        }
+        await waitForPages(model, "folders")
+        // A card under the pointer lifts, so the popup opens again until the pointer has stayed
+        // off the window.
+        for attempt in 1...5 {
+            await pointerAway("folders")
+            FolderPopup.shared.open(model, at: dir)
+            if await pointerStaysAway(2.0) || attempt == 5 { break }
+            note("folders: the pointer crossed the window, opening the popup again")
+            FolderPopup.shared.close()
+            await pause(0.8)
+        }
+        await ready("folders")
+        FolderPopup.shared.close()
+        await pause(0.8)
+        if hadShelf { RelatedPrefs.shared.update { $0.shelfHidden = false } }
+        for (id, was) in open { model.setFolder(id, open: was) }
+        selectDraftSplit(model)
+        await pause(0.4)
+    }
+
+    /// Run in dark. The tab bar along the top in School: Essentials, the pinned tabs, the pinned
+    /// folders as chips, School's tabs, and the paper draft split below. Every folder is closed,
+    /// so the tabs have room for their names. The sidebar comes back after.
+    static func tabBar(_ model: BrowserModel) async {
+        fitWindow("tab-bar")
+        ShelfState.shared.closeNow()
+        FolderPopup.shared.close()
+        school(model)
+        let open = model.pinnedFolders.map { ($0.id, $0.isExpanded) }
+        TabLayoutSwitch.set(.horizontal)
+        for f in model.pinnedFolders { model.setFolder(f.id, open: false) }
+        selectDraftSplit(model)
+        await waitForPages(model, "tab-bar")
+        // A tab under the pointer shows hovered, so the bar is drawn again until the pointer has
+        // stayed off the window.
+        for attempt in 1...5 {
+            await pointerAway("tab-bar")
+            TabLayoutSwitch.set(.sidebar)
+            await pause(0.6)
+            TabLayoutSwitch.set(.horizontal)
+            if await pointerStaysAway(2.0) || attempt == 5 { break }
+            note("tab-bar: the pointer crossed the window, drawing the bar again")
+        }
+        await ready("tab-bar")
+        TabLayoutSwitch.set(.sidebar)
+        for (id, was) in open { model.setFolder(id, open: was) }
+        await pause(0.6)
     }
 }
