@@ -2,7 +2,7 @@
   "name": "browser-knowledge",
   "displayName": "Browser knowledge",
   "version": "0.3.0",
-  "description": "Your Rain knowledge base in Claude: search your notes, pages and docs, see how they connect, and know what you're working on now. Proof of concept.",
+  "description": "Your Rain knowledge base in Claude: search your notes, pages and docs, see how they connect, and know what you're working on now. Prerelease.",
   "author": { "name": "Felix Lee" },
   "repository": "https://github.com/weilun1910/rain-browser",
   "keywords": ["knowledge", "notes", "browser", "mcp", "personal context"],

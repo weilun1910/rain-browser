@@ -2,7 +2,7 @@
   "name": "browser-poc",
   "owner": { "name": "Felix Lee" },
   "metadata": {
-    "description": "Plugins for Rain, a proof of concept. Not a finished product."
+    "description": "Plugins for Rain, a Mac browser in prerelease."
   },
   "plugins": [
     {

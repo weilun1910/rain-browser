@@ -37,6 +37,6 @@ Things to know before you do this:
 - Which ChatGPT plans can add custom MCP servers on the web isn't settled in OpenAI's docs as of November 2026.
 - Choose what AI clients can see in Rain's Settings first. The served log there shows everything that went out.
 
-Don't put the server behind a public tunnel like ngrok or cloudflared with no authentication. Anyone who learned the address could read your notes. This proof of concept doesn't open a local HTTP port for that reason.
+Don't put the server behind a public tunnel like ngrok or cloudflared with no authentication. Anyone who learned the address could read your notes. Rain doesn't open a local HTTP port for that reason.
 
-This route wasn't tested for the proof of concept, because it needs your own OpenAI Platform setup.
+This route hasn't been tested yet, because it needs your own OpenAI Platform setup.

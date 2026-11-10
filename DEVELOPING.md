@@ -1,6 +1,6 @@
 # Building and running Rain
 
-How to build the proof of concept, run its tests and open the demo profile. What it does is in the [README](README.md) and [docs/FEATURES.md](docs/FEATURES.md).
+How to build Rain, run its tests and open the demo profile. What it does is in the [README](README.md) and [docs/FEATURES.md](docs/FEATURES.md).
 
 ## Build and run
 

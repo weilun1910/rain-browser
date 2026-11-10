@@ -1,6 +1,6 @@
 # AI client integrations
 
-This is part of a proof of concept, not a finished product.
+These are part of Rain's prerelease version.
 
 Rain can serve its knowledge base to AI clients over MCP. The app's binary does it with `--mcp`, reading the same profile the app uses (add `--data-dir <dir>` for a separate profile). It reads the index without changing it, and writes to notes only if you turn that on in Settings.
 

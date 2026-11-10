@@ -55,7 +55,7 @@ enum WindowChrome {
         r.scale = 2
         var options: [NSApplication.AboutPanelOptionKey: Any] = [
             .applicationName: Wordmark.name,
-            .credits: NSAttributedString(string: "A proof of concept for a Mac browser where things you've seen come back when they matter.",
+            .credits: NSAttributedString(string: "A prerelease of a Mac browser where things you've seen come back when they matter.",
                                          attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor]),
         ]
         if let img = r.nsImage { options[.applicationIcon] = img }

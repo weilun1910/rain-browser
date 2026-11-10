@@ -4,7 +4,7 @@
 
 # Rain
 
-Rain is a Mac browser I'm building, and this repo is its proof of concept.
+Rain is a Mac browser I'm building, and this is a prerelease version.
 
 Pages, notes, docs and meetings I've already seen come back on their own when what I'm working on makes them relevant. I don't have to file or pin anything first, and it all runs on my Mac.
 

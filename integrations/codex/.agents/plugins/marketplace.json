@@ -1,6 +1,6 @@
 {
   "name": "browser-poc",
-  "interface": { "displayName": "Rain (proof of concept)" },
+  "interface": { "displayName": "Rain (prerelease)" },
   "plugins": [
     {
       "name": "browser-knowledge",
