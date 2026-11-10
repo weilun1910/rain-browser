@@ -34,21 +34,37 @@ An Obsidian-style graph connects my notes, Google Docs, Notion pages, Granola me
 
 ### Arc and Zen, rebuilt natively
 
-Spaces have their own pinned tabs, folders, tabs and splits, each with a colour that tints the sidebar, and a two-finger swipe slides between them under my fingers. Cmd-T opens one bar that switches tabs, runs about 40 commands, fills in addresses and searches my notes and history. Split view takes up to four pages or notes. There's also Essentials, Peek, compact mode, auto-archive and pinned tabs that remember their page. The floating controls sit on Liquid Glass.
+Spaces have their own pinned tabs, folders, tabs and splits, each with a colour that tints the sidebar, and a two-finger swipe slides between them under my fingers. Cmd-T opens one bar that switches tabs, runs about 40 commands, fills in addresses and searches my notes and history. Split view takes up to four pages or notes, and dragging a tab onto the page splits it, with a preview of the half it'll take. There's also Essentials, Peek, compact mode, auto-archive and pinned tabs that remember their page. The floating controls sit on Liquid Glass.
 
 ![The Cmd-T bar open over a page](docs/screenshots/command-bar.jpg)
 
 ![Three panes in a split, with a note on the right](docs/screenshots/split.jpg)
 
-### Notes that live in my own folders
+Tabs can run down the sidebar like Arc or along the top like Safari, and I can switch between the two any time. The sidebar drags narrower, all the way down to a single column of icons. Folders can hold folders, and dragging a tab onto a closed folder springs it open.
 
-I point Rain at folders of Markdown files, like my Obsidian vault, and every note opens as a tab I can pin, file or split next to a page. Rain never re-saves a note on open and never overwrites a file that changed on disk, because Claude and Codex edit the same files.
+![Tabs in a bar along the top, with Essentials and a split below](docs/screenshots/tab-bar.jpg)
+
+### Real folders for pages and notes
+
+Every space has its own folder in `~/Documents/Rain`. Saving a page puts it in there as a file Finder and Safari can open, so my bookmarks and notes sit in the same folders. The folder popup is Rain's own file manager for them, with a picture of the top of every saved page and the first lines of every note. I pin the folders I use most to the sidebar and drag tabs in and out of them.
+
+![The folder popup over a page, with saved pages and notes in a space's folder](docs/screenshots/folders.jpg)
+
+Notes are plain Markdown files. I point Rain at folders of them, like my Obsidian vault, and every note opens as a tab I can pin, file or split next to a page. The vault stays where it is, and a space's folder just links to it. Rain never re-saves a note on open and never overwrites a file that changed on disk, because Claude and Codex edit the same files.
 
 ### My AI can read it too
 
 Rain runs as an MCP server, so Claude Code, Claude Desktop and Codex can search what I've read and written, see how things connect and know what I have open right now. That makes it a body of personal context that keeps itself up to date. A switch per source decides what AI clients can see, and editing notes stays off until I turn it on. The plugins are in [integrations/](integrations/).
 
 ![The AI clients settings, with install steps and a switch for each source](docs/screenshots/ai-clients.jpg)
+
+Web pages, shared docs and meeting transcripts can be written by anyone, so they reach my AI wrapped in markers that say the text came from outside. Rain's instructions to the AI say to treat that text as information and never follow what it asks.
+
+### Security and privacy
+
+Rain runs on WebKit, the engine inside Safari, so it starts with Safari's tracking prevention and its warnings for phishing and malware sites. WebKit's security fixes reach Rain the same day they reach Safari, through macOS updates.
+
+On top of that, Rain tries every site over HTTPS first, and a page that only loads over plain HTTP says Not secure in the address field. It sends Global Privacy Control, which tells sites not to sell or share my data. A page has to ask before it opens another app, so an ad or a redirect can't launch Zoom or the App Store on its own. Downloads get the same quarantine mark Safari gives them, so macOS checks a downloaded app before it first runs. Logins come from the Passwords app, the same iCloud Keychain Safari uses, and Rain never stores a password itself.
 
 ## About the screenshots
 
