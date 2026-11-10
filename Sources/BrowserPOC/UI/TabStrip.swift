@@ -798,12 +798,15 @@ struct BarFolderChip: View {
     private var shown: FolderDropZone? { zone ?? drag.folderPreview.flatMap { $0.folder == folder.id ? $0.zone : nil } }
 
     static let font = NSFont.systemFont(ofSize: 12, weight: .medium)
+    /// The count is drawn with even-width digits, which are wider than the plain ones, so it's
+    /// measured with them too. Measured plain, "10" came out short and cut the name to "Paper sourc…".
+    static let countFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
     static let maxName: CGFloat = 120
 
     /// The chip's width, so the strip can share out the rest of the room before drawing.
     static func width(_ f: Folder, count: Int) -> CGFloat {
         let name = min(maxName, ceil((f.name as NSString).size(withAttributes: [.font: font]).width))
-        let badge = f.isExpanded ? 0 : ceil(("\(count)" as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 11)]).width) + Theme.Space.s
+        let badge = f.isExpanded ? 0 : ceil(("\(count)" as NSString).size(withAttributes: [.font: countFont]).width) + Theme.Space.s
         return Theme.Space.m * 2 + 16 + Theme.Space.s + name + badge
     }
 
