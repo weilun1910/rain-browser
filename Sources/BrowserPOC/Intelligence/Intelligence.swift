@@ -57,9 +57,17 @@ final class Intelligence: @unchecked Sendable {
         // is still alive, waiting briefly for a job in the middle of a batch.
         quitObserver = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: nil) { _ in
             Reembedder.shared.enabled = false
-            _ = Intelligence.shared.shutdown(timeout: 3)
+            if !Intelligence.shared.shutdown(timeout: 3) {
+                // A job is still inside llama.cpp. A handler registered now runs before any of
+                // llama.cpp's teardown, including tables it set up after the models loaded.
+                atexit { Intelligence.lastChanceAtExit() }
+            }
         }
     }
+
+    /// Checked between texts and between batches, so a job ends moments after shutdown begins
+    /// instead of running out a long batch while the app quits around it.
+    private func stopRequested() -> Bool { isShuttingDown }
 
     /// True once shutdown has begun. Model calls return nil from then on.
     var isShuttingDown: Bool {
@@ -104,8 +112,7 @@ final class Intelligence: @unchecked Sendable {
         let m = LlamaModel(path: ModelFiles.path(ModelCatalog.embedder).path, kind: .embedding,
                            contextTokens: 2048, maxTokens: 512, sequences: 8)
         if m == nil { gemmaFailed = true; appLog.error("EmbeddingGemma failed to load") }
-        // Registered after llama.cpp set up Metal, so it runs before llama.cpp's own teardown.
-        _ = Self.exitHook
+        if m != nil { exitHandlerAfterFirstLoad(.embedding) }
         gemma = m
         return m
     }
@@ -118,7 +125,7 @@ final class Intelligence: @unchecked Sendable {
         let m = LlamaModel(path: ModelFiles.path(ModelCatalog.reranker).path, kind: .reranker,
                            contextTokens: 4096, maxTokens: 448, sequences: 8)
         if m == nil { rerankerFailed = true; appLog.error("Reranker failed to load") }
-        _ = Self.exitHook
+        if m != nil { exitHandlerAfterFirstLoad(.reranker) }
         reranker = m
         return m
     }
@@ -160,16 +167,26 @@ final class Intelligence: @unchecked Sendable {
         return gemma != nil || reranker != nil
     }
 
-    private static let exitHook: Void = {
-        atexit {
-            // Normally a no-op: quitting already shut down. If a job never finished, skip
-            // llama.cpp's static teardown rather than crash in it.
-            if !Intelligence.shared.shutdown(timeout: 5) {
-                fflush(nil)
-                _exit(0)
-            }
+    /// Kinds of model that have loaded once. Read and written under `lock`.
+    private var loadedKinds: Set<LlamaModel.Kind> = []
+
+    /// Registers the exit handler after llama.cpp has set up Metal and the tables a kind of model
+    /// needs, so it runs before their teardown: exit handlers run newest first. Each kind sets up
+    /// its own, like the reranker's tokenizer tables, so each kind's first load registers one.
+    /// With only the first load's, a reranker that loaded later crashed at exit in its tokenizer.
+    private func exitHandlerAfterFirstLoad(_ kind: LlamaModel.Kind) {
+        guard loadedKinds.insert(kind).inserted else { return }
+        atexit { Intelligence.lastChanceAtExit() }
+    }
+
+    /// Normally a no-op: quitting already shut down. If a job never finished, skip llama.cpp's
+    /// static teardown rather than crash in it.
+    private static func lastChanceAtExit() {
+        if !Intelligence.shared.shutdown(timeout: 5) {
+            fflush(nil)
+            _exit(0)
         }
-    }()
+    }
 
     /// Frees about a gigabyte of model memory when nothing used it for five minutes.
     private func unloadIfIdle() {
@@ -211,7 +228,7 @@ final class Intelligence: @unchecked Sendable {
         let backend = id ?? documentEmbedder
         switch backend {
         case .gemma:
-            if let v = using({ loadedGemma().map { $0.embed(items.map { Self.documentPrompt(title: $0.title, text: $0.text) }) } }) {
+            if let v = using({ loadedGemma().flatMap { $0.embed(items.map { Self.documentPrompt(title: $0.title, text: $0.text) }, stop: stopRequested) } }) {
                 return (.gemma, v)
             }
             return (.sentence, items.map { Self.sentenceVector($0.text) })
@@ -226,7 +243,7 @@ final class Intelligence: @unchecked Sendable {
     func embedQueries(_ queries: [String], using id: EmbedderID) -> [[Float]?] {
         switch id {
         case .gemma:
-            return using { loadedGemma().map { $0.embed(queries.map(Self.queryPrompt)) } } ?? queries.map { _ in nil }
+            return using { loadedGemma().flatMap { $0.embed(queries.map(Self.queryPrompt), stop: stopRequested) } } ?? queries.map { _ in nil }
         case .contextual:
             return queries.map { ContextualEmbedder.shared.vector($0) }
         case .sentence:
@@ -251,7 +268,7 @@ final class Intelligence: @unchecked Sendable {
     /// One query per document, so each candidate is judged against the part of the context it matched.
     func rerank(queries: [String], documents: [String]) -> [Float]? {
         guard !documents.isEmpty, queries.count == documents.count else { return nil }
-        return using { loadedReranker().map { $0.rerank(pairs: Array(zip(queries, documents)), instruction: Self.rerankInstruction) } }
+        return using { loadedReranker().flatMap { $0.rerank(pairs: Array(zip(queries, documents)), instruction: Self.rerankInstruction, stop: stopRequested) } }
     }
 }
 

@@ -100,12 +100,14 @@ final class LlamaModel: @unchecked Sendable {
 
     /// Runs token sequences through the model in as few batches as fit, returning the pooled
     /// output for each sequence: a vector for embedders, [p(yes), p(no)] for Qwen3 rerankers.
-    private func run(_ seqs: [[llama_token]]) -> [[Float]?] {
+    /// Nil if `stop` turned true between batches.
+    private func run(_ seqs: [[llama_token]], stop: () -> Bool) -> [[Float]?]? {
         var results = [[Float]?](repeating: nil, count: seqs.count)
         var batch = llama_batch_init(Int32(nBatch), 0, 1)
         defer { llama_batch_free(batch) }
         var i = 0
         while i < seqs.count {
+            if stop() { return nil }
             var members: [Int] = []
             var used = 0
             while i < seqs.count, members.count < nSeqMax {
@@ -144,20 +146,25 @@ final class LlamaModel: @unchecked Sendable {
     }
 
     /// Unit-length vectors, one per text. Texts should already carry the model's prompt prefix.
-    func embed(_ texts: [String]) -> [[Float]?] {
+    /// Nil if `stop` turned true partway, which the app's quit uses to end a job in moments.
+    func embed(_ texts: [String], stop: () -> Bool = { false }) -> [[Float]?]? {
         precondition(kind == .embedding)
         lock.lock(); defer { lock.unlock() }
-        let seqs = texts.map { clip(tokenize($0, addSpecial: true, parseSpecial: false), to: maxTokens) }
-        return run(seqs).map { $0.flatMap(VectorMath.normalized) }
+        var seqs: [[llama_token]] = []
+        for t in texts {
+            if stop() { return nil }
+            seqs.append(clip(tokenize(t, addSpecial: true, parseSpecial: false), to: maxTokens))
+        }
+        return run(seqs, stop: stop)?.map { $0.flatMap(VectorMath.normalized) }
     }
 
     /// Relevance in 0...1 for each document against the query.
-    func rerank(query: String, instruction: String, documents: [String]) -> [Float] {
-        rerank(pairs: documents.map { (query, $0) }, instruction: instruction)
+    func rerank(query: String, instruction: String, documents: [String], stop: () -> Bool = { false }) -> [Float]? {
+        rerank(pairs: documents.map { (query, $0) }, instruction: instruction, stop: stop)
     }
 
-    /// Relevance in 0...1 for each (query, document) pair.
-    func rerank(pairs: [(String, String)], instruction: String) -> [Float] {
+    /// Relevance in 0...1 for each (query, document) pair. Nil if `stop` turned true partway.
+    func rerank(pairs: [(String, String)], instruction: String, stop: () -> Bool = { false }) -> [Float]? {
         precondition(kind == .reranker)
         lock.lock(); defer { lock.unlock() }
         let fallback = "<|im_start|>user\n<Instruct>: {instruction}\n<Query>: {query}\n<Document>: {document}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
@@ -166,15 +173,18 @@ final class LlamaModel: @unchecked Sendable {
             .replacingOccurrences(of: "Given a web search query, retrieve relevant passages that answer the query", with: instruction)
             .replacingOccurrences(of: "{instruction}", with: instruction)
         // Keep the query whole and cut the document so the prompt fits.
-        let seqs: [[llama_token]] = pairs.map { query, d in
+        var seqs: [[llama_token]] = []
+        seqs.reserveCapacity(pairs.count)
+        for (query, d) in pairs {
+            if stop() { return nil }
             let queryTokens = tokenize(query, addSpecial: false, parseSpecial: false).count
             let docBudget = max(64, maxTokens - queryTokens - 110)
             let dt = tokenize(d, addSpecial: false, parseSpecial: false)
             let doc = dt.count > docBudget ? detokenize(Array(dt.prefix(docBudget))) : d
             let prompt = template.replacingOccurrences(of: "{query}", with: query).replacingOccurrences(of: "{document}", with: doc)
-            return tokenize(prompt, addSpecial: true, parseSpecial: true)
+            seqs.append(tokenize(prompt, addSpecial: true, parseSpecial: true))
         }
-        return run(seqs).map { out in
+        return run(seqs, stop: stop)?.map { out in
             guard let out, !out.isEmpty else { return 0 }
             if out.count >= 2 { return out[0] }  // softmax over yes and no, already applied
             return 1 / (1 + exp(-out[0]))         // single-logit cross-encoders

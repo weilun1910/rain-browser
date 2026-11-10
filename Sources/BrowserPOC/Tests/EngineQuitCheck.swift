@@ -36,18 +36,23 @@ enum EngineQuitCheck {
         }
         _ = store.importChrome(docs)
         Reembedder.shared.kick()
-        // The reranker busy on another thread at the same time.
-        let docTexts = (0..<16).map { "Title: Page \($0)\n" + String(repeating: "a browser on webkit with extensions and notes. ", count: 12) }
-        Thread.detachNewThread {
-            while !Intelligence.shared.isShuttingDown {
-                _ = Intelligence.shared.rerank(query: "browser extensions on webkit", documents: docTexts)
-            }
-        }
         let end = Date().addingTimeInterval(90)
         while Date() < end {
             if (store.vectorCounts()[.gemma] ?? 0) > 0 && Intelligence.shared.hasLoadedModels { break }
             Thread.sleep(forTimeInterval: 0.05)
         }
+        // Then the reranker, busy on another thread. It loads after EmbeddingGemma, the way it
+        // does in the app, so llama.cpp sets up its tokenizer tables after the first exit handler
+        // was registered and tears them down before it runs. The documents are long, so a call
+        // spends seconds splitting them into tokens and outlasts the wait on quit, the way a
+        // Related run did on 9 Nov when it crashed in those tables.
+        let docTexts = (0..<120).map { "Title: Page \($0)\n" + String(repeating: "a browser on webkit with extensions and notes. ", count: 6000) }
+        Thread.detachNewThread {
+            while !Intelligence.shared.isShuttingDown {
+                _ = Intelligence.shared.rerank(query: "browser extensions on webkit", documents: docTexts)
+            }
+        }
+        Thread.sleep(forTimeInterval: 2)
         let done = store.vectorCounts()[.gemma] ?? 0
         print("\(marker) (\(done) of \(store.passageCount()) passages re-embedded, mode \(mode))")
         fflush(stdout)
